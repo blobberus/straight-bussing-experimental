@@ -1,3 +1,5 @@
+**THIS IS THE EXPERIMENTAL COPY** (github.com/blobberus/straight-bussing-experimental, copied 2026-10-27): a test platform for changes from rider feedback, NOT synced with blobberus/straight-bussing in either direction. All workflows are disabled (no collector, Pages, iOS CI or App Store release here); never push to or run data tools against the main repo from here. Details: README.md. Everything below describes the main project as copied.
+
 # Project notes (read this first, keep it short)
 
 Project: **Straight Bussing**, a free unofficial live UChicago shuttle tracker.
