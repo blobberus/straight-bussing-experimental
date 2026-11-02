@@ -1,0 +1,59 @@
+First, make this repo up to date to the current version of Straight Bussing in terms of functionality and everything implemented.
+
+This build is a revamp of the interface to improve the looks of the app ahead of an official Appstore launch for my project. Taste and a professional look is essential while maintaining the interface and intuitive structure I currently have maintained. Follow the instructions below and begin improving with multiple agents with expertise as needed.
+
+This repo should have two sections: One for the Swift version of the implementation (optimized for the Appstore and running on iPhone). One section for a site-renderable version like the other version of Straight Bussing which has the exact same UI as the swift version. It is very important that the app is optimized to run smoothly without lag. 
+
+Download all skills that require building an aesthetic apple app. Here is the guidance:
+
+Refine my existing navigation app toward Google Maps’ functional clarity and Apple Maps’ restrained, native visual design.
+
+First inspect the current framework, map provider, screens, and reusable components. Identify the five biggest contributors to an unfinished or generic appearance.
+
+Establish one shared design specification for typography, spacing, colors, icons, corner radii, materials, and motion. Preserve existing functionality and use platform-native conventions.
+
+Refine the complete search → place details → route selection → active navigation journey. Keep the map dominant, controls easy to understand, and route information readable at a glance. Use translucency and animation selectively.
+
+Review actual rendered screens after implementation. Check light and dark modes, larger text, long place names, loading, errors, denied location access, and rerouting. Report what was visually verified and what remains untested.
+
+Claude-compatible skills for polishing a navigation app
+
+1. Mobile iOS Design — Native iOS design, typography, icons, sheets, and gestures
+https://github.com/wshobson/agents/blob/main/plugins/ui-design/skills/mobile-ios-design/SKILL.md
+
+2. SwiftUI Expert — SwiftUI implementation, animations, performance, and accessibility
+https://github.com/AvdLee/SwiftUI-Agent-Skill
+
+3. Mapbox Cartography — Map colors, labels, visual hierarchy, and readability
+https://github.com/mapbox/mapbox-agent-skills#-mapbox-cartography
+
+4. Mapbox Style Patterns — Navigation map styles, markers, layers, and night themes
+https://github.com/mapbox/mapbox-agent-skills#-mapbox-style-patterns
+
+5. Impeccable — Design critique, consistency, simplification, and final polish; primarily web-oriented
+https://github.com/pbakaus/impeccable
+
+6. UI UX Pro Max — Design systems, palettes, typography, and platform-specific UI guidance
+https://github.com/nextlevelbuilder/ui-ux-pro-max-skill
+
+7. Expo Design and UI Skills — Design systems, native UI, and animations for React Native/Expo
+https://github.com/expo/skills/blob/main/plugins/expo/skills/README.md
+
+8. Frontend Design — Anthropic’s skill for intentional aesthetic direction and avoiding generic designs
+https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md
+
+Recommended combinations
+
+For SwiftUI:
+Mobile iOS Design + SwiftUI Expert, with Impeccable for design critique.
+
+For React Native/Expo:
+Expo Design System + Expo Native UI + Expo Animation.
+
+If using Mapbox:
+Add Mapbox Cartography + Mapbox Style Patterns.
+
+
+
+
+With the information from these skills, rebuild the interface of straight bussing to be more aesthetically pleasing. Take advantage of the tastes and design to make the interface seem less vibe coded but still easily legible. All functionality and UX elements from the current build should transfer (a new user should only experience new menu structures and the way the app looks, but still largely navigate in the same way). The ultimate goal is to make this app presentable for the entire user body as an official final product. Run a test run for each view to make it as capable and optimized as possible whilst maintaining your aesthetic implementations.
