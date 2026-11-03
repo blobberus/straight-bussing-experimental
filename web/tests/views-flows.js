@@ -167,7 +167,7 @@ test("directions: My location default, station suggestions, plan + sidewalk refi
   ok(res.querySelector(".v-opt .j-crit"), "a card says what it minimizes");
   const txt = res.textContent;
   ok(txt.includes("Bus arrives at Main & 1st"), "bus step");
-  ok(txt.includes("sidewalk route"), "refined walk tag");
+  ok(txt.includes("sidewalk route"), "refined walk, said as plain detail text (DESIGN-SPEC 10.10)");
   ok(txt.includes("Arrive"), "arrive clock");
   ok(txt.includes(NOTE), "exact note");
   ok(txt.includes("from live bus prediction"), "source");
