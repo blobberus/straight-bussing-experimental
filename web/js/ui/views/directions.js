@@ -467,7 +467,8 @@ const fq = (sel) => barEl?.querySelector?.(sel) || rootRef?.querySelector?.(sel)
 const inFields = (el) => !!el && (!!barEl?.contains?.(el) || !!rootRef?.contains?.(el));
 function timing() {
   const css = getComputedStyle(document.documentElement);
-  return { dur: parseFloat(css.getPropertyValue("--d-sheet")) || 320, ease: css.getPropertyValue("--ease-spring").trim() || "cubic-bezier(.32, .72, 0, 1)" };
+  // mMorph (DESIGN-SPEC 9): 300 ms on the standard curve, search bar into the Directions card and back
+  return { dur: parseFloat(css.getPropertyValue("--m-morph")) || 300, ease: css.getPropertyValue("--ease-standard").trim() || "cubic-bezier(.2, 0, 0, 1)" };
 }
 /** FLIP: animate `el` from rect `from` to where it is now, its children fading in over the second part. */
 function flipFrom(el, from, round) {
@@ -475,7 +476,7 @@ function flipFrom(el, from, round) {
   const r = el.getBoundingClientRect();
   if (!(r.width > 0 && r.height > 0 && from.width > 0 && from.height > 0)) return false;
   const { dur, ease } = timing(), sx = from.width / r.width, sy = from.height / r.height;
-  const end = getComputedStyle(el).borderRadius || "14px", rad = round != null ? round : from.height / 2;
+  const end = getComputedStyle(el).borderRadius || "20px", rad = round != null ? round : from.height / 2;
   el.animate([
     { transform: `translate(${from.left - r.left}px, ${from.top - r.top}px) scale(${sx}, ${sy})`, borderRadius: `${rad / sx}px / ${rad / sy}px` },
     { transform: "none", borderRadius: end },
@@ -514,7 +515,7 @@ function hideBar() {
   const app = document.getElementById("app");
   if (card && app?.dataset?.view !== "directions") {   // leaving Directions: the card shrinks back into the bar
     const bar = document.querySelector("#topbar .searchbar");
-    flipFrom(bar, card, 14);
+    flipFrom(bar, card, 20);
   }
 }
 
