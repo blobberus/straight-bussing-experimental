@@ -319,6 +319,9 @@ struct RouteRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(ChromePressStyle())
+            // one sentence instead of the badge's "Route X", the name again and the status as three reads
+            .accessibilityLabel("\(r?.short.isEmpty == false ? r!.short + ", " : "")\(model.longName(rid)), \(subtitle(n, tripOff: tripOff))")
+            .accessibilityHint("Opens the route")
             if !tripOff {
                 Button { model.toggleRouteHidden(rid) } label: {
                     Image(systemName: hidden ? "eye.slash" : "eye").font(.system(size: IconSize.row))
