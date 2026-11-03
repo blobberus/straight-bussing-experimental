@@ -10,18 +10,19 @@ import StraightBussingKit
 /// after the data, or when the arrival enters its last minute), and everything in between either counts by itself
 /// (iOS 18+) or is said "as of" the last update (iOS 17).
 
-/// Route badge in the route's color.
+/// Route badge in the route's color, the app's badge (docs/DESIGN-SPEC.md 10.9): Bold system text (no rounded face),
+/// white or near-black by contrast, the 6 pt tag radius.
 struct LiveRouteChip: View {
     let state: LiveTripSnapshot
     var compact = false
     var body: some View {
         Text(state.routeShort.isEmpty ? "Bus" : state.routeShort)
-            .font(.system(size: compact ? 12 : 14, weight: .heavy, design: .rounded))
+            .font(.system(size: compact ? 11 : 13, weight: .bold))
             .lineLimit(1)
-            .padding(.horizontal, compact ? 5 : 7)
-            .padding(.vertical, compact ? 2 : 3)
-            .foregroundStyle(Color.textOn(hex: state.routeColor))
-            .background(Color(hex: state.routeColor), in: RoundedRectangle(cornerRadius: compact ? 5 : 6))
+            .padding(.horizontal, compact ? 5 : 6)
+            .frame(minWidth: compact ? 28 : 32, minHeight: compact ? 20 : 24)
+            .foregroundStyle(Color.badgeText(hex: state.routeColor))
+            .background(Color(hex: state.routeColor), in: RoundedRectangle(cornerRadius: Radius.tag, style: .continuous))
             .accessibilityLabel("Route \(state.routeName)")
     }
 }
@@ -158,7 +159,7 @@ struct TripProgressBar: View {
                     if let p = state.busPosition {
                         Image(systemName: "bus.fill")
                             .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Color.textOn(hex: state.routeColor))
+                            .foregroundStyle(Color.badgeText(hex: state.routeColor))
                             .padding(4)
                             .background(color, in: Circle())
                             .overlay(Circle().stroke(.white, lineWidth: 1.5))
