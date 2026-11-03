@@ -367,9 +367,16 @@ Same words, icons and actions as today (`ui/pill.js`, iOS `StatusPill`); two for
 | Form | States | Look |
 |---|---|---|
 | Chip | Simulated buses (demo) | Capsule 32 tall, sized to content, leading-aligned under the search bar, `bgChrome` + `e1`; `flask` 15 + `footnote` Semibold `label`; trailing `info` 15 `tint`; whole chip is the button |
-| Banner | Live data delayed; out of date; no live locations; no shuttles running; feed unreachable | Full width (`insetChrome`), `rCard`, opaque `warnBg` (delayed, out of date, no live locations, no shuttles) or `dangerBg` (unreachable), `e1`; status icon 17 in `warn` / `danger`; text `rowDetail` in `label`, at most 2 lines at default size (first sentence Semibold); trailing action as a 44 pt text button in `tint` ("Retry", "See alert") |
+| Banner | Live data delayed; out of date; no live locations; no shuttles running; feed unreachable | Full width (`insetChrome`), `rCard`, opaque `warnBg` (delayed, out of date, no live locations, no shuttles) or `dangerBg` (unreachable), `e1`; status icon 17 in `warn` / `danger`; text `rowDetail` in `label`, at most 2 lines at default size (first sentence Semibold); the action ("Retry", "See alert") on the LEADING side in a fixed slot (84 x 44 pt, a `bgCard` capsule with `tint` text, top-leading corner of the banner) that never moves (see the Retry rule below) |
 
 - Exact copy is kept, e.g. "Can't reach the shuttle feed." (Semibold) + "Don't rely on these times; call 773.702.8181."
+- **Retry never shifts (owner 2026-11-03):** "move the retry button to the left side of the notification so if the user
+  spams it while on a route, it doesn't shift and accidentally cancel their current trip." The slot keeps its size and
+  place whatever the text or state; while a Retry poll runs it shows progress in place and further taps do nothing but
+  keep the banner; when the feed comes back right after a tap, the banner keeps its height and place for 2.5 s after the
+  last tap ("Live data is back.", a check mark, taps absorbed), so the trip chip (whose Show all ends the trip) and the
+  sheet never slide up under the finger; a stray tap on the leading side lands on the chip's label, never on its
+  trailing action. iOS: Kit `RetryHold` (unit-tested) and the UI test `testRepeatedRetryDuringATripKeepsTheTrip`.
 - One banner at a time (priority: unreachable > out of date > delayed > no live locations > no shuttles), plus the demo
   chip if both apply (chip first). Never iOS system yellow fills (audit: one state, one look).
 - Announce changes politely: web `role="status"` with `aria-live="polite"` (kept); iOS posts one accessibility

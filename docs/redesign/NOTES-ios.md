@@ -14,6 +14,26 @@ reason. Kept separate from the spec so the web engineer's edits and these notes 
 | 10.11, 10.12 buttons | `ios/App/Sources/Views/Styles.swift`: `PrimaryButtonStyle` (50 full width / 44 inline), `SecondaryButtonStyle` (+ destructive, compact 36 visual / 44 hit), `TextButtonStyle`, `CapsuleButtonStyle` (Routes filter), `RowButtonStyle` (pressed row = `fillPressed`), `EqualWidthHStack` (equal-width button rows that fall back to a stack through `ViewThatFits`), `FlowLayout`, `Sym` (one SF Symbol per meaning, with fallbacks for symbols newer than iOS 17). |
 | 10.8 to 10.10, 10.20 | `ios/App/Sources/Views/Components.swift`: `RouteBadge` (24 / 20 pt, contrast-picked text, ring under 3:1), `EtaView` (numeral + inline unit, Now, clock at 60 min, `~` stale, `est.`), `LiveDot`, `SourceLine`, `RowLayout` (40 pt leading slot; stacks at accessibility sizes), `Card`, `RowDivider` (68 pt in), `SectionTitle`, `ListHeader`, `InlineBanner`, `IconCircle`, `SkeletonRows` (row-shaped, pulse off under Reduce Motion), `EmptyStateView` (in a card, help under it). |
 
+## Retry never shifts the screen (owner request 2026-11-03)
+
+"When the connection/bus location is not updated and the error shows up, move the retry button to the left side of the
+notification so if the user spams it while on a route, it doesn't shift and accidentally cancel their current trip."
+
+- `StatusBanner` (`RootView.swift`): Retry (and See alert) sit in a fixed slot at the banner's top-leading corner, 84 x
+  44 pt (scaled with Dynamic Type only), a `bgCard` capsule with `tint` text. A running Retry poll shows a spinner in
+  the same slot; the banner is top-aligned, so a text change (for example "Retrying. Showing last known data.") never
+  moves the slot.
+- `AppModel.retryFeed()`: one Retry poll at a time; every tap (on Retry or on the held banner) extends the hold.
+- Kit `RetryHold` (pure, `RetryHoldTests`): when the feed comes back right after a tap, the banner keeps its height and
+  place for 2.5 s after the last tap, drawn as "Live data is back." (new copy, a check mark, `chromeSolid` surface), and
+  absorbs taps. Without it, the trip chip (whose Show all calls `endJourney`, which ends the trip) would move up into
+  the banner's place under a finger that keeps tapping.
+- On the leading side a tap that misses still lands on the trip chip's badges or label (no action), never on its
+  trailing Show all; End trip is in the sheet's trip card, on the trailing side and far below the banner.
+- UI test `testRepeatedRetryDuringATripKeepsTheTrip`: `-feed flaky` starts a trip with live data, then fails the feed;
+  six taps on the same screen point keep the slot in place, the trip running, and the chip in its row.
+- The web applies the same rule (spec 10.3 now says leading slot + hold).
+
 ## Deviations from the spec, and why
 
 1. **Basemap colors (11.2).** MapKit cannot be recolored; the app uses `.standard(elevation: .flat, emphasis: .muted,
