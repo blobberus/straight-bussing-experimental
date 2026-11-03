@@ -34,6 +34,23 @@ notification so if the user spams it while on a route, it doesn't shift and acci
   six taps on the same screen point keep the slot in place, the trip running, and the chip in its row.
 - The web applies the same rule (spec 10.3 now says leading slot + hold).
 
+## Larger text (spec 13.7), as fixed after the first CI gallery
+
+- The sheet header stacks at accessibility sizes: Back and the title (up to 3 lines) on top, the summary or action
+  under it. Before, the trailing summary squeezed the title until words broke in the middle ("Reynol ds Cl...").
+- Nothing in a sheet page may ask for more than the screen's width: the J1 text buttons wrap, the option card's total
+  and arrival wrap in their stacked layout, the rail pills wrap; and the chrome and the sheet with the bottom bar are
+  pinned to the screen's width, so one wide child can never push the gear or My Routes off screen again (AX5 did).
+- The place summary shows the full name and address at accessibility sizes (no line limit).
+- Rows follow `RowLayout`: the badge above the title and the ETA under the text from AX1.
+
+## Directions on the map
+
+- The selected option's routes take the focused state while Directions is open (wider, casings, chevrons; the rest
+  at 0.2 and their stops hidden), like a route page; a started trip already hides the other routes.
+- Collapsing the Directions sheet frames the selected option again in the larger visible map (it was framed for the
+  strip above the expanded sheet), so the route and its destination pin are not left behind the field card.
+
 ## Deviations from the spec, and why
 
 1. **Basemap colors (11.2).** MapKit cannot be recolored; the app uses `.standard(elevation: .flat, emphasis: .muted,
@@ -85,5 +102,12 @@ notification so if the user spams it while on a route, it doesn't shift and acci
     headings, so it never hides under a wide marker ("AP/DX | 2").
 19. **Liquid Glass (O2).** Not hand-rolled on the app's own chrome (default "No"); system sheets, alerts, menus and
     the keyboard get it from iOS 26 automatically.
-20. **Live Activity / Dynamic Island.** Unchanged in this pass (the widget keeps its own compact chip); the ETA notation
-    there already uses whole minutes and the same words.
+20. **Live Activity / Dynamic Island.** The chip follows the badge spec (Bold system text, contrast-picked color, 6 pt
+    radius) and the arrival numerals drop the rounded face; the layout of the Lock Screen card and the islands is
+    unchanged (system frames, whole minutes, the same words).
+21. **Stop actions (10.14).** Directions / From here / Favorite are sized by their words with the leftover width shared
+    (`FillRowLayout`, like the web's `flex: 1 1 auto`), not three equal columns: three columns of the widest label
+    ("Favorited" with its star) did not fit at 393 pt. A narrow phone wraps the last one; accessibility sizes stack.
+22. **Button rows inside lists.** Edit / Delete, Cancel / Save and the Routes filter are plain equal-split HStacks in
+    their list rows (short labels); the measured equal-width layout is kept for ScrollView pages only, where it gave
+    list rows an empty band in the first CI gallery.
