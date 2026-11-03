@@ -18,6 +18,7 @@
  *   also closes it. main.js opens it after the first real render, so it never delays the first paint or the data.
  *   Test seam: pages that boot the real app set sessionStorage[WELCOME_KEY] = "1" first (tests/e2e.js, e2e-demo.js).
  */
+import { svg } from "./icons.js";
 import { esc } from "../core/esc.js";
 
 /** How often the welcome popup may ask (owner 2026-11-02: "only occur every once in a while"). */
@@ -40,7 +41,7 @@ export const WELCOME_NOTE = "You can also find Give feedback in Settings at any 
 /** What a screen reader adds to a feedback link's visible label. */
 export const NEW_TAB = "opens a Google Form in a new tab";
 /** Speech bubble on an accent disc (decoration: the words carry the meaning). Popup header and Settings card. */
-export const FEEDBACK_ICON = '<span class="fb-badge" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 19.5l1.4-4.3A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8.5 10h7M8.5 13.5h4.5"/></svg></span>';
+export const FEEDBACK_ICON = `<span class="fb-badge" aria-hidden="true">${svg("message-square", 20)}</span>`;
 
 const GUARD_MS = 350;   // like ui/confirm.js: taps in the first moment after opening are ignored (a double tap)
 const PAINT_WAIT_MS = 400;   // welcomeAfterPaint: the longest wait for the next frame
@@ -54,7 +55,7 @@ let shownThisLoad = false;
  * @returns {string}
  */
 export function feedbackLinkHTML(label, { cls = "v-btn v-btn--secondary", attrs = "", icon = false } = {}) {
-  const arrow = icon ? '<svg class="v-ic fb-ext" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>' : "";
+  const arrow = icon ? svg("square-arrow-out-up-right", 15, { cls: "v-ic fb-ext" }) : "";
   return `<a class="${esc(cls)}" href="${esc(FEEDBACK_URL)}" target="_blank" rel="noopener" aria-label="${esc(`${label}, ${NEW_TAB}`)}"${attrs ? " " + attrs : ""}>${esc(label)}${arrow}</a>`;
 }
 

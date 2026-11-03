@@ -65,7 +65,7 @@ test("welcome popup: owner's title and text, buttons Cancel / Go to Feedback, th
   eq(d.querySelector(".v-welcome-band h2").textContent, OWNER_TITLE, "the title sits in the tinted band");
   ok(d.querySelector(".v-welcome-band .fb-badge[aria-hidden='true'] svg"), "the speech bubble icon is decoration only");
   eq([...d.querySelectorAll("p")].map((x) => x.textContent), [FEEDBACK_LEAD, WELCOME_BODY, WELCOME_NOTE], "the ask first, then why, then where else");
-  eq(getComputedStyle(d.querySelector(".v-welcome-lead")).fontWeight, "650", "the ask in bold");
+  eq(getComputedStyle(d.querySelector(".v-welcome-lead")).fontWeight, "600", "the ask in Semibold (DESIGN-SPEC 2: weights 400 / 600 / 700)");
   eq(document.getElementById(d.getAttribute("aria-labelledby")), d.querySelector("h2"), "aria-labelledby = the title");
   eq(document.getElementById(d.getAttribute("aria-describedby")).textContent, FEEDBACK_LEAD + WELCOME_BODY + WELCOME_NOTE, "aria-describedby = all the text");
   const btns = [...d.querySelectorAll("[data-welcome]")];
@@ -258,6 +258,12 @@ function contrast(fg, bg) {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
+/** A translucent color ("rgba(118, 118, 128, 0.12)", the iOS-style fill of Secondary buttons) laid over an opaque one. */
+function over(top, base) {
+  const t = String(top).match(/[\d.]+/g).map(Number), b = String(base).match(/[\d.]+/g).map(Number), a = t.length > 3 ? t[3] : 1;
+  return `rgb(${[0, 1, 2].map((i) => Math.round(t[i] * a + b[i] * (1 - a))).join(", ")})`;
+}
+
 /** Is this "rgb(...)" color mostly green (the live color's job, DESIGN.md 1b)? */
 const greenish = (c) => { const [r, g, b] = String(c).match(/[\d.]+/g).map(Number); return g > r + 20 && g > b + 20; };
 
@@ -283,7 +289,7 @@ test("welcome popup: noticeable (a tinted band, not the live green) and readable
       ok(Math.abs(br.left - dr.left) < 1 && Math.abs(br.right - dr.right) < 1 && Math.abs(br.top - dr.top) < 1, theme + ": the band runs edge to edge at the top");
       const pairs = [["title", d.querySelector("h2"), bandBg], ["badge icon", badge, cs(badge).backgroundColor]];
       for (const x of d.querySelectorAll("#v-welcome-b p")) pairs.push([x.className, x, bg]);
-      for (const b of d.querySelectorAll("[data-welcome]")) pairs.push([b.textContent, b, cs(b).backgroundColor]);
+      for (const b of d.querySelectorAll("[data-welcome]")) pairs.push([b.textContent, b, over(cs(b).backgroundColor, bg)]);
       for (const [name, el, back] of pairs) {
         const k = contrast(cs(el).color, back);
         ok(k >= 4.5, `${theme}: ${name} contrast ${k.toFixed(2)} >= 4.5 (${cs(el).color} on ${back})`);
@@ -356,7 +362,7 @@ test("settings: Beta feedback comes first, a tinted card with the ask and a real
         const cs = (x) => getComputedStyle(x), cbg = cs(card).backgroundColor, badge = card.querySelector(".fb-badge");
         ok(!/rgba\(0, 0, 0, 0\)|transparent/.test(cbg) && !greenish(cbg) && !greenish(cs(badge).backgroundColor), `${theme}: tinted, not green (${cbg})`);
         for (const [name, x, back] of [["lead", card.querySelector(".st-fblead"), cbg], ["line", card.querySelector(".st-intro"), cbg],
-          ["note", card.querySelector(".st-fbnote"), cbg], ["button", a, cs(a).backgroundColor], ["badge icon", badge, cs(badge).backgroundColor]]) {
+          ["note", card.querySelector(".st-fbnote"), cbg], ["button", a, over(cs(a).backgroundColor, cbg)], ["badge icon", badge, cs(badge).backgroundColor]]) {
           const k = contrast(cs(x).color, back);
           ok(k >= 4.5, `${theme}: ${name} contrast ${k.toFixed(2)} >= 4.5 (${cs(x).color} on ${back})`);
         }
