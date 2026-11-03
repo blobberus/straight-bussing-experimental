@@ -254,44 +254,112 @@ struct ChromePressStyle: ButtonStyle {
 /// The status banner (spec 10.3; web main.js renderPill): stale or failed live data is always flagged and a fresh empty
 /// feed says whether the schedule has routes in service (ship checklist item 1). One banner at a time, full width,
 /// opaque `warnBg` (delayed, out of date, no live locations, no shuttles) or `dangerBg` (unreachable), same words as
-/// the web, the first sentence Semibold, Retry / See alert as a 44 pt text button. A change is announced once.
+/// the web, the first sentence Semibold. A change is announced once.
+///
+/// Its action (Retry, See alert) sits on the LEADING side in a fixed slot (owner 2026-11-03: "move the retry button to
+/// the left side of the notification so if the user spams it while on a route, it doesn't shift and accidentally cancel
+/// their current trip"): the slot has a fixed size and sits at the banner's top-leading corner, so neither a text
+/// change nor a state change moves it; while a Retry poll runs it shows progress in the same place; when the feed
+/// comes back right after a tap the banner keeps its place for 2.5 s after the last tap ("Live data is back.", taps
+/// absorbed; Kit `RetryHold`), so the trip chip with its Show all (which ends the trip) and the sheet cannot slide up
+/// under the finger. On the leading side a missed tap lands on the chip's label, never on its trailing Show all.
 struct StatusBanner: View {
     @Environment(AppModel.self) private var model
+    /// The live banner's last height: the held banner keeps it, so nothing below moves when the feed comes back.
+    @State private var liveHeight: CGFloat = 0
+    /// The action slot: a fixed size (scales with Dynamic Type, never with the text or the state).
+    @ScaledMetric(relativeTo: .subheadline) private var slotW: CGFloat = 84
+
     var body: some View {
-        if !model.simulating, let p = model.statusPill {
-            let shape = RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-            let parts = Self.split(p.text)
-            HStack(alignment: .center, spacing: Space.s3) {
-                Image(systemName: icon(p)).font(.system(size: IconSize.status, weight: .semibold))
-                    .foregroundStyle(p.kind == .err ? Palette.danger : Palette.warn)
+        let _ = model.retryHoldTick   // the hold ended: look again
+        if !model.simulating, let s = model.retryHold.shown(model.statusPill, now: Date().timeIntervalSince1970) {
+            banner(s)
+        }
+    }
+
+    @ViewBuilder func banner(_ s: RetryHold.Shown) -> some View {
+        let p = s.pill
+        let shape = RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+        let hasSlot = p.retry || p.alert
+        let parts = s.recovered ? (lead: "Live data is back.", rest: "") : Self.split(p.text)
+        HStack(alignment: .top, spacing: Space.s3) {
+            if hasSlot { slot(s).frame(width: min(slotW, 120), height: Space.tap) }
+            HStack(alignment: .firstTextBaseline, spacing: Space.s2) {
+                Image(systemName: s.recovered ? "checkmark.circle.fill" : icon(p))
+                    .font(.system(size: IconSize.status, weight: .semibold))
+                    .foregroundStyle(s.recovered ? Palette.live : p.kind == .err ? Palette.danger : Palette.warn)
                     .accessibilityHidden(true)
                 (Text(parts.lead).fontWeight(.semibold) + Text(parts.rest.isEmpty ? "" : " " + parts.rest))
                     .font(Typo.rowDetail).foregroundStyle(Palette.label)
                     .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                if p.retry {
-                    Button("Retry") { Task { await model.pollOnce() } }
-                        .textButtonStyle(font: Typo.sectionTitle)
-                        .accessibilityLabel("Retry loading live data")
-                } else if p.alert {
-                    // no bus is reporting and the operator posted an alert: it may say why (rider safety)
-                    Button("See alert") { model.openAlerts() }
-                        .textButtonStyle(font: Typo.sectionTitle)
-                        .accessibilityLabel("Read the service alert")
-                        .accessibilityIdentifier("pillAlert")
-                }
             }
-            .padding(.leading, Space.insetContent)
-            .padding(.trailing, p.retry || p.alert ? Space.s2 : Space.insetContent)
-            .padding(.vertical, p.retry || p.alert ? 0 : Space.s3)
-            .frame(maxWidth: .infinity, minHeight: Space.tap, alignment: .leading)
-            .background(p.kind == .err ? Palette.dangerBg : Palette.warnBg, in: shape)
-            .elevation(.floating, in: shape)
-            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+            .padding(.vertical, hasSlot ? Space.s3 : 0)
             .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("statusPill")
-            .onAppear { AccessibilityNotification.Announcement(p.text).post() }
-            .onChange(of: p) { _, v in AccessibilityNotification.Announcement(v.text).post() }
+            .accessibilityAddTraits(.isStaticText)
+            .accessibilityHidden(s.recovered && hasSlot)   // the slot says it then
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, hasSlot ? Space.s1 : Space.insetContent)
+        .padding(.trailing, Space.insetContent)
+        .padding(.vertical, hasSlot ? 0 : Space.s3)
+        .frame(maxWidth: .infinity, minHeight: s.recovered ? max(Space.tap, liveHeight) : Space.tap, alignment: .topLeading)
+        .background(s.recovered ? Palette.chromeSolid : p.kind == .err ? Palette.dangerBg : Palette.warnBg, in: shape)
+        .contentShape(shape)
+        // the held banner absorbs taps (each extends the hold) instead of letting them reach what is under it
+        .onTapGesture { if s.recovered { model.retryFeed() } }
+        .elevation(.floating, in: shape)
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { h in
+            if !s.recovered && abs(h - liveHeight) > 0.5 { liveHeight = h }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("statusPill")
+        .onAppear { AccessibilityNotification.Announcement(s.recovered ? parts.lead : p.text).post() }
+        .onChange(of: s) { _, v in AccessibilityNotification.Announcement(v.recovered ? "Live data is back." : v.pill.text).post() }
+    }
+
+    /// The fixed leading slot: Retry (progress while its poll runs), See alert, or, once the feed is back, a check mark
+    /// that takes no tap of its own (the banner absorbs it).
+    @ViewBuilder func slot(_ s: RetryHold.Shown) -> some View {
+        let p = s.pill
+        if s.recovered {
+            Image(systemName: "checkmark").font(.system(size: IconSize.status, weight: .semibold)).foregroundStyle(Palette.live)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityLabel("Live data is back")
+                .accessibilityIdentifier("bannerRetry")
+        } else if p.retry {
+            Button { model.retryFeed() } label: {
+                ZStack {
+                    if model.retrying {
+                        ProgressView().controlSize(.small).tint(Palette.tint)
+                    } else {
+                        Text("Retry").lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                }
+                .font(Typo.sectionTitle)
+                .foregroundStyle(Palette.tint)
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background(Palette.bgCard, in: Capsule())
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(ChromePressStyle())
+            .accessibilityLabel(model.retrying ? "Retrying" : "Retry loading live data")
+            .accessibilityIdentifier("bannerRetry")
+        } else if p.alert {
+            // no bus is reporting and the operator posted an alert: it may say why (rider safety)
+            Button { model.openAlerts() } label: {
+                Text("See alert").lineLimit(1).minimumScaleFactor(0.8)
+                    .font(Typo.sectionTitle)
+                    .foregroundStyle(Palette.tint)
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .background(Palette.bgCard, in: Capsule())
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(ChromePressStyle())
+            .accessibilityLabel("Read the service alert")
+            .accessibilityIdentifier("pillAlert")
         }
     }
 
