@@ -757,3 +757,39 @@ Owner steps, columns and privacy rules: **`docs/USAGE-STATS.md`**.
   stop still stacks), tests/e2e-backnav.js in e2e.test.html (3, the real app with real map line taps: My Routes >
   Central > 53rd Street Express > Back or browser back = the custom route page, unchanged; Routes list > line > map tap
   on another line > Back = Routes list; a single line > Back and browser back). sw `sb-v2-80`.
+
+## Redesign: layout and shell contracts (2026-11-03, docs/DESIGN-SPEC.md; owner brief "Straight Bussing New Version.txt")
+The navigation structure is unchanged (search bar with clock and gear, three sections in the bottom bar, sheet with two
+resting states, back stack, Settings and Lines by Time overlays); what changed in the shell and the contracts views use:
+- **Tokens** (`css/tokens.css`): the spec's token table under its CSS names; the old names stay as aliases. Root = body
+  size (`html { font-size: 106.25% }`, `-apple-system-body` on iPhone Safari); every type role is `calc(1rem * n / 17)`.
+  `js/ui/frame.js initTextSize` sets `html[data-text]` = `default` (< 20 px root), `large` (20 to 27), `ax` (28+);
+  stylesheets stack rows, buttons, option lines and the sheet header's trailing slot at `ax`.
+- **Icons**: `js/ui/icons.js` is the one set (`svg(name, size, {cls, stroke})`, `pair(name)` for outline / filled);
+  `index.html` inlines the same SVGs for the static chrome; `components.js icon()` maps the old names onto it.
+- **Sheet** (`css/sheet.css`, `js/ui/sheet.js`): opaque `bgSheet`, no backdrop blur; `--v-peek` is set on `#app` from the
+  measured header height (first measurement without a slide), so the collapsed sheet grows with text; `.is-scrolled`
+  shows the header hairline. Header markup: `.titletext` holds `#title` and `#subtitle`; `#titleRight` is the
+  trailing slot.
+- **View header contract** (main.js `renderHeader`): `def.title(state, o)`, `def.subtitle(state, o)` and
+  `def.metaHTML(state, o)` (trusted markup built with esc(); else the plain-text `def.meta`), with `o = {detent}`; the
+  header re-renders on every store change, on a sheet state change and on the bus event `sheet:header` (a view's own
+  state changed, e.g. Directions selected another option). Header actions (`[data-action]` in `#titleRight`) are bound
+  like the content's. Users: nearby (badge + ETA + live dot; during a trip the next step over "Trip to X" with Arriving
+  In when collapsed, "Current trip" when expanded), stop (next arrival), route (`routeStatusText`), directions (selected
+  total), routes (`routesMetaHTML`: Edit map order), myroutes (`myRoutesMetaHTML`: New).
+- **Status** (`js/ui/pill.js`): `#pill[data-form]` = `chip` (simulated buses: 32 pt capsule, whole chip is the button)
+  or `banner` (every feed state: full width, opaque warn / danger background, first sentence Semibold via
+  `setPillText`). `--pill-h` and the expanded state below the banner work as before; the locate button moves under a
+  banner.
+- **Trip chip** (`js/ui/contextbar.js`): badges (up to 3, then "+N"), "Trip to X" / "Routes to X" / the Lines by Time
+  name / the custom route's name, Show all / Clear; only the label truncates; no marquee.
+- **Toast** (`css/base.css`): 12 above the collapsed sheet, 12 above the bottom bar when expanded, hidden while an
+  overlay (Settings, Lines by Time) is open.
+- **Map** (`js/map/layers.js`): `lineWeight` by the spec table, `FOCUS_EXTRA` 2, `CASING_EXTRA` 3, `casingClass(color)`
+  (" sb-cl" / " sb-cd" flip the casing under 3:1 per theme), `stopStyle(z)`, `routeLabel` = the badge's chipText (never
+  truncated), `notchRadius(w, h, deg)`; dimmed lines are drawn without casing. `js/map/landmarks.js` takes an `avoid()`
+  callback (the location dot). `css/map.css` reads `--sb-accent` (tintFill) and `--sb-tint` (tint).
+- Performance rules kept: the sheet's `--drag` stays non-inherited, `will-change` only while dragging, content insets
+  change after a settle, bus markers update in place on requestAnimationFrame; at most four blurred elements.
+Deviations from the spec: `docs/redesign/NOTES-web.md`. sw `sb-v2-82`.
