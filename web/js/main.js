@@ -59,7 +59,7 @@ function toast(text) {
   el.toast.textContent = String(text);
   el.toast.classList.remove("hide");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.toast.classList.add("hide"), 4500);
+  toastTimer = setTimeout(() => el.toast.classList.add("hide"), 3000);   // spec 10.19: 3 s (no web toast carries an action)
 }
 let lastErrToast = 0;
 function reportError(err) {
