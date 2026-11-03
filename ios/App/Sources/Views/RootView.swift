@@ -159,13 +159,19 @@ final class SheetScroll {
 }
 
 extension View {
-    /// Report this scroll view's offset to the sheet header (iOS 18+; on iOS 17 the hairline stays off).
+    /// Report this scroll view's offset to the sheet header (iOS 18+; on iOS 17 the hairline stays off). With
+    /// `-scrollend` (CI) the page opens scrolled to its end.
     func reportsSheetScroll() -> some View { modifier(SheetScrollReporter()) }
 }
 
 struct SheetScrollReporter: ViewModifier {
     @Environment(SheetScroll.self) private var scroll
+    @Environment(AppModel.self) private var model
     func body(content: Content) -> some View {
+        reporting(content.defaultScrollAnchor(model.config.scrollEnd ? .bottom : nil))
+    }
+
+    @ViewBuilder func reporting(_ content: some View) -> some View {
         if #available(iOS 18.0, *) {
             content.onScrollGeometryChange(for: Bool.self, of: { g in g.contentOffset.y + g.contentInsets.top > 1 }) { _, v in
                 if scroll.scrolled != v { scroll.scrolled = v }

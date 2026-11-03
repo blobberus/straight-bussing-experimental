@@ -19,6 +19,7 @@ import StraightBussingKit
 ///   -alert                with -demo: the operator's service alert is up (the alert row)
 ///   -locdenied            with -demo -noloc: location denied (the help card)
 ///   -hold                 with -demo: never polls (the loading state)
+///   -scrollend            the sheet's page opens scrolled to its end (CI shots of what is below the fold)
 /// Screens for the redesign gallery: stoplong / dirlong (the longest stop name), searchplace (a place query typed in
 /// Directions).
 struct LaunchConfig {
@@ -33,6 +34,7 @@ struct LaunchConfig {
     var alert = false
     var locDenied = false
     var hold = false
+    var scrollEnd = false
 
     static func parse(_ args: [String] = ProcessInfo.processInfo.arguments) -> LaunchConfig {
         var c = LaunchConfig()
@@ -51,6 +53,7 @@ struct LaunchConfig {
         c.alert = c.demo && args.contains("-alert")
         c.locDenied = c.demo && args.contains("-locdenied")
         c.hold = c.demo && args.contains("-hold")
+        c.scrollEnd = args.contains("-scrollend")
         return c
     }
 }

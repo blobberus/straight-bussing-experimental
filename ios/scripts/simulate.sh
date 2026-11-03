@@ -77,6 +77,19 @@ for mode in light dark; do
   shot 51-dir-long     "$mode" 10 -screen dirlong
 done
 
+# Below the fold (-scrollend: the page opens scrolled to its end): footnotes, buttons, the official contact
+for mode in light dark; do
+  shot 03b-trip-end     "$mode" 10 -screen trip -detent full -scrollend
+  shot 05b-routes-end   "$mode" 8  -screen routes -scrollend
+done
+xcrun simctl ui "$UDID" appearance light
+shot 04b-directions-end light 9  -screen directions -scrollend
+shot 06b-route-end      light 9  -screen route -scrollend
+shot 08b-stop-end       light 8  -screen stop -scrollend
+shot 11b-about-end      light 8  -screen about -detent full -scrollend
+shot 19b-custom-end     light 8  -screen custom -scrollend
+shot 26b-nobus-end      light 9  -screen current -nobus -detent full -scrollend
+
 # Larger text (Dynamic Type): key rows must wrap, never clip or slide under the sheet. Light mode, the largest
 # standard size (xxxl) and accessibility size AX3; files <name>-xxxl.png / <name>-ax3.png (one gallery card each).
 bigshot() {  # bigshot <name> <wait s> <args...>
