@@ -436,6 +436,34 @@ export function createSheet({ sheetEl, contentEl, headEl, grabEl, initial, panel
     offs.push(() => panelMq.removeEventListener("change", onMq));
   }
 
+  /* ---- collapsed height = the header's measured height (spec 10.6: grows with text, never cuts the title) ---- */
+  let peekPx = 0;
+  const fitPeek = (instant) => {
+    const h = Math.round(headEl.offsetHeight);
+    if (!h || h === peekPx) return;
+    peekPx = h;
+    if (instant === true) {   // the first measurement: no slide from the CSS default
+      sheetEl.style.transition = "none";
+      host.style.setProperty("--v-peek", h + "px");
+      void sheetEl.offsetHeight;
+      sheetEl.style.removeProperty("transition");
+    } else host.style.setProperty("--v-peek", h + "px");
+    if (detent === "peek") emitInset();
+  };
+  if (typeof ResizeObserver === "function") {
+    const ro = new ResizeObserver(() => fitPeek(false));
+    ro.observe(headEl);
+    offs.push(() => ro.disconnect());
+  }
+  offs.push(() => host.style.removeProperty("--v-peek"));
+  fitPeek(true);
+  /* ---- a hairline under the header once the content scrolls (spec 10.6) ---- */
+  let scrolled = false;
+  on(contentEl, "scroll", () => {
+    const sc = contentEl.scrollTop > 0;
+    if (sc !== scrolled) { scrolled = sc; sheetEl.classList.toggle("is-scrolled", sc); }
+  }, { passive: true });
+
   paint();
   rest(true);
   requestAnimationFrame(emitInset);
