@@ -211,42 +211,33 @@ struct SheetHeader: View {
     @Environment(AppModel.self) private var model
     @Environment(SheetScroll.self) private var scroll
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let back = !model.path.isEmpty
         let trip = model.page == nil && model.tab == .current && model.activeTrip != nil ? model.tripFollow : nil
-        HStack(alignment: .center, spacing: Space.s2) {
-            if back {
-                Button { model.back() } label: {
-                    Image(systemName: "chevron.backward").font(.system(size: 20, weight: .semibold)).foregroundStyle(Palette.tint)
-                        .frame(width: Space.tap, height: Space.tap)
-                        .contentShape(Rectangle())
+        Group {
+            if typeSize.isAccessibilitySize {
+                // accessibility sizes (spec 13.7): the title gets the whole width (never broken inside a word), the
+                // summary or action goes under it
+                VStack(alignment: .leading, spacing: Space.s1) {
+                    HStack(alignment: .center, spacing: Space.s2) {
+                        if back { backButton }
+                        title(trip, lines: 3)
+                        Spacer(minLength: 0)
+                    }
+                    trailing(trip)
+                        .padding(.leading, back ? Space.tap + Space.s2 : 0)
                 }
-                .buttonStyle(ChromePressStyle())
-                .accessibilityLabel("Back")
-                .accessibilityIdentifier("backButton")
-            }
-            if let p = trip, model.detent == .peek {
-                // a trip in progress, collapsed (spec 10.6, O3): the current step and the trip, Arriving In on the right
-                let step = TripText.nowCard(p, routes: model.staticData.routes, now: model.now, you: model.tripYou).prim
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(step).font(Typo.rowTitle).foregroundStyle(Palette.label).lineLimit(2)
-                        .accessibilityIdentifier("sheetTitle")
-                        .accessibilityAddTraits(.isHeader)
-                    Text("Trip to \(p.to)").font(Typo.rowDetail).foregroundStyle(Palette.label2).lineLimit(1)
-                }
-                .padding(.vertical, Space.s2)
+                .padding(.vertical, Space.s1)
             } else {
-                Text(model.title)
-                    .font(Typo.sheetTitle)
-                    .foregroundStyle(Palette.label)
-                    .lineLimit(2)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityIdentifier("sheetTitle")
-                    .padding(.vertical, Space.s2)
+                HStack(alignment: .center, spacing: Space.s2) {
+                    if back { backButton }
+                    title(trip, lines: 2)
+                    Spacer(minLength: Space.s2)
+                    trailing(trip)
+                }
             }
-            Spacer(minLength: Space.s2)
-            trailing(trip)
         }
         .padding(.leading, back ? Space.s1 : Space.insetContent)
         .padding(.trailing, Space.insetContent)
@@ -255,6 +246,39 @@ struct SheetHeader: View {
             if scroll.scrolled && model.detent == .full {
                 Rectangle().fill(Palette.separator).frame(height: 1 / max(1, displayScale)).accessibilityHidden(true)
             }
+        }
+    }
+
+    var backButton: some View {
+        Button { model.back() } label: {
+            Image(systemName: "chevron.backward").font(.system(size: 20, weight: .semibold)).foregroundStyle(Palette.tint)
+                .frame(width: Space.tap, height: Space.tap)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(ChromePressStyle())
+        .accessibilityLabel("Back")
+        .accessibilityIdentifier("backButton")
+    }
+
+    @ViewBuilder func title(_ trip: TripFollow?, lines: Int) -> some View {
+        if let p = trip, model.detent == .peek {
+            // a trip in progress, collapsed (spec 10.6, O3): the current step and the trip, Arriving In on the right
+            let step = TripText.nowCard(p, routes: model.staticData.routes, now: model.now, you: model.tripYou).prim
+            VStack(alignment: .leading, spacing: 2) {
+                Text(step).font(Typo.rowTitle).foregroundStyle(Palette.label).lineLimit(lines)
+                    .accessibilityIdentifier("sheetTitle")
+                    .accessibilityAddTraits(.isHeader)
+                Text("Trip to \(p.to)").font(Typo.rowDetail).foregroundStyle(Palette.label2).lineLimit(1)
+            }
+            .padding(.vertical, Space.s2)
+        } else {
+            Text(model.title)
+                .font(Typo.sheetTitle)
+                .foregroundStyle(Palette.label)
+                .lineLimit(lines)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("sheetTitle")
+                .padding(.vertical, Space.s2)
         }
     }
 
