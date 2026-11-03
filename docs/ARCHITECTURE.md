@@ -180,8 +180,8 @@ Layer groups must never be rebuilt when nothing changed (diff by a cheap signatu
 ## UI shell (D1) and views (D2)
 ```js
 // ui/router.js
-export function registerView(id, def)   // def = { title(state)->string, parent?:viewId, detent?:'peek'|'half'|'full', tab?:'nearby'|'routes'|'myroutes', render(state)->htmlString, mount?(rootEl, ctx), unmount?(), refresh?(), meta?(state)->text, onStopTap?(id, ctx)->bool }
-export function navigate(view, params={})   // sets store.view/prevView/stopId/routeId, adjusts detent
+export function registerView(id, def)   // def = { title(state)->string, parent?:viewId, detent?:'peek'|'half'|'full', tab?:'nearby'|'routes'|'myroutes', render(state)->htmlString, mount?(rootEl, ctx), unmount?(), refresh?(), meta?(state)->text, onStopTap?(id, ctx)->bool, replaceSelf?:bool }
+export function navigate(view, params={})   // sets store.view/prevView/stopId/routeId, adjusts detent; a sub view pushes the current location (a view already on the stack pops back to it); a replaceSelf view (the route page) opened from itself replaces the current entry instead (line replaces line, owner 2026-11-02)
 export function back()
 // ui/actions.js
 export function registerAction(name, fn)    // fn(dataset, event, ctx); markup uses data-action="name" data-id="..." (event delegation on the sheet content)
@@ -354,6 +354,22 @@ its own list: Apple Maps for the map and walks instead of the web map stack).
 
 ### Beta feedback (2026-10-13, owner)
 `ui/feedback.js`: `FEEDBACK_URL` (the only place the Google Form address appears), `feedbackLinkHTML()` (a real `<a target="_blank" rel="noopener">`, never window.open after an await), the welcome popup (native `<dialog>` like ui/confirm.js: Cancel focused first, Escape / outside tap close, 350 ms double-tap guard) once per browser session (`sessionStorage`; blocked storage = once per page load), opened by main.js after the first painted render (`welcomeAfterPaint`). Settings starts with "Beta feedback" (`views/settings.js feedbackHTML`). Browser tests set the session flag before booting the app (e2e.js, e2e-demo.js).
+- 2026-11-02 (owner: "Make the feedback request notification a little more noticable (using different colors etc).
+  Emphasize how it would be very helpful. Would it be possible to make this request only occur every once in a while
+  and not every time the user reloads the site?" and "In the settings menu, the beta feedback should also be more
+  prominent"): one look for the popup and the Settings card: the accent tint `--accent-bg` (tokens.css: light #d9e7f8,
+  dark #223042; never the green live color), `FEEDBACK_ICON` (speech bubble, white on an `--accent-fill` disc,
+  aria-hidden), the bold ask `FEEDBACK_LEAD` "Your feedback would be very helpful.". Popup: the owner's title in a band
+  running edge to edge under the rounded top, then `WELCOME_BODY` and `WELCOME_NOTE`, Cancel / Go to Feedback (with the
+  opens-elsewhere arrow). Settings: "Beta feedback" stays first; a tinted card with the icon + ask, `FEEDBACK_LINE`,
+  Give feedback as the card's primary button, the privacy note.
+- How often: never twice in one visit (`sessionStorage` `sb-welcome-seen`, still the tests' seam), at most once every
+  `WELCOME_EVERY_DAYS` (7) days, and not for `WELCOME_AFTER_FEEDBACK_DAYS` (30) days after the rider opened the form
+  (Go to Feedback, or Give feedback in Settings: `noteFeedbackOpened`). `localStorage` `sb-welcome-log` =
+  `{shown, feedback}` (ms; two dates, on the device only; privacy.html "Your settings" and About say so); `welcomeDue`
+  is pure (a date far in the future, from a changed clock, counts by its distance). Storage blocked: once per session,
+  or per page load. Tests: tests/feedback-welcome.js (wording, frequency, contrast, Settings card), feedback-app.js
+  (real app: a new visit within the week shows nothing, a week later it asks). sw sb-v2-81.
 
 ### You on the trip map + trip alerts (2026-10-13, owner: "the Current Trip map should show the user's location in the current trip's location (especially for bus routes). Make this sync to the notification center's get off in X stops")
 ONE evaluation of the followed trip per data change, `core/tripprogress.js tripNow(state, nowS)` (memo: same journey,
@@ -397,8 +413,15 @@ Web: `ui/notifier.js` (SETTINGS) watches the store while the page is open and de
 first: the compass (iOS Safari `deviceorientation` + `webkitCompassHeading`, Chrome / Android `deviceorientationabsolute`
 = 360 - alpha; a relative alpha is ignored), + the screen angle in landscape; else the GPS course (`coords.heading`) while
 moving >= 1 m/s; else no cone (the plain dot). iOS 13+ shows the compass only after `DeviceOrientationEvent.requestPermission()`
-inside a tap: `compass.request()` runs synchronously in `locate()` (every tap that asks for the location) and the locate
-button, never at launch (`locate({auto: true})`), and never again once readings come. On while location sharing is on
+inside a tap (Safari's "Motion & Orientation Access" prompt). One tap shows at most ONE system prompt (2026-11-02, owner:
+"There are two requests for locations when the user decides to press share location/use my location ... If this is not
+absolutely needed and can be completed with one notification to the user, do so"): main.js `askCompass()` calls
+`compass.request()` synchronously from `locate()` (every tap that asks for the location) and the locate button only
+when `mayAskCompass(store.locState)` (location already `granted`, so no location prompt can show in the same tap);
+never at launch (`locate({auto: true})`), at most one request in flight, never again once readings come. So the first
+share / locate tap shows the location prompt alone; a later locate tap may show the motion prompt alone; a blocked or
+switched-off location (Settings > Stop sharing) never reaches it. Without the compass the cone still follows the GPS
+course while moving. Android / Chrome need no prompt for the sensors. Test: `tests/e2e-locprompt.js` (e2e.test.html). On while location sharing is on
 (`start` after a fix, `stop` in `stopLocation`), listener off while the page is hidden. Readings never enter the store:
 coalesced to one per animation frame, passed on only on a turn >= 2 deg or a width change, straight to
 `MapApi.setHeading(deg, spread)`. Width = 2 x the compass's stated error, 40..120 deg (60 when the source gives no
@@ -621,3 +644,116 @@ Same spec for the iPhone app (another agent ports it to `ios/`). sw `sb-v2-36`.
   `TripStopTimes.swift` (`TripFollow.stopTimes`), `TripText.stopTimes` / `stopEta` / `stopSay`, App `TripTimelineView`
   (ride minutes from `SchedulePredictor`); tests `TripStopTimesTests`.
 
+
+## Tap a line on the map; a closed route shows its hours first (2026-10-27, owner: "If a user click on a line that is displayed on the actual map, the uppermost line on the layers ... should open as if the user clicked the specific route", "if a specific route that is running is closed, display the hours and service menu first")
+- **Line taps.** Route lines stay non-interactive Leaflet layers (stop halos, buses, favorites and controls keep winning
+  their own taps). `map.js`'s map click asks the network layer `lineAt(containerPoint)`: every drawn route polyline is
+  projected to container pixels (only those whose bounds come near the tap) and `map/geometry.js lineAt` returns the
+  TOPMOST line within `LINE_TAP_PX` (14 px) plus half its drawn width (the casing), in the network's own draw order
+  (`stackOrder`: routeOrder, focused routes above dimmed ones), even where a lower line passes closer. Hidden routes are
+  not drawn, so never tapped. A hit fires `MapApi.onLineTap(rid)` instead of `onMapTap`; with no listener, or while a
+  trip plan is drawn (the network is a dim backdrop then), the tap stays an empty-map tap.
+- `main.js` opens the route like a Routes list tap (`openRoute`: route detail at its detent, map framed on the shape),
+  unless `core/visibility.js lineTapOpens(state)` says no: Directions, Routes to station, and the Current trip view while
+  a trip is in progress keep a map tap as "lower the sheet". A pointer shortcut only: the Routes list stays the
+  accessible path (no hover cursor on desktop).
+- **Closed route.** `ui/views/route.js routeClosed(state, rid, now)` = no bus of the route running and the schedule does
+  not say it runs now (a scheduled route whose buses send no location is open; so is a bus running outside the
+  timetable). Then "Hours & service" renders right after the status line and notes, and the stop timeline follows under
+  a visible "Stops" heading (`.r-stops-h`); otherwise the order is unchanged. The render is a pure function of state and
+  time, so the order flips once at the service boundary. Tests: `web/tests/map-linetap.js` (map.test.html),
+  `route-view.js`. sw `sb-v2-68`.
+- 2026-10-29 (owner: on a closed route the operator's route assistance numbers must not come first): closed = status, Today line, Hours & service (week, changes, scheduled buses by hour), then the no-bus help (operator alert, Call bus route help, Safety or urgent 773.702.8181), then Stops. Open routes keep the help right after the status. route.js renderRoute; tests route-view.js; sw sb-v2-70.
+
+## Anonymous usage statistics (2026-10-27, owner: "track when a distinct user logs on (time of day), track how long they use it, track what locations they use it most often from", anonymously; visit start and distinct users "should collect regardless")
+Website only; on since 2026-10-29 (`USAGE_URL` in web/js/data/usage.js = the owner's Apps Script web app; empty = off).
+Owner steps, columns and privacy rules: **`docs/USAGE-STATS.md`**.
+- `data/usage.js` (USAGE): `startUsage(store, {ver})` after the first render (main.js; never in demo mode, from
+  automated browsers or off https). Rows: `start` always (Chicago day / weekday / time to the minute, app kind, version,
+  first visit), `end` = seconds on screen this visit (store `usage.dur`, default on, off by default with Global
+  Privacy Control / Do Not Track), `place` = nearest stop name within 400 m or "Away from stops", once per visit (store
+  `usage.zone`, default off). Each row: `id` (random 128-bit, localStorage `sb:usageId`, `resetId()` for a new one)
+  and `sid` (random per visit; a new visit after 30 min in the background). No coordinates, IP, user agent or
+  identity. Sender (2026-10-29): `fetch` text/plain POST (no preflight) with `credentials: "omit"` (no cookies, so no
+  browser login rides along), redirect followed; Google's reply ("ok" / "dropped" / "error") is readable (the 302 and the
+  echo both allow any origin). keepalive for rows sent while the page goes away; one beacon only if fetch throws (result
+  "failed"). The start row's outcome: `lastSend()` + bus `usage:sent`, shown in Settings (`usageStatusText`: "This visit was
+  counted at ..."). Never throws.
+- A reload in the same tab (by hand, or ui/update.js reloading after an update) continues the visit: sessionStorage
+  `VISIT_KEY` holds it and `begin()` resumes it when it was active under 30 min ago (no second start row; owner
+  2026-10-30: double counted visitors). The receiver also refuses a repeated Visit number and cleans old repeats.
+- Two-minute rule (owner 2026-10-30): a start less than `QUICK_REPEAT_S` (120 s) after this browser's last start row
+  (localStorage `sb:usageLastStart`, any tab) continues that visit; the receiver also folds a number's start within 2 min
+  of its previous one (alias for later rows) and cleans old ones at each summary refresh.
+- State: `usage: {dur, zone}` persisted (`cleanUsage`, KEYS.usage).
+- Settings > Usage statistics (only when configured): `USAGE_ALWAYS` (what is always counted; "Your identity is never
+  collected"), switches `usageDur` / `usageZone`, button "Get a new anonymous number". The location note adds
+  `LOC_ZONE_NOTE` while the nearest stop is shared. About adds `ABOUT_USAGE` and drops "no tracking". privacy.html
+  describes it (always / unless you turn it off / only if you turn it on; the iPhone app collects nothing).
+- Receiver `tools/usage/Code.gs` (Apps Script web app, tabs starts / ends / places, format checks, no formulas);
+  report `tools/usage_report.py` (+ test_usage_report.py). Tests: tests/usage.test.html. sw cache bumped.
+
+## Bug check 2026-10-29 (owner: "Run a full bug check and optimization on the app and data collection methods")
+- data/live.js: `parseTrips` drops non-object `stop_time_update` entries (one null used to drop the whole poll), and any
+  error inside a poll sets `failed` + `liveLoaded` and counts as a failed poll (stale-data honesty: never "loading" forever).
+- data/usage.js: a page loaded in the background (restored or pre-opened tab) starts its visit when first shown.
+- sw.js: offline, a page opened with a query string (About's `support.html?contact=1...`) gets that precached page
+  before the app shell; tests/data-pwa.js runs the real fetch handler against a fake cache.
+- index.html: `<link rel="modulepreload">` for the 74 first-render modules (main.js as `js/main.js?v=5`), so they load in
+  parallel instead of 8 import levels deep (2.97 s -> 2.48 s at 150 ms per request over HTTP/1.1); a test keeps the list
+  equal to the real first-render graph: a new static import in the boot path must be added there.
+- tests/core-dst.js pins clocks, service days, night tails, Lines by Time and usage times on Nov 1 2026 / Mar 14 2027.
+- Collector and tools: docs/DATA-COLLECTION-LOG.md DC-019. sw cache sb-v2-72.
+- iOS: `BusMotion.startTicking` no longer runs two animation loops after a quick background and back (a generation
+  counter, so each loop clears only its own handle); `LiveActivityController` sends updates and the final end in order
+  (a `lastSend` chain), so the Lock Screen never shows older numbers than the app sent last; Kit `DSTTests` pin Nov 1
+  2026 / Mar 14 2027 (with tools/test_dst.py and tests/core-dst.js). CI 40840132902.
+
+## Numbered buses; a picked bus's own times (2026-10-30, owner: "if there are multiple buses on a line, name them with a number so that if a user clicks on a particular bus it will show their arrival times at each station instead of the closest one while that bus is clicked")
+- core/busnum.js (pure; iOS Kit mirrors it): `busNumbers(store.buses)` names a route's buses 1, 2, ... only when it
+  shows 2 or more, in vehicle id order (numeric when both ids are numbers, else text), so names stay put while the same
+  buses run; `busKey` (vehicle id, else label), `busName` ("Bus 2" / "Bus <fleet label>" / "This bus"),
+  `selectedBus(state)` (store.busId, only on that route's page and while the bus is shown), `busArrival` (one vehicle
+  id's own prediction at a stop, never another bus's).
+- Map (map/layers.js createBusLayer): a white disc with the number at the top right of the bus badge, updated in place
+  (no rebuild, the motion of map/track.js continues); name/aria-label "Bus 2, <route name>"; the picked bus gets the
+  `is-picked` ring. main.js passes `selected` with drawBuses (BUS_KEYS has busId).
+- A bus tap opens its route with that bus picked (main.js onBusTap -> openRoute + store.busId); in the route page
+  "Where the buses are" rows are buttons (`route:bus`, again = unpick, 44 px, aria-pressed). Picked: "Showing Bus 2's
+  times" + "Show the next bus at each stop" (`route:allbuses`); every station's time is that bus's own (busArrival), none
+  where it has no prediction; pills / rail markers say "Bus 2". main.js clears busId when the route page closes or the
+  bus is no longer shown. State: `busId` (nav, not persisted). Tests: core-busnum.js, route-busnum.js, map-layers.js,
+  e2e.js (a bus tap picks it, back clears it).
+- 2026-10-30 (later): a picked bus left out of a feed poll keeps its pick for `PICK_HOLD_S` (45 s, like the map's badge, MISSING_S); leaving the route page still lets go at once (`busnum.pickCheck`, main.js). sw sb-v2-75.
+
+## Arriving In, trips with no bus, walk first (2026-10-30, owner: "the time that is shown when the menu is minimized ... should show the time until the next bus will arrive at their stop. Call it Arriving In: ... rather show the current walking time or the duration of the next step if the user's trip has no bus", "if the distance is very close, it is ok to just suggest the user to walk on their first travel option")
+- Current trip header (main.js shows the view's meta at every detent, so also minimized): while a plan journey is on,
+  nearby.js metaNearby / peekNearby return ui/views/tripprogress.js `tripMetaText`, from the same `tripNow` as the card:
+  waiting = "Arriving In: 4 min" (bus at your boarding stop), on the bus = to the stop where you get off; "Arriving In:
+  Now" under a minute; "~4 min" while live data is delayed (etaText, as the card); a planned time without live data
+  = "Arriving In: ~4 min est." (never "Now"); no time = "No live bus time yet"; walking to the stop / after the last bus
+  / a trip with no bus = "Walk 6 min" (walking minutes left: from your location to the stop or destination when known,
+  else the plan's); off the last bus with no walk = "Arrived". No trip: the nearest stop's next bus, as before.
+- Walk first: core/rank.js `walkFirst` (WALK_FIRST_MIN 10), applied by core/planner.js plan and again in Directions
+  after the sidewalk refine: with at least one bus option, when walking the whole way takes 10 min or less or arrives
+  no later than the best bus, a walk option {key:'walk', walkOnly:true, legs:[walk]} leads (selected first, "Close
+  enough to walk", walking time, arrival, distance, its step and Start); bus options keep their ranked order; max 4 in
+  all; the "Walking the whole way" footnote is dropped then. No bus option = the no-route screen and its help, unchanged.
+- Trips with no bus: planJourney accepts the walk option (rids [], one walk leg, dest); it hides no route; the trip bar
+  says "Walking the whole way, no bus"; Current trip shows "Trip to X", "Walk N min to X", "No bus needed: it is close
+  enough to walk.", End trip, Trip steps (core/tripprogress.js `walkTrip` / `walkLeft`); no notification prompt.
+- Tests: tests/trip-arriving.js (8), core-rank.js walk first (3), views-flows.js walk option. sw sb-v2-74.
+
+## Line replaces line: Back after a line opened from a line (2026-11-02, owner: "Pressing back after selecting a specific line to view should not shift to the previous line but rather go to the previous menu view entirely")
+- `ui/router.js navigate`: a view registered with `replaceSelf: true` (only `route`, ui/views/route.js) that is opened
+  while the same view shows another id (a map line tap via main.js onLineTap, a bus tap via onBusTap) does not push the
+  current entry: the new route page takes its place, so a route page never sits directly on another one in the back
+  stack. Back then returns to the menu the first route page came from (My Routes / a custom route with its params and
+  detent, the Routes list, a stop, Alerts, Current trip, search results). Route > stop > route keeps every step (the
+  stop sits between them); a route already on the stack still pops back to it (no loops). The browser's back, Escape
+  and the header Back all call `back()` (main.js keeps one history entry while in a sub view), so they agree.
+- iOS: `AppModel.showPage` (used by `push` and `busTapped`) replaces a `.route` on top of the path with the new one.
+- Tests: tests/ui-shell-router.js (4: My Routes > Central > 53rd > Back, from any menu, route > stop > route, stop >
+  stop still stacks), tests/e2e-backnav.js in e2e.test.html (3, the real app with real map line taps: My Routes >
+  Central > 53rd Street Express > Back or browser back = the custom route page, unchanged; Routes list > line > map tap
+  on another line > Back = Routes list; a single line > Back and browser back). sw `sb-v2-80`.

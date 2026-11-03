@@ -14,7 +14,7 @@ aggregate rows (the owner's accuracy goal by lead) are merged into data/eta/summ
 Only finished days are archived (3 h after the day ends, so the last runs have uploaded); a day already archived is
 skipped unless --replace. Needs the logged-in gh CLI (GH_TOKEN in CI). Stdlib + gh. Tests: tools/test_eta.py.
 """
-import argparse, glob, gzip, io, json, subprocess, sys, time, zipfile
+import argparse, csv, glob, gzip, io, json, subprocess, sys, time, zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -25,6 +25,7 @@ import build_eta_dataset as B
 REPO = "blobberus/straight-bussing"
 PREFIXES = ("pred-updates-", "raw-polls-")
 SETTLE_S = 3 * 3600
+FIRST_DAY = "2026-10-08"              # the first day the collector logged; --catch-up never looks earlier
 LOCAL = L.ROOT / "data" / "monitor"
 
 
@@ -50,7 +51,7 @@ def finished(day, now):
 def last_days(n, now):
     """The n service days before the current one, newest first."""
     cur = B.service_day_of(now)
-    return [str(cur - timedelta(days=k)) for k in range(1, n + 1)]
+    return [str(cur - timedelta(days=k)) for k in range(1, n + 1) if str(cur - timedelta(days=k)) >= FIRST_DAY]
 
 
 def _epoch(iso):
@@ -172,7 +173,7 @@ def write_alerts(rows, path):
 
 
 def archive(day, repo, arts, work, arrivals, gtfs=None, local=False, upload=True, clobber=False, web_data=None,
-            local_dir=LOCAL, alerts=None):
+            local_dir=LOCAL, alerts=None, patterns=None):
     """Build and (optionally) upload the day's three files (plus alerts-<day>.csv.gz when `alerts`, the data branch's
     alerts.csv, covers the day). -> (summary rows, message) or (None, why skipped)."""
     work = Path(work)
@@ -189,19 +190,32 @@ def archive(day, repo, arts, work, arrivals, gtfs=None, local=False, upload=True
     write_gz_lines(pred, paths[0])
     write_gz_lines(raw, paths[1])
     t0, t1 = B.day_bounds(day)
-    st = L.Static(web_data) if web_data else L.Static()
+    st = (L.Static(web_data, patterns) if patterns else L.Static(web_data)) if web_data else L.Static()
     try:
         from context_join import load_calendar
         cal = load_calendar(L.ROOT / "data" / "calendar.json")
     except Exception:
         cal = ()
+    changes, change_file, change_msg = [], None, ""
+    try:                                      # bus count changes (bus_changes.py): optional, never costs the main files
+        import bus_changes as BC
+        changes = BC.day_changes([paths[1]], arrivals, st, t0, t1)
+        change_file = work / f"bus-changes-{day}.csv.gz"
+        with gzip.open(change_file, "wt", encoding="utf-8", newline="", compresslevel=9) as f:
+            cw = csv.DictWriter(f, fieldnames=list(BC.COLUMNS), lineterminator="\n", extrasaction="ignore")
+            cw.writeheader()
+            cw.writerows(changes)
+        change_msg = (f", {sum(1 for c in changes if c['kind'] == 'drop')} bus drops "
+                      f"({sum(1 for c in changes if c['kind'] == 'drop' and str(c['lasting']) == '1')} lasting)")
+    except Exception as ex:
+        changes, change_file, change_msg = [], None, f", bus changes skipped ({type(ex).__name__}: {ex})"
     rows = B.build(day, B.load_arrivals(arrivals, t0, t1 + B.HORIZON_S), B.load_pred_updates([paths[0]], t0, t1 + B.HORIZON_S),
-                   B.load_raw([paths[1]], t0, t1), B.load_timetable(gtfs), st, cal=cal)
+                   B.load_raw([paths[1]], t0, t1), B.load_timetable(gtfs), st, cal=cal, changes=changes)
     B.write_rows(rows, paths[2])
     summ = B.summary(rows, day)
     B.merge_summary(work / f"summary-{day}.csv", summ)
     msg = (f"{day}: {len(pred)} prediction updates, {sum(len(p['v']) for p in raw)} position reports, {len(rows)} table rows "
-           f"({sum(p.stat().st_size for p in paths) / 1e6:.1f} MB gz)")
+           f"({sum(p.stat().st_size for p in paths) / 1e6:.1f} MB gz)") + change_msg
     alert_file = None
     try:                                      # optional: never costs the day's main files
         day_alerts = alerts_of_day(alerts, day)
@@ -221,7 +235,7 @@ def archive(day, repo, arts, work, arrivals, gtfs=None, local=False, upload=True
                           "forecast-snapshot table (eta-<day>.csv.gz) and the operator's service alert versions "
                           "(alerts-<day>.csv.gz). Made by .github/workflows/archive.yml; "
                           "schemas in docs/DATA.md. Unofficial student project; public feed data only.")
-        extra = [alert_file] if alert_file else []
+        extra = [f for f in (alert_file, change_file) if f]
         if gtfs and Path(gtfs).exists():      # the timetable used (80 kB): rebuilds stay exact after a GTFS change
             g = work / f"gtfs-{day}.zip"
             g.write_bytes(Path(gtfs).read_bytes())
@@ -229,6 +243,29 @@ def archive(day, repo, arts, work, arrivals, gtfs=None, local=False, upload=True
         gh("release", "upload", tag, *map(str, paths + extra), "--repo", repo, *(["--clobber"] if clobber else []))
         msg += f" -> release {tag}"
     return summ, msg
+
+
+def day_timetable(day, versions, store, work):
+    """The timetable the collector used for most of `day` (tools/gtfs_versions.py, recorded by every collect run since
+    2026-11-01) -> (zip, web_data dir, route_patterns.json) built into work/, or None for days before the record (then
+    the caller's --gtfs, downloaded today, is all there is). Built once per version."""
+    if not versions or not store or not Path(versions).exists():
+        return None
+    import gtfs_versions as GV
+    z = GV.pick(versions, store, day)
+    if z is None:
+        return None
+    out = Path(work) / f"web-{Path(z).stem}"
+    pat = out / "route_patterns.json"
+    if not (out / "route_stops.json").exists():
+        r = subprocess.run([sys.executable, str(L.ROOT / "tools" / "build_gtfs.py"), "--zip", str(z), "--out", str(out),
+                            "--patterns", str(pat)], capture_output=True, text=True, timeout=300)
+        if r.returncode:
+            raise RuntimeError(f"build_gtfs {z}: {(r.stderr or r.stdout).strip()[-300:]}")
+        addr = L.ROOT / "web" / "data" / "stop_addresses.json"
+        if addr.exists():
+            (out / addr.name).write_bytes(addr.read_bytes())
+    return z, out, pat
 
 
 def archived(repo, day):
@@ -247,7 +284,10 @@ def main(argv=None):
     ap.add_argument("--replace", action="store_true", help="rebuild and overwrite an archived day")
     ap.add_argument("--no-upload", action="store_true", help="build into --work only")
     ap.add_argument("--arrivals", nargs="*", default=[str(LOCAL / "databranch" / "data" / "ground_truth" / "arrivals.csv")])
-    ap.add_argument("--gtfs", help="google_transit.zip (timetable columns; optional)")
+    ap.add_argument("--gtfs", help="google_transit.zip (timetable columns; optional): used for days without a recorded version")
+    ap.add_argument("--gtfs-versions", help="the data branch's data/ground_truth/gtfs_versions.csv: archive each day with the "
+                                            "timetable the collector used that day (tools/gtfs_versions.py)")
+    ap.add_argument("--gtfs-store", help="the folder of the recorded zips (data/ground_truth/gtfs)")
     ap.add_argument("--alerts", default=str(LOCAL / "databranch" / "data" / "ground_truth" / "alerts.csv"),
                     help="the data branch's alerts.csv: also upload alerts-<day>.csv.gz (optional; skipped if missing)")
     ap.add_argument("--data-dir", help="data branch worktree: merge the day's summary rows into data/eta/summary.csv")
@@ -280,8 +320,12 @@ def main(argv=None):
             print(f"{day}: already archived")
             continue
         try:
-            summ, msg = archive(day, a.repo, arts, a.work, arrivals, a.gtfs, a.local, not a.no_upload, a.replace,
-                                local_dir=a.local_dir, alerts=a.alerts)
+            tt = day_timetable(day, a.gtfs_versions, a.gtfs_store, a.work)
+            gtfs, web_data, patterns = tt if tt else (a.gtfs, None, None)
+            summ, msg = archive(day, a.repo, arts, a.work, arrivals, gtfs, a.local, not a.no_upload, a.replace,
+                                local_dir=a.local_dir, alerts=a.alerts, web_data=web_data, patterns=patterns)
+            if summ and gtfs:
+                msg += f" (timetable {Path(gtfs).stem if tt else 'downloaded today'})"
         except Exception as ex:               # one bad day must not stop the others
             failed += 1
             print(f"{day}: FAILED {ex!r}", file=sys.stderr)

@@ -12,8 +12,9 @@ import { bus } from "./core/events.js";
 import { nowS } from "./core/time.js";
 import { hav } from "./core/geo.js";
 import { DEMO } from "./core/demo.js";
-import { mapVisibility } from "./core/visibility.js";
+import { mapVisibility, lineTapOpens } from "./core/visibility.js";
 import { settleTimeView } from "./core/custom.js";
+import { busKey, selectedBus, pickCheck } from "./core/busnum.js";
 import { createMap } from "./map/map.js";
 import { loadStatic } from "./data/static.js";
 import { startLive } from "./data/live.js";
@@ -27,7 +28,7 @@ import { registerContextActions, mountContextBar } from "./ui/contextbar.js";
 import { initFrame } from "./ui/frame.js";
 import { isSettingsOpen, closeSettingsOverlay } from "./ui/settings-overlay.js";
 import { startTripMap } from "./ui/tripmap.js";
-import { createCompass } from "./ui/compass.js";
+import { createCompass, mayAskCompass } from "./ui/compass.js";
 
 /** Every view module; each calls registerView() at import time ("timepick" only registers its actions: Lines by Time is an overlay). */
 export const VIEW_IDS = Object.freeze(["nearby", "stop", "routes", "route", "alerts", "about", "pick", "directions", "myroutes", "settings", "timepick"]);
@@ -35,10 +36,10 @@ export const VIEW_IDS = Object.freeze(["nearby", "stop", "routes", "route", "ale
 const OPTIONAL_VIEWS = new Set(["settings", "timepick"]);
 const RENDER_TICK_MS = 15000;
 const MAP_METHODS = ["setTheme", "setBottomInset", "drawNetwork", "drawBuses", "setSelectedStop", "setUser", "setHeading",
-  "highlightStops", "drawPlan", "drawFavorites", "setTrip", "inView", "setLandmarks", "fitTo", "flyTo", "onStopTap", "onBusTap", "onUserMove", "onMapTap"];
+  "highlightStops", "drawPlan", "drawFavorites", "setTrip", "inView", "setLandmarks", "fitTo", "flyTo", "onStopTap", "onBusTap", "onLineTap", "onUserMove", "onMapTap"];
 const VIS_KEYS = ["hiddenRoutes", "routeFilter", "view", "routeId", "routeOrder", "journey", "activeCustom", "customRoutes"];
 const NET_KEYS = ["routes", "shapes", "routeStops", "stopRoutes", "stops", "theme", ...VIS_KEYS];
-const BUS_KEYS = ["buses", "feedTs", "routes", ...VIS_KEYS];
+const BUS_KEYS = ["buses", "feedTs", "routes", "busId", ...VIS_KEYS];
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -90,7 +91,8 @@ function syncMap(s, changed) {
   const { hidden, focus, order } = mapVisibility(s);   // journey > custom route / hidden list; see core/visibility.js
   if (NET_KEYS.some(has)) mapCall("drawNetwork", { routes: s.routes, shapes: s.shapes, routeStops: s.routeStops,
     stopRoutes: s.stopRoutes, stops: s.stops, hidden, focus, order, dark: isDark() });
-  if (BUS_KEYS.some(has)) mapCall("drawBuses", s.buses || [], { routes: s.routes, shapes: s.shapes, hidden, focus, nowS: nowS() });
+  if (BUS_KEYS.some(has)) mapCall("drawBuses", s.buses || [], { routes: s.routes, shapes: s.shapes, hidden, focus, nowS: nowS(),
+    selected: busKey(selectedBus(s)) });   // the bus picked on the route page is highlighted
   if (has("view") || has("stopId") || has("stops")) {
     const st = s.view === "stop" && s.stopId && s.stops ? s.stops[s.stopId] : null;
     mapCall("setSelectedStop", st ? { id: s.stopId, lat: st.lat, lon: st.lon } : null);
@@ -105,6 +107,17 @@ function syncMap(s, changed) {
 let locating = null, watchId = null;
 // the way the rider faces, straight to the map (never the store: up to 60 readings a second); on while sharing is on
 const compass = createCompass({ onHeading: (deg, spread) => mapCall("setHeading", deg, spread) });
+/**
+ * Ask for the compass (iOS Safari's "Motion & Orientation Access" prompt) from a tap, only when it can be the tap's
+ * ONE system prompt (owner 2026-11-02: "two requests for locations ... can be completed with one notification to the
+ * user, do so"): location is already granted and working, so no location prompt can show in the same tap
+ * (ui/compass.js mayAskCompass). The first share / locate tap shows the location prompt alone; a later locate tap may
+ * show the motion prompt alone.
+ * Decided from the store, synchronously, before any await: iOS accepts requestPermission() only inside the tap.
+ */
+function askCompass() {
+  if (mayAskCompass(store.get().locState)) compass.request();
+}
 const LOC_OFF = "sb-loc-off";   // the rider chose Stop sharing in Settings: no automatic location at the next launch
 const locOptOut = () => { try { return localStorage.getItem(LOC_OFF) === "1"; } catch (e) { return false; } };
 /** Settings > Stop sharing: forget the position, stop watching, remember the choice. */
@@ -128,12 +141,13 @@ function startWatch() {
 }
 /**
  * Ask for the device location. Sets store.user / store.locState. Never throws. A tap (every caller but the launch,
- * which passes {auto: true}) also asks for the compass (iOS shows it only after a permission asked inside a tap).
+ * which passes {auto: true}) also asks for the compass, but only when location already works (askCompass: never two
+ * system prompts from one tap; iOS shows the compass only after a permission asked inside a tap).
  * @param {{auto?:boolean}} [opts]
  * @returns {Promise<boolean>} true when a position was obtained
  */
 function locate(opts) {
-  if (!(opts && opts.auto)) compass.request();
+  if (!(opts && opts.auto)) askCompass();   // reads locState before this call changes it to "asking"
   if (locating) return locating;
   locating = new Promise((resolve) => {
     const prev = store.get().locState;
@@ -170,7 +184,7 @@ function locate(opts) {
   return locating;
 }
 async function onLocateFab() {
-  compass.request();   // inside the tap, before any await (a trip with a known position never calls locate)
+  askCompass();   // inside the tap, before any await (a trip with a known position never calls locate)
   if (tripMap?.active?.()) {   // during a trip: show you in the trip again (follow), asking for the location if unknown
     tripMap.recenter();
     const s = store.get();
@@ -366,8 +380,17 @@ async function boot() {
     if (def && typeof def.onStopTap === "function" && safe(() => def.onStopTap(String(id), ctx), false)) return;
     openStop(id);
   });
-  mapCall("onBusTap", (x) => openRoute(x && typeof x === "object" ? x.rid || x.routeId || (x.trip && x.trip.route_id) : x, false));
-  mapCall("onMapTap", () => { if (!sheet.isPanel() && sheet.getDetent() !== "peek") sheet.setDetent("peek"); });   // tap outside the sheet: back to the map
+  // a bus tap opens its route with THAT bus picked: the route page shows its own time at each station (owner 2026-10-30)
+  mapCall("onBusTap", (x) => {
+    const rid = x && typeof x === "object" ? x.rid || x.routeId || (x.trip && x.trip.route_id) : x;
+    openRoute(rid, false);
+    if (x && typeof x === "object" && x.id != null && store.get().view === "route") store.set({ busId: String(x.id) });
+  });
+  const lowerSheet = () => { if (!sheet.isPanel() && sheet.getDetent() !== "peek") sheet.setDetent("peek"); };
+  mapCall("onMapTap", lowerSheet);   // tap outside the sheet: back to the map
+  // a tap on a route line opens the line drawn on top, as choosing it in the Routes list does (owner 2026-10-27);
+  // a pointer shortcut only (the Routes list stays the accessible way); off where the map shows a trip
+  mapCall("onLineTap", (rid) => (lineTapOpens(store.get()) ? openRoute(String(rid)) : lowerSheet()));
   onThemeChange((d) => { mapCall("setTheme", d); syncMap(store.get(), null); });
 
   // data first: stops, routes and the live feed load while the view modules download (slow 4G: next bus ~3 s sooner)
@@ -382,6 +405,10 @@ async function boot() {
   mountContextBar(el.ctxbar, store);
 
   store.subscribe((s, changed) => { syncMap(s, changed); scheduleRender(); syncHistory(); });
+  // the picked bus goes when the rider leaves its route page, or when it has been missing from the feed for PICK_HOLD_S
+  // (a bus left out of one or two polls keeps its pick, as the map keeps its badge); then back to the next bus at each stop
+  let pickGone = 0;
+  store.subscribe((s) => { const r = pickCheck(s, pickGone, nowS()); pickGone = r.goneSince; if (r.clear) store.set({ busId: null }); });
   // Lines by Time: the moment the shown lines change (one deselected or added), the "Lines active at" name goes and the lines stay
   store.subscribe((s, changed) => { if (s.timeView && (!changed || changed.has("hiddenRoutes") || changed.has("routes"))) { const p = settleTimeView(s); if (Object.keys(p).length) store.set(p); } });
   render();
@@ -389,6 +416,9 @@ async function boot() {
   tripMap = startTripMap(store, map);   // you in the started trip + follow camera (same evaluation as the card and alerts)
   // beta welcome popup, once per browser session, after this first real render is painted (owner 2026-10-13)
   import("./ui/feedback.js").then((m) => m.welcomeAfterPaint()).catch((e) => console.warn("welcome popup", e));
+  // anonymous usage statistics (owner 2026-10-27; data/usage.js): nothing at all until a receiver is set, never in demo mode
+  if (!DEMO) import("./data/usage.js").then((m) => m.usageConfigured() && import("./ui/views/about.js").then((a) => m.startUsage(store, { ver: a.APP_VERSION })))
+    .catch((e) => console.warn("usage statistics", e));
   if (!DEMO) import("./ui/notifier.js").then((m) => { notifier = m.startNotifier?.(store, { toast }) || null; }).catch(() => {});   // bus-near alerts while the page is open
 
   setInterval(() => {

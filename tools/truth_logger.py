@@ -58,9 +58,19 @@ class Errors:
     """Counts failed fetches and processing errors and logs them to stderr, sampled (first 20, then every
     100th) so a feed that is malformed on every poll cannot flood the log."""
     def __init__(self, out=None):
-        self.fetch = self.proc = 0
-        self.first = ""
+        self.fetch = self.proc = self.schema = 0
+        self.first = self.schema_first = ""
         self.out = out
+
+    def shape(self, where, why):
+        """A feed that downloads and parses but is not shaped like GTFS-realtime (Passio changed its format?). Counted
+        apart from fetch failures: without this a renamed field reads as "no buses" and the run idles (risk review
+        2026-11-01, DC-021)."""
+        self.schema += 1
+        if not self.schema_first:
+            self.schema_first = f"{where}: {why}"[:300]
+        if self.schema <= 5 or self.schema % 100 == 0:
+            print(f"{datetime.now():%H:%M:%S} SCHEMA {where}: {why}", file=self.out or sys.stderr, flush=True)
 
     def __call__(self, where, ex, fetch=False):
         if fetch:
@@ -96,6 +106,48 @@ def reports(feed, err=None):
             err("vehiclePositions entity", ex)
             continue
         yield rep
+
+
+def feed_shape(feed, kind):
+    """None if `feed` looks like a GTFS-realtime feed of this kind ("vehicle" or "trip_update"), else why not. An empty
+    entity list is fine (no buses at night); a header without a timestamp, or entities none of which carries `kind`
+    (or, for vehicles, a position), is not."""
+    if not isinstance(feed, dict):
+        return f"not a JSON object ({type(feed).__name__})"
+    head = feed.get("header")
+    if not isinstance(head, dict) or not str(head.get("timestamp") or "").strip().isdigit():
+        return "no header.timestamp"
+    ents = feed.get("entity", [])
+    if not isinstance(ents, list):
+        return f"entity is a {type(ents).__name__}, not a list"
+    if ents and not any(isinstance(e, dict) and isinstance(e.get(kind), dict) for e in ents):
+        keys = sorted({k for e in ents[:20] if isinstance(e, dict) for k in e})
+        return f"{len(ents)} entities, none with '{kind}' (keys: {', '.join(keys)[:120]})"
+    if kind == "vehicle" and ents and not any("latitude" in ((e.get("vehicle") or {}).get("position") or {})
+                                              for e in ents if isinstance(e, dict) and isinstance(e.get("vehicle"), dict)):
+        return f"{len(ents)} vehicles, none with position.latitude"
+    return None
+
+
+IN_SERVICE_M = 600      # a bus this close to a stop of its own route counts as in service (health.py "buses but no rows")
+
+
+def in_service(st, reps, head):
+    """How many reports are fresh (at most 5 min old by the feed's clock) and within IN_SERVICE_M of a stop of their own
+    route. A bus Passio still lists on a trip while it drives to the garage after service is neither (2026-11-02: three
+    buses 3 km from any stop, 00:13 to 00:37, made the first "buses but no rows" alert a false one)."""
+    n = 0
+    for r in reps:
+        try:
+            if head and head - int(r.get("vt") or 0) > 300:
+                continue
+            lat, lon = float(r["lat"]), float(r["lon"])
+            stops = [st.stops[s] for s in st.route_stops.get(str(r.get("route")), []) if s in st.stops]
+            if any(L.hav_m(lat, lon, s["lat"], s["lon"]) <= IN_SERVICE_M for s in stops):
+                n += 1
+        except (KeyError, TypeError, ValueError):
+            continue
+    return n
 
 
 def feed_summary(feed):
@@ -163,10 +215,11 @@ class RawPolls:
         self.n += 1
 
 
-def poll(tr, w, now, err, get=fetch, raw=None, pred_count=None):
+def poll(tr, w, now, err, get=fetch, raw=None, pred_count=None, changes=None):
     """One poll of both feeds. Any failure (network, bad JSON, a malformed entry, a detector bug, the raw
     poll file) goes to err() and only skips that feed or entry for this poll, never the run.
     pred_count(feed, now) -> buses Passio predicts for (service_gate.predicted_buses): added as summary["pred"].
+    changes: a bus_changes.BusChanges fed with the poll's reports and new arrivals (bus count drops / adds per route).
     -> feed_summary or None."""
     pred = 0
     try:
@@ -174,6 +227,9 @@ def poll(tr, w, now, err, get=fetch, raw=None, pred_count=None):
     except Exception as ex:
         err("tripUpdates", ex, fetch=True)
     else:
+        why = feed_shape(feed, "trip_update")
+        if why and hasattr(err, "shape"):
+            err.shape("tripUpdates", why)
         try:
             store_predictions(tr, feed, now, err)
         except Exception as ex:                  # not a feed object at all
@@ -188,18 +244,22 @@ def poll(tr, w, now, err, get=fetch, raw=None, pred_count=None):
     except Exception as ex:
         err("vehiclePositions", ex, fetch=True)
         return None
+    why = feed_shape(feed, "vehicle")
+    if why and hasattr(err, "shape"):
+        err.shape("vehiclePositions", why)
     if raw is not None:
         try:
             raw.write(now, feed)
         except Exception as ex:
             err("raw polls", ex)
-    summary, ev = None, []
+    summary, ev, reps = None, [], []
     try:
         summary = feed_summary(feed)
     except Exception as ex:
         err("vehiclePositions summary", ex)
     try:
         for rep in reports(feed, err):
+            reps.append(rep)
             try:
                 ev += tr.update(rep, now)
             except Exception as ex:
@@ -210,12 +270,27 @@ def poll(tr, w, now, err, get=fetch, raw=None, pred_count=None):
         ev += tr.drain(now)
     except Exception as ex:
         err("detector drain", ex)
+    if changes is not None:                      # before write(): it sorts ev in place, which is fine either way
+        try:
+            changes.observe(reps, now, ev)
+        except Exception as ex:
+            err("bus changes", ex)
     try:
         w.write(ev)
     except Exception as ex:
         err("write rows", ex)
     if summary is not None and pred_count is not None:
         summary["pred"] = pred
+    st = getattr(tr, "st", None)                 # stand-in trackers (tests) have no static data: no count then
+    if summary is not None and st is not None:
+        try:
+            head = int((feed.get("header") or {}).get("timestamp") or 0)
+        except (TypeError, ValueError):
+            head = 0
+        try:
+            summary["live"] = in_service(st, reps, head)
+        except Exception as ex:
+            err("in-service count", ex)
     return summary
 
 
@@ -416,6 +491,8 @@ def main():
     ap.add_argument("--pred-seed", nargs="*", default=[], help="PredLog files to reload the last hour from")
     ap.add_argument("--alerts-out", help="Passio's service alerts as version rows (CSV, alerts_lib.COLUMNS), "
                                          "rewritten after each alerts poll (AlertLog)")
+    ap.add_argument("--changes-out", help="bus count changes per route (drop / add rows, bus_changes.COLUMNS) appended "
+                                          "here as they are confirmed (bus_changes.BusChanges)")
     ap.add_argument("--alerts-every", type=float, default=300, help="seconds between serviceAlerts polls (min 30; "
                                                                      "the first is at start)")
     ap.add_argument("--alerts-timeout", type=float, default=8, help="serviceAlerts request timeout, seconds")
@@ -454,6 +531,13 @@ def main():
         tr.seed(L.read_tail(a.seed or a.out), int(time.time()))
     except Exception as ex:                      # a bad seed only costs duplicate protection (merge dedupes too)
         err("seed", ex)
+    changes = None
+    if a.changes_out:                            # optional: a failure here never stops arrival logging
+        try:
+            import bus_changes as BC
+            changes = BC.BusChanges(st, int(time.time()), out=a.changes_out)
+        except Exception as ex:
+            err("bus changes setup", ex)
     alerts, alerts_setup = None, ""
     if a.alerts_out:                             # own thread + counters: never part of err / the arrival loop
         try:
@@ -469,6 +553,7 @@ def main():
             print(f"alerts off for this run ({alerts_setup})", file=sys.stderr, flush=True)
     end = time.time() + a.duration if a.duration else None
     started, polls, summary = time.time(), 0, {}
+    bus_polls, fail_since, fail_spans, max_fail = 0, None, [], 0.0   # health.py: outages and "buses but no rows"
     act, idle_stop, gate_at, pcount = None, None, started + 60, None
     if a.stop_when_idle or a.live_file:          # an unreadable schedule or a gate bug only costs the early stop
         try:
@@ -480,7 +565,7 @@ def main():
     try:
         while True:
             t0 = time.time()
-            s = poll(tr, w, int(t0), err, raw=raw, pred_count=pcount)
+            s = poll(tr, w, int(t0), err, raw=raw, pred_count=pcount, changes=changes)
             if plog is not None:
                 try:
                     plog.flush()
@@ -488,6 +573,15 @@ def main():
                     err("pred log", ex)
             if s is not None:
                 summary = s
+                if (s["live"] if "live" in s else (s.get("fresh") or 0)) > 0:   # a bus in service, not one going home
+                    bus_polls += 1
+                if fail_since is not None:           # a stretch with no readable vehicle feed ended
+                    max_fail = max(max_fail, t0 - fail_since)
+                    if t0 - fail_since >= 120 and len(fail_spans) < 20:
+                        fail_spans.append([int(fail_since), int(t0)])
+                    fail_since = None
+            elif fail_since is None:
+                fail_since = t0
             polls += 1
             if act is not None:
                 try:
@@ -519,6 +613,10 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        if fail_since is not None:                   # still failing at the end
+            max_fail = max(max_fail, time.time() - fail_since)
+            if time.time() - fail_since >= 120 and len(fail_spans) < 20:
+                fail_spans.append([int(fail_since), int(time.time())])
         try:
             w.write(tr.drain(int(time.time()), final=True))
         except Exception as ex:
@@ -539,7 +637,10 @@ def main():
                      "rows": w.n, "errors": err.proc, "fetch_errors": err.fetch, "first_error": err.first,
                      "raw_polls": raw.n if raw else None, "pred_rows": w.np if a.pred_out else None,
                      "pred_updates": plog.n if plog else None, "idle_stop": idle_stop,
-                     "last_bus": act.last_bus if act else None, **(al or {})}),
+                     "last_bus": act.last_bus if act else None,
+                     "bus_changes": changes.n if changes is not None else None,
+                     "bus_polls": bus_polls, "max_fail_s": int(max_fail), "fail_spans": fail_spans,
+                     "schema_errors": err.schema, "schema_first": err.schema_first, **(al or {})}),
                     encoding="utf-8")
             except OSError as ex:
                 print(f"could not write {a.status_file}: {ex}", file=sys.stderr)
@@ -550,6 +651,7 @@ def main():
                                                             if al.get("alert_last_error") else ""))
     print(f"done: {w.n} rows appended to {a.out}; polls={polls} errors={err.proc} fetch_errors={err.fetch}"
           + (f"; {w.np} prediction rows to {a.pred_out}" if a.pred_out else "") + al_txt
+          + (f"; {changes.n} bus count changes to {a.changes_out}" if changes is not None else "")
           + (f"; stopped early (idle): {idle_stop}" if idle_stop else ""))
 
 

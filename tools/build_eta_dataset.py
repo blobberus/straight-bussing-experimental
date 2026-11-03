@@ -55,7 +55,7 @@ COLUMNS = ("query_epoch,query_local,service_day,dow,day_type,cal_regime,hour,veh
            "stop_id,stop_name,stop_index,visit_rank,next_trip,cur_trip_id,stops_away,dist_m,crosses_terminal,"
            "last_stop_id,last_arrival_epoch,last_age_s,speed_mps,standing_s,delay_s,actual_epoch,lead_s,label_status,"
            "passio_status,passio_epoch,passio_made_epoch,passio_seen_epoch,passio_age_s,passio_err_s,passio_rel,"
-           "tt_epoch,tt_err_s,tt_rel,ttd_epoch,ttd_err_s,ttd_rel").split(",")
+           "tt_epoch,tt_err_s,tt_rel,ttd_epoch,ttd_err_s,ttd_rel,bus_change_min,leaving_bus").split(",")
 SUMMARY_COLUMNS = ("service_day,source,lead_bin,route,segment,targets,n,pass_10,pass_10_floor,late_1,early_10,"
                    "gross,gross_early,mae_s,median_err_s,pass_shrink,early_shrink").split(",")
 # pass_shrink / early_shrink (2026-10-17): the owner's current goal, the 10 minute shrink (arrivals_lib.shrink_tol:
@@ -293,8 +293,32 @@ def _fmt(x, nd=0):
     return str(x)
 
 
-def build(day, arrivals, preds, raw=None, timetable=None, st=None, step=STEP_S, horizon=HORIZON_S, cal=()):
-    """-> list of row dicts (COLUMNS) for one service day."""
+def flag_bus_changes(rows, changes, window=HORIZON_S):
+    """Mark rows near a lasting drop on their route (bus_changes.py, owner 2026-10-30): bus_change_min = minutes from the
+    drop to the row's query time (negative = the drop is still ahead), leaving_bus = 1 if the row's bus is the one that
+    leaves, else 0; both blank when no lasting drop is within `window` s. changes: bus_changes row dicts. In place."""
+    by = defaultdict(list)
+    for c in changes or ():
+        if c.get("kind") == "drop" and str(c.get("lasting")) == "1":
+            by[str(c["route_id"])].append((int(float(c["epoch"])), str(c["vehicle_id"])))
+    for v in by.values():
+        v.sort()
+    for r in rows:
+        lst = by.get(str(r.get("route_id")))
+        if not lst:
+            continue
+        q = int(r["query_epoch"])
+        i = bisect.bisect_left(lst, (q, ""))
+        near = [lst[j] for j in (i - 1, i) if 0 <= j < len(lst) and abs(lst[j][0] - q) <= window]
+        if near:
+            ep, veh = min(near, key=lambda x: abs(x[0] - q))
+            r["bus_change_min"] = round((q - ep) / 60, 1)
+            r["leaving_bus"] = int(str(r.get("vehicle_id")) == veh)
+    return rows
+
+
+def build(day, arrivals, preds, raw=None, timetable=None, st=None, step=STEP_S, horizon=HORIZON_S, cal=(), changes=None):
+    """-> list of row dicts (COLUMNS) for one service day. changes: the day's bus_changes rows (flag_bus_changes)."""
     st = st or L.Static()
     t0, t1 = day_bounds(day)
     raw = raw or {}
@@ -333,15 +357,24 @@ def build(day, arrivals, preds, raw=None, timetable=None, st=None, step=STEP_S, 
             i += 1
         return True
 
-    def shown(veh, trip, sid, t, seq_want, loop, ep=None):
+    tops = {}                                # (veh, trip, stop) -> the highest stop_sequence Passio gave it
+
+    def shown(veh, trip, sid, t, seq_want, loop, ep=None, loop_last=False):
         """Passio's update on display at t for this bus's next visit -> (status, entry|None). ep: that visit's
-        arrival, to check the time against the bus's visit to the stop before it (any trip id, as the detector)."""
+        arrival, to check the time against the bus's visit to the stop before it (any trip id, as the detector).
+        loop_last: the loop's end visit, which is Passio's highest stop_sequence for the stop on this trip (the
+        detector's DC-017 rule: our route order can hold stops a trip skips, so idx + 1 can miss it)."""
         key = (veh, trip, sid)
         if key not in preds:
             key = (None, trip, sid)
             if key not in preds or not only_bus(trip, veh, t):
                 return "none", None
         lst, i = preds[key], bisect.bisect_right(pred_seen[key], t)
+        if loop and loop_last:
+            if key not in tops:
+                tops[key] = max((x[4] for x in lst if isinstance(x[4], int)), default=None)
+            if tops[key] is not None and tops[key] > 1:
+                seq_want = tops[key]
         best = None
         while i > 0:                          # newest first seen by t (at a loop stop: the matching stop_sequence)
             e = lst[i - 1]
@@ -427,7 +460,8 @@ def build(day, arrivals, preds, raw=None, timetable=None, st=None, step=STEP_S, 
                         crosses = True
                 status, e = ("none", None)
                 if rank == 1:
-                    status, e = shown(veh, trip, sid, t, idx + 1, loop, ep)
+                    last_i = loop and idx == len(rs) - 1 - rs[::-1].index(sid)
+                    status, e = shown(veh, trip, sid, t, idx + 1, loop, ep, loop_last=last_i)
                     if status == "shown":
                         own.add((veh, ep, sid))
                     elif not loop and (veh, ep, sid) in own:     # a lead the own trip id left empty (DC-010)
@@ -471,6 +505,7 @@ def build(day, arrivals, preds, raw=None, timetable=None, st=None, step=STEP_S, 
                                  passio_status="shown", passio_epoch=e[3], passio_made_epoch=e[2],
                                  passio_seen_epoch=e[0], passio_age_s=t - e[2]))
     rows.sort(key=lambda r: (r["query_epoch"], r["vehicle_id"], r["lead_s"]))
+    flag_bus_changes(rows, changes)
     return rows
 
 

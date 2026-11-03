@@ -28,6 +28,7 @@ WORKFLOW = "collect.yml"
 CSV = "data/ground_truth/arrivals.csv"
 PRED_CSV = "data/ground_truth/predictions.csv"   # Passio's prediction 1-30 min ahead per arrival (merge_predictions.py)
 ALERTS_CSV = "data/ground_truth/alerts.csv"     # Passio's service alerts, one row per version (merge_alerts.py)
+CHANGES_CSV = "data/ground_truth/bus_changes.csv"   # bus count changes per route (bus_changes.py merge)
 PRED_SEED_S = 3600 + 600                        # reload prediction logs this recent into a new chunk (--pred-seed)
 LOG_KEEP_S = 14 * 86400                         # local prediction logs + raw polls: long enough to archive a day CI missed
 FEED = "https://passio3.com/chicago/passioTransit/gtfs/realtime/vehiclePositions.json"
@@ -69,6 +70,12 @@ def alerts_partner(run_file):
     """runs/run-<stamp>.csv -> runs/alerts-<stamp>.csv (the same chunk's service alert versions)."""
     p = Path(run_file)
     return p.with_name("alerts-" + p.name[len("run-"):]) if p.name.startswith("run-") else None
+
+
+def changes_partner(run_file):
+    """runs/run-<stamp>.csv -> runs/changes-<stamp>.csv (the same chunk's bus count changes)."""
+    p = Path(run_file)
+    return p.with_name("changes-" + p.name[len("run-"):]) if p.name.startswith("run-") else None
 
 
 # ---------------------------------------------------------------- helpers
@@ -123,10 +130,14 @@ def alive(pid):
         return bool(ok) and code.value == 259                # STILL_ACTIVE
     try:
         os.kill(pid, 0)
-        return True
     except ProcessLookupError:
         return False
     except PermissionError:
+        return True
+    try:                                    # Linux: a process that exited but was not reaped yet answers kill(0)
+        with open(f"/proc/{int(pid)}/stat", encoding="utf-8") as f:
+            return f.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except (OSError, IndexError):
         return True
 
 
@@ -437,12 +448,23 @@ def fetch_data(ctx):
 
 
 def refresh_seed(ctx):
+    """The data branch's arrivals.csv as the next chunk's seed. Right after merge_arrivals rotated it to archive/
+    it holds only the header, so the newest archive file seeds instead (truth_logger reads only its tail): without
+    rows the first chunks after a rotation would start with no recent visits (same rule as collect.yml)."""
     try:
         if remote_has_data(ctx):
             fetch_data(ctx)
             with open(ctx.seed, "wb") as f:
                 subprocess.run(["git", "show", f"{ctx.remote}/data:{CSV}"], cwd=ctx.root, stdout=f,
                                stderr=subprocess.DEVNULL)
+            if ctx.seed.read_bytes().count(b"\n") <= 1:
+                names = subprocess.run(["git", "ls-tree", "--name-only", f"{ctx.remote}/data", "data/ground_truth/archive/"],
+                                       cwd=ctx.root, capture_output=True, text=True).stdout.split()
+                arch = sorted(n for n in names if Path(n).name.startswith("arrivals-") and n.endswith(".csv"))
+                if arch:
+                    with open(ctx.seed, "wb") as f:
+                        subprocess.run(["git", "show", f"{ctx.remote}/data:{arch[-1]}"], cwd=ctx.root, stdout=f,
+                                       stderr=subprocess.DEVNULL)
         elif not ctx.seed.exists():
             ctx.seed.write_text("", encoding="utf-8")
     except Exception as e:
@@ -484,6 +506,26 @@ def _push(ctx):
     return git(ctx, "push", "-q", ctx.remote, "HEAD:refs/heads/data", cwd=ctx.wt, check=False).returncode == 0
 
 
+def guard_snapshot(ctx):
+    """tools/check_merge.py's row counts of the freshly checked-out data branch (risk review 2026-11-01, DC-021: the same
+    no-rows-lost guard as collect.yml), or None if the guard is unavailable."""
+    try:
+        sys.path.insert(0, str(ctx.root / "tools"))
+        import check_merge
+        return check_merge.snapshot(ctx.wt / "data" / "ground_truth")
+    except Exception as e:
+        log(ctx, f"no-rows-lost guard unavailable ({type(e).__name__}: {e}); pushing without it")
+        return None
+
+
+def guard_verify(ctx, before):
+    """-> list of problems (empty = safe to push)."""
+    if before is None:
+        return []
+    import check_merge
+    return check_merge.verify(ctx.wt / "data" / "ground_truth", before)
+
+
 def publish(ctx, files, model=True):
     """Merge run files into the data branch and push. -> (ok, rows_added, message). A chunk without arrivals still
     counts when it saw service alerts (they run overnight too); an alerts merge failure never stops the push."""
@@ -496,6 +538,7 @@ def publish(ctx, files, model=True):
     for attempt in range(1, 6):
         try:
             prepare_worktree(ctx)
+            before = guard_snapshot(ctx)
             into, added = ctx.wt / CSV, 0
             mp = ctx.root / "tools" / "merge_predictions.py"
             for f in files:
@@ -521,10 +564,24 @@ def publish(ctx, files, model=True):
                         log(ctx, "alerts merge failed (arrivals are still pushed): " + (r.stderr or r.stdout)[-300:])
                 except Exception as e:
                     log(ctx, f"alerts merge failed (arrivals are still pushed): {e}")
+            bc = ctx.root / "tools" / "bus_changes.py"
+            ch = [str(changes_partner(f)) for f in files if has_rows(changes_partner(f), "route_id,")]
+            if bc.exists() and (ch or (ctx.wt / CHANGES_CSV).exists()):
+                try:                       # merge + classify with arrivals.csv; never stops the push (as collect.yml)
+                    r = subprocess.run([sys.executable, str(bc), "merge", "--into", str(ctx.wt / CHANGES_CSV),
+                                        "--add", *(ch or [str(ctx.wt / CHANGES_CSV)]), "--arrivals", str(into)],
+                                       capture_output=True, text=True, cwd=ctx.root, timeout=180)
+                    if r.returncode:
+                        log(ctx, "bus changes merge failed (arrivals are still pushed): " + (r.stderr or r.stdout)[-300:])
+                except Exception as e:
+                    log(ctx, f"bus changes merge failed (arrivals are still pushed): {e}")
             rm = ctx.root / "tools" / "refresh_model.py"
             if model and rm.exists():
                 subprocess.run([sys.executable, str(rm), "--data", str(into), "--out", str(ctx.wt / "web/data/learned.json")],
                                capture_output=True, cwd=ctx.root)
+            lost = guard_verify(ctx, before)
+            if lost:                        # never push a merge that loses rows; the run files stay for a retry
+                return False, 0, "the no-rows-lost guard stopped the push: " + "; ".join(lost)[:300]
             git(ctx, "add", "-A", "data", cwd=ctx.wt)
             for extra in ("README.md", "web/data/learned.json"):
                 if (ctx.wt / extra).exists():
@@ -553,7 +610,7 @@ def publish_pending(ctx, st, active, model):
     if ok:
         for f in files:
             os.replace(f, ctx.merged / f.name)
-            for pf in (pred_partner(f), alerts_partner(f)):
+            for pf in (pred_partner(f), alerts_partner(f), changes_partner(f)):
                 if pf is not None and pf.exists():
                     os.replace(pf, ctx.merged / pf.name)
         st["files_merged"] = st.get("files_merged", 0) + len(files)
@@ -561,7 +618,8 @@ def publish_pending(ctx, st, active, model):
         st["last_publish"], st["last_error"] = time.time(), ""
     else:
         st["last_error"] = msg
-    for old in [*ctx.merged.glob("run-*.csv"), *ctx.merged.glob("pred-*.csv"), *ctx.merged.glob("alerts-*.csv")]:
+    for old in [*ctx.merged.glob("run-*.csv"), *ctx.merged.glob("pred-*.csv"), *ctx.merged.glob("alerts-*.csv"),
+                *ctx.merged.glob("changes-*.csv")]:
         if time.time() - old.stat().st_mtime > 7 * 86400:
             old.unlink(missing_ok=True)
     for d in (ctx.predlog, ctx.raw):
@@ -645,6 +703,7 @@ def local(ctx, a, resume=False):
                                       "--pred-log", str(ctx.predlog / (path.stem + ".jsonl")),
                                       "--raw-out", str(ctx.raw / (path.stem + ".jsonl")),
                                       "--alerts-out", str(alerts_partner(path)),
+                                      "--changes-out", str(changes_partner(path)),
                                       *([] if a.no_gate else ["--stop-when-idle"]), "--pred-seed", *seeds],
                                      cwd=ctx.root, stdout=logf, stderr=subprocess.STDOUT)
                 logf.close()

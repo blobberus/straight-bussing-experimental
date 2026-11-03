@@ -2,17 +2,22 @@
 
 Test platform for Straight Bussing changes made from rider feedback. It started as a one-time copy of
 [blobberus/straight-bussing](https://github.com/blobberus/straight-bussing) on 2026-10-27 (main at `e3d8aaf`, full
-history, every code branch, tag `v1-final`).
+history, every code branch, tag `v1-final`), and was brought up to date with the main project once more on 2026-11-02
+at the owner's request (main at `ba4f450`), as the base for the interface redesign (`Straight Bussing New
+Version.txt`, `docs/REDESIGN-AUDIT.md`, `docs/DESIGN-SPEC.md`).
 
-**Not synced, in either direction.** Nothing here updates the main project and nothing there updates this copy. A
+**Not synced, in either direction.** Nothing here updates the main project and nothing there updates this copy
+(the 2026-11-02 update was a one-time merge the owner asked for). A
 change that works here goes to the main project only when it is ported by hand (for example `git format-patch` here,
 `git am` in the main clone).
 
 ## What is different from the main project
 
-- **All GitHub Actions workflows are disabled** (Actions tab): no ground-truth collector, archive or context jobs
-  (the main project keeps collecting; a second collector would only duplicate it), no Pages deploy, no iOS builds,
-  and never the App Store release job (`ios-release.yml` uses the same bundle id as the real app).
+- **GitHub Actions: only `ios.yml` is enabled** (owner, 2026-11-02): it builds and tests the iPhone app and keeps
+  the simulator screenshots as the run artifact `ios-simulator-preview` (its publish step runs only in the main
+  repo, so nothing is published from here). Disabled: the ground-truth collector, archive and context jobs (the main
+  project keeps collecting; a second collector would only duplicate it), `collector-tests.yml`, the Pages deploy, and
+  never the App Store release job (`ios-release.yml` uses the same bundle id as the real app).
 - **Not copied:** the `data` branch (the main project's live dataset), the release archives, issues, secrets,
   variables and the Pages setting.
 
@@ -20,7 +25,8 @@ change that works here goes to the main project only when it is ported by hand (
 
 1. Settings > Pages > Source: **GitHub Actions**; then enable `pages.yml` in the Actions tab and run it. The test site
    is then at https://blobberus.github.io/straight-bussing-experimental/.
-2. For iOS builds also enable `ios.yml` (it redeploys Pages with the simulator gallery, so step 1 comes first).
+2. `ios.yml` is already enabled; its gallery publish step is limited to the main repo, so with a test site you
+   would also lift that condition in `.github/workflows/ios.yml`.
 
 Leave `collect.yml`, `archive.yml`, `context.yml` and `ios-release.yml` disabled.
 

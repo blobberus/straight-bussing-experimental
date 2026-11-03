@@ -214,7 +214,7 @@ extension AppModel {
         // buses ride their route line (Kit BusTrack, BusMotion; web map/track.js): a changed report starts a move from
         // where the badge is now; `-demo` (CI), Reduce Motion and a sheet over the map move at once
         let reports = liveState.buses.enumerated().map { i, b in
-            BusMotion.Report(id: b.vehicle.id ?? "bus-\(i)", rid: b.trip.routeId ?? "", label: b.displayLabel, coord: b.coord,
+            BusMotion.Report(id: BusNumbers.key(b) ?? "bus-\(i)", rid: b.trip.routeId ?? "", label: b.displayLabel, coord: b.coord,
                              bearing: b.bearing, vt: b.timestamp)
         }
         busMotion.update(reports, shapes: staticData.shapes, version: staticVersion, now: now,
@@ -232,8 +232,14 @@ extension AppModel {
     /// last poll while others report stays for up to 45 s (`BusMotion.missingS`).
     func publishBuses() {
         let t = now
-        let markers = busMotion.drawn().map { d in
-            MapBus(id: d.id, rid: d.rid, label: d.label, coord: d.coord, bearing: d.rotation, stale: d.vt > 0 && t - d.vt > 60)
+        let drawn = busMotion.drawn()
+        // "Bus 1", "Bus 2" on routes the map shows with two or more buses (owner 2026-10-30): numbered from what is drawn,
+        // so a bus missing from one poll (kept 45 s) keeps its number and its pick
+        let nums = BusNumbers.byRoute(drawn.map { (rid: $0.rid, key: Optional($0.id)) })
+        if busNumbers != nums { busNumbers = nums }
+        let markers = drawn.map { d in
+            MapBus(id: d.id, rid: d.rid, label: d.label, coord: d.coord, bearing: d.rotation, stale: d.vt > 0 && t - d.vt > 60,
+                   number: nums[d.rid]?[d.id])
         }
         if mapBuses != markers { mapBuses = markers }
     }
@@ -555,22 +561,43 @@ extension AppModel {
         if j.kind == .plan { endTrip() } else { routeState.journey = nil; apply(StatePatch(routeFilter: .some(nil))) }
     }
 
-    /// A tap on empty map lowers the sheet to peek (web onMapTap), never right after a stop or bus tap.
-    func mapTapped() {
+    /// A tap on the map that is not a stop or bus tap: on a route line (`line`, MapScreen `lineHit`) it opens that
+    /// route as the Routes list does (owner 2026-10-27, web main.js onLineTap), where `lineTapOpens`; else it lowers the
+    /// sheet to peek (web onMapTap). Never right after a stop or bus tap.
+    func mapTapped(line: String? = nil) {
         let at = Date().timeIntervalSince1970
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 180_000_000)
             // a stop / bus tap delivered just before or after this one: that was not the empty map
             guard let self, self.lastAnnotationTap < at - 0.4 else { return }
+            if let rid = line, self.lineTapOpens, self.staticData.routes[rid] != nil, self.page != .route(rid) {
+                // the Routes list's tap: the route page, the map framed on the route; tapped on a route page it takes that
+                // page's place, so Back returns to the menu under it (owner 2026-11-02, AppModel.showPage)
+                self.push(.route(rid))
+                return
+            }
             if self.detent != .peek { self.detent = .peek }
         }
     }
 
+    /// Does a tap on a route line open it (web core/visibility.js lineTapOpens)? Not in Directions or Routes to station,
+    /// and not on Current trip while a trip is in progress: the map shows the trip there and a tap lowers the sheet.
+    var lineTapOpens: Bool {
+        switch page {
+        case .directions?, .pick?: return false
+        default: return !(activeTrip != nil && tab == .current && page == nil)
+        }
+    }
+
     /// A bus tapped on the map opens its route WITHOUT moving the map (web main.js openRoute(rid, false)).
-    func busTapped(_ rid: String) {
+    /// A bus tapped on the map opens its route with THAT bus picked: each station shows its own time (owner 2026-10-30,
+    /// web main.js onBusTap). Already on that route page: only the pick.
+    func busTapped(_ rid: String, vehicleId: String? = nil) {
         lastAnnotationTap = Date().timeIntervalSince1970
         guard staticData.routes[rid] != nil else { return }
-        paths[tab, default: []].append(.route(rid))   // the sheet keeps its state (owner 2026-10-12)
+        selectedBus = vehicleId.map { SelectedBus(rid: rid, vehicleId: $0) }
+        if page == .route(rid) { return }
+        showPage(.route(rid))   // the sheet keeps its state (owner 2026-10-12); on another route page it takes its place
         syncMapFocus()
     }
 

@@ -95,12 +95,27 @@ final class MapCameraModel {
     @ObservationIgnored var lastFrameAt: Double = 0
 }
 
-/// A route polyline ready for MapKit (coordinates converted and color parsed once per visibility change).
+/// A route polyline ready for MapKit (coordinates converted and color parsed once per visibility change). `rid` and
+/// the bounding box serve a tap on the line (MapScreen `lineHit`, Kit `LineTap`).
 struct MapLine: Identifiable {
     let id: String
+    let rid: String
     let coords: [CLLocationCoordinate2D]
     let color: Color
     let width: CGFloat
+    let minLat: Double, maxLat: Double, minLon: Double, maxLon: Double
+
+    init(id: String, rid: String, coords: [CLLocationCoordinate2D], color: Color, width: CGFloat) {
+        self.id = id
+        self.rid = rid
+        self.coords = coords
+        self.color = color
+        self.width = width
+        minLat = coords.map(\.latitude).min() ?? 0
+        maxLat = coords.map(\.latitude).max() ?? 0
+        minLon = coords.map(\.longitude).min() ?? 0
+        maxLon = coords.map(\.longitude).max() ?? 0
+    }
 }
 
 struct MapStop: Identifiable {
@@ -127,6 +142,15 @@ struct MapBus: Identifiable, Equatable {
     let coord: LatLon
     let bearing: Double?
     let stale: Bool
+    /// "Bus 2": its number when its route shows two or more buses (Kit `BusNumbers`, owner 2026-10-30).
+    var number: Int? = nil
+}
+
+/// The bus picked on its route page: each station shows that bus's own time (owner 2026-10-30, web store.busId).
+/// `vehicleId` is the bus key (`BusNumbers.key`: vehicle id, else label), the map marker's id.
+struct SelectedBus: Equatable {
+    let rid: String
+    let vehicleId: String
 }
 
 /// The app store (web/js/state.js) as an Observable model. Pure rules live in StraightBussingKit; this type
@@ -240,6 +264,13 @@ final class AppModel {
     /// calls `mapCoverChanged` when it flips.
     var mapCovered: Bool { showSettings || showTimePick || showLiveActivityPreview }
     var editingOrder = false
+    /// The bus whose own times its route page shows instead of the next bus at each stop (owner 2026-10-30): set by
+    /// tapping a bus on the map or its row on the route page (again = unpick); cleared when that page closes or the map
+    /// no longer draws the bus (it keeps a bus missing from one poll for 45 s, and the pick with it).
+    var selectedBus: SelectedBus?
+    /// "Bus 1", "Bus 2" per route (route id -> bus key -> number), from the buses the map draws (Kit `BusNumbers`),
+    /// written only when it changes.
+    var busNumbers: [String: [String: Int]] = [:]
     var confirmDelete: CustomRoute?
     /// Where to land after a confirmed delete: "list" | "detail" | "edit" (web deleteWithConfirm `from`).
     var confirmDeleteFrom = "list"
@@ -356,7 +387,7 @@ final class AppModel {
     }
 
     func push(_ p: SheetPage) {
-        paths[tab, default: []].append(p)
+        showPage(p)
         switch p {
         case .directions, .about, .editCustom: detent = .full
         // pages that opened at the midway stop keep the rider's current state (owner 2026-10-12: two states only)
@@ -364,6 +395,16 @@ final class AppModel {
         case .stop, .customRoute, .alerts, .pick: break
         }
         syncMapFocus()
+    }
+
+    /// Puts a page on the current tab's path. Line replaces line (owner 2026-11-02, web ui/router.js `replaceSelf`): a
+    /// route page opened from another route page (a map line or bus tap) takes its place, so Back returns to the menu
+    /// the first route page was opened from (My Routes, the Routes list, a stop, Alerts, ...), never to the previous line.
+    func showPage(_ p: SheetPage) {
+        var stack = paths[tab] ?? []
+        if case .route(_) = p, case .route(_)? = stack.last { stack.removeLast() }
+        stack.append(p)
+        paths[tab] = stack
     }
 
     func back() {
@@ -464,7 +505,7 @@ final class AppModel {
             let dim = focus.map { !$0.contains(rid) } ?? false
             let color = dim ? Color.dimmed(hex: r.color) : Color(hex: r.color)
             for (i, line) in (S.shapes[rid] ?? []).enumerated() {
-                lines.append(MapLine(id: "\(rid)-\(i)", coords: line.map(\.cl), color: color, width: dim ? 3 : 5))
+                lines.append(MapLine(id: "\(rid)-\(i)", rid: rid, coords: line.map(\.cl), color: color, width: dim ? 3 : 5))
             }
         }
         var ids = Set<String>()

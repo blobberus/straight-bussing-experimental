@@ -8,6 +8,7 @@ predictions and train our own (`tools/model_*.py`, `docs/ALGORITHMS.md`). Unoffi
 | `data/ground_truth/arrivals.csv` | `data` branch only (git-ignored on main) | real arrivals, collected every 10 s while buses run (`tools/service_gate.py`), merged about every 40 min (once per CI run) |
 | `data/ground_truth/predictions.csv` | `data` branch | since 2026-10-12: Passio's prediction 1, 2, 3, 5, 10, 15, 20 and 30 min before each arrival (one row per arrival and lead; schema below), for the owner's "10% rule" |
 | `data/ground_truth/alerts.csv` | `data` branch | since 2026-10-14: the operator's service alerts (Passio `serviceAlerts`), one row per alert version with when our collector first and last saw it (schema below); context for odd days (detours, reduced service), not ground truth about buses |
+| `data/ground_truth/bus_changes.csv` | `data` branch | since 2026-10-30: bus count changes per route (a bus leaves while the route keeps running, or a bus joins), each drop classified as lasting or a layover (schema below; owner: the 2 to 1 bus transitions) |
 | `data/ground_truth/archive/*.csv` | `data` branch | same schemas, rotated when a live file passes 40 MB (arrivals, predictions; alerts.csv never rotates) |
 | CI artifacts `raw-polls-<run>`, `pred-updates-<run>` | GitHub Actions, 90 days | every position poll (E03) and every Passio prediction update `[veh, trip, stop_id, made, predicted, seq, seen, last]` (repeated about once a minute while it stays on display) per run (`tools/raw_fetch.py --list`) |
 | Release `data-archive-YYYY-MM` assets | GitHub Releases (prerelease), kept | from service day 2026-10-12 on (Oct 10-11: positions only), one set per service day, uploaded the morning after: `pred-updates-<day>.jsonl.gz`, `raw-polls-<day>.jsonl.gz` (the two artifacts merged and deduped), `eta-<day>.csv.gz` (forecast snapshots, below), `gtfs-<day>.zip`, and from the first day alerts were collected `alerts-<day>.csv.gz` (the alerts.csv versions in the feed at some poll of that service day; header only = none seen); about 5.5 MB a day, no growth of the git history (`.github/workflows/archive.yml`, `tools/archive_day.py`) |
@@ -128,6 +129,57 @@ active_end. Fetch health per run: `logger.json` keys `alert_polls` `alert_ok` `a
 failed`, and a `Service alerts not collected` warning appears when more than half failed (never part of the
 "Collector run degraded" verdict).
 
+## bus_changes.csv (added 2026-10-30; one row = one confirmed change in a route's bus count)
+Owner: "A large propagating timing error I noticed originates from when buses transition from 2 bus to 1 bus schedule.
+When collecting data, flag buses that are during a transition and mark the one that disappears." `tools/bus_changes.py`,
+fed by every vehiclePositions poll (truth_logger.py `--changes-out`, so replay_day.py rebuilds it too), merged and
+classified by every collect run (`bus_changes.py merge --arrivals arrivals.csv`, also `monitor.py local`).
+- **Running buses of a route:** buses with a fresh report there (at most 90 s old by the feed's clock, the detector's rule),
+  on a route the static data knows.
+- **drop:** a bus sends no report on the route for 10 min while at least one other bus of the route reported within that
+  time: N to N-1 (N >= 2). `epoch` = its last report. A route that empties (end of service, or a feed outage that
+  silences every bus) is not a drop; neither is a gap under 10 min (Passio's empty / partial lists, DC-015).
+- **add:** a bus newly reporting on the route for 5 min with at least 3 reports, when the route already ran: N to N+1
+  (N >= 1). `epoch` = its first report. A bus first seen in a run's first 5 min counts as already there (the earlier
+  overlapping run, which saw it arrive, writes the row). Two overlapping runs' copies (same route, kind, bus within 300 s)
+  are merged.
+- **Classification (every merge, from arrivals.csv, which knows where each bus went across runs):** `returned_min` =
+  minutes until the bus's next logged arrival on the same route (within 3 h, else blank); `lasting` = 1 if none within
+  30 min, 0 if sooner (a **layover**: between trips Passio leaves a bus out of the feed for 10 to 27 min, so most
+  short drops are layovers at a line end), blank while the log does not reach 30 min past the drop yet; on adds
+  `returning` = 1 if the same bus dropped off that route in the 30 min before (a layover's end). **The transitions the
+  owner means are `kind = drop` with `lasting = 1`.**
+
+`route_id` `route_name` `epoch` `local_time` `kind` (drop | add) `buses_before` `buses_after` `vehicle_id` (the bus that
+left or came) `last_stop_id` `last_stop_name` (drops: its last logged arrival on the route, else Passio's last named stop)
+`last_seen_epoch` `trip_id` (its last / first trip id) `staying_vehicles` (`;`-joined) `sched_buses_hour`
+`sched_buses_next_hour` (timetable buses for that clock hour and the next, web/data/service.json) `expected` (1 if the
+timetable's bus count falls / rises between 30 min before and 30 min after, 0 if not, blank if unknown)
+`moved_to_route` (the route the bus reported or logged an arrival on next, within 30 min) `returned_min` `lasting`
+`returning`.
+
+Archive: `bus-changes-<day>.csv.gz` on the `data-archive-YYYY-MM` release is rebuilt by archive_day.py from the day's
+merged raw polls (one pass, `bus_changes.day_changes`) and classified the same way; the forecast table's
+`bus_change_min` / `leaving_bus` use it. The live file and the archive can differ by a row or two at run edges.
+
+## gtfs_versions.csv and gtfs/ (added 2026-11-01; one row = one timetable version the collector used)
+Why: `stop_index` is a place in the route's stop list, and the lists come from Passio's GTFS, which every collect run
+rebuilds. When Passio publishes a new timetable the lists change (Oct 26, 2026: Apostolic 9 to 10 stops,
+Apostolic/Drexel 10 to 12), and nothing recorded which timetable a run used; the daily archive downloaded the GTFS the
+next morning, so `gtfs-2026-10-25.zip` on the release is Oct 26's timetable (risk review DC-021). Now every collect run
+records the zip it built from (`tools/gtfs_versions.py record`, in the merge step): one row per version, and the zip
+itself once per version as `data/ground_truth/gtfs/gtfs-<version>.zip` (about 80 kB). The version is a hash of the
+timetable files (feed_info.txt and zip metadata left out): Passio regenerates the zip daily with new feed dates even
+when nothing changed.
+
+`version` `first_seen` `last_seen` (epochs: the earliest logging start and the latest merge of the runs that used it)
+`first_seen_local` `last_seen_local` `feed_start` `feed_end` (Passio's feed_info dates) `routes` `stops` `trips`
+`file` (`gtfs/gtfs-<version>.zip`). `python tools/gtfs_versions.py pick --versions ... --store ... --day D` names the
+version used for most of service day D; `archive_day.py --gtfs-versions` archives each day with it (and builds that
+day's stop lists from it). **Days before 2026-11-01:** the timetable live on day D is the release's
+`gtfs-<D - 1>.zip` (downloaded during D's morning); for Oct 25, 2026 use `gtfs-2026-10-24.zip`, not
+`gtfs-2026-10-25.zip`.
+
 ## Forecast snapshots for training and analysis: `eta-<day>.csv.gz` (added 2026-10-12)
 `tools/build_eta_dataset.py`. **One row = (query minute t, bus, one of that bus's arrivals in (t, t + 45 min])**, plus
 rows for a visit Passio showed at t that no arrival matches (`label_status` no_arrival: a bus going out of service, a
@@ -146,7 +198,9 @@ late, the bus came early**) and `_rel` = err / lead_s, so **the 10% rule is |rel
 (reading B) is rel > +0.01**: `passio_status` (shown / none / previous_lap) `passio_epoch` `passio_made_epoch`
 `passio_seen_epoch` `passio_age_s` `passio_err_s` `passio_rel`; `tt_epoch` (GTFS timetable of the target trip; blank
 on headway trips, the Downtown Campus Connector) `tt_err_s` `tt_rel`; `ttd_epoch` (timetable + the bus's current
-delay) `ttd_err_s` `ttd_rel`. Passio at t uses the collector's rules (this bus, loop stop_sequence, first seen by t
+delay) `ttd_err_s` `ttd_rel` · since 2026-10-30 `bus_change_min` (minutes from the nearest lasting drop on the row's route to the query
+time, negative = the drop is still ahead; blank if none within 45 min; bus_changes.py) and `leaving_bus` (1 if the
+row's bus is the one that leaves in that drop, 0 if it stays, blank with no drop). Passio at t uses the collector's rules (this bus, loop stop_sequence, first seen by t
 and still shown within 90 s, only for its next visit; an update made before the previous visit on the same trip =
 previous_lap; since 2026-10-16 (DC-010) a minute the own trip id left empty, after one it filled for the same arrival,
 takes the bus's prediction under a trip id Passio re-matched it to, by the detector's own rule, as in
@@ -326,6 +380,40 @@ Actions > Variables), or "Disable workflow" in the Actions tab (the keepalive st
 6. annotates the run (`::warning::`) when logging stopped early, the feed kept failing, or the chain did
    not start the next run; the job stays green so the merge always runs.
 
+**Safety nets (risk review 2026-11-01, docs/DATA-COLLECTION-LOG.md DC-021):**
+- **Pre-flight self-test.** Before anything else every run (collect or idle) runs `tools/collector_selftest.py`
+  (imports, command lines and the offline test suites of everything a run uses, about 15 s). If main's code fails,
+  the run collects with the last code that finished a healthy run, the git tag `collector-ok` (`git checkout
+  collector-ok -- tools`), and raises a health alert. Every healthy collect run on main's code moves the tag to its
+  commit. `.github/workflows/collector-tests.yml` runs the same tests (plus the merge step itself against a throwaway
+  remote, `tools/test_collect_yml.py`) on every push to main that touches the collector, so a broken change shows red
+  at once.
+- **No-rows-lost guard.** `tools/check_merge.py` snapshots the freshly checked-out data branch and, after the merges,
+  refuses the push if any family (arrivals, predictions, bus changes; alert versions) has fewer rows, a header changed,
+  a line has the wrong number of columns, a file is cut short, or an archive file was rewritten. The step then fails,
+  the data branch stays as it was, and the run's own files are kept as the artifact `unmerged-<run id>` (90 days).
+  `monitor.py local` uses the same guard.
+- **Health alerts.** `tools/health.py` keeps one GitHub issue (label `collector-health`) in step: opened (or reopened)
+  when a new problem appears, edited while problems last, commented only for a new kind of problem, closed when every
+  check is clear. Checks: the self-test verdict (every run); each collect run (no status file, no polls, the vehicle
+  feed unreadable for 15 min or more, the feed in an unexpected shape, buses seen but no arrival logged, a blocked or
+  failed push, many processing errors); the collected data after each merge (normally busy 10-minute slots with no
+  arrival on any route, a finished day under 60% of its usual count, a route under 20% of its usual count, duplicates,
+  rows missing ids, under 50% of arrivals with Passio's prediction; paused during academic breaks and holidays,
+  data/calendar.json) and the archive (finished days missing files while their artifacts still exist); the archive
+  job's own failure. From outside, the public data repo's sync chain runs `health.py watchdog` every ~30 min: buses
+  in the feed but no collect run active and nothing merged for 45 min opens an issue in the data repo (a run that logs
+  or pushes nothing is reported by the run itself). "Buses" in the run checks are buses in service: fresh reports
+  within 600 m of a stop of their own route (status `bus_polls`), not buses Passio still lists on a trip on their way
+  to the garage (DC-022). Replayed over Oct 12 to 31 the data checks raise exactly one problem, the real
+  Oct 28 feed outage. Repo variable `HEALTH_ISSUES=off` keeps everything to annotations and job summaries.
+- **The logger's status file** (`--status-file`) also reports `bus_polls` (polls that saw a bus), `max_fail_s` and
+  `fail_spans` (stretches of 2 min or more with no readable vehicle feed) and `schema_errors` / `schema_first` (feeds
+  that parse but are not shaped like GTFS-realtime, which would otherwise read as "no buses").
+- **Off-GitHub copy.** Everything collected lives on one GitHub account; `python tools/backup.py` copies the data
+  branch's files and every archive release asset to `~/StraightBussing-backup` (incremental, size-checked,
+  `MANIFEST.json` with sha256; `--check` verifies). Run it every week or two.
+
 It never pushes to main, so Pages never redeploys. One row per bus per stop visit; no rows overnight
 while no shuttles run.
 
@@ -374,7 +462,8 @@ poll (`truth_logger.py --raw-out`, one JSON line per poll: `{"t", "h", "v": [[ve
 bearing, speed, q, stop_id, status, vt], ...]}`) as the artifact `raw-polls-<run id>` (about 1 MB per run,
 kept 90 days, never on the data branch). `python tools/raw_fetch.py` downloads the new ones into
 `data/raw_polls/days/<service day>.jsonl` (deduped on vehicle + vt; git-ignored); `--list` shows what is on
-GitHub. Download at least every 2 months or they expire.
+GitHub. Download at least every 2 months or they expire. (The daily archive turns them into one file per day on
+the `data-archive-YYYY-MM` release and since 2026-11-01 catches up every day whose artifacts still exist, 85 days.)
 
 **Privacy**: the feeds hold only vehicle positions and predictions, no riders. Nothing personal is
 collected; addresses come from public OpenStreetMap data via Photon (stop coordinates only).

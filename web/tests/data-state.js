@@ -7,8 +7,8 @@ import { tick } from './data-helpers.js';
 const CONTRACT_KEYS = ['routes', 'stops', 'shapes', 'routeStops', 'stopRoutes', 'addresses', 'staticLoaded',
   'buses', 'trips', 'alerts', 'feedTs', 'lastOk', 'failed', 'liveLoaded',
   'user', 'locState', 'locErr', 'hiddenRoutes', 'theme', 'service', 'landmarks',
-  'routeOrder', 'customRoutes', 'activeCustom', 'prevHidden', 'favStops', 'notify', 'journey', 'timeView',
-  'view', 'prevView', 'stopId', 'routeId', 'routeFilter'];
+  'routeOrder', 'customRoutes', 'activeCustom', 'prevHidden', 'favStops', 'notify', 'usage', 'journey', 'timeView',
+  'view', 'prevView', 'stopId', 'routeId', 'routeFilter', 'busId'];
 
 /** Run fn with the persisted prefs saved/restored around it. */
 async function withPrefs(fn) {

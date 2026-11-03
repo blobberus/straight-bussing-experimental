@@ -235,12 +235,21 @@ struct DirectionsView: View {
                 walkOnlyCard(r)
                 refiningNote
             } else {
-                ForEach(Array(r.options.prefix(Planner.maxOpts).enumerated()), id: \.element.key) { item in
+                // very close (owner 2026-10-30): walking the whole way is the first option when it takes 10 min or less
+                // or arrives no later than the best bus (Kit Rank.walkFirst)
+                let walkFirst = Rank.walkFirst(r)
+                if walkFirst {
+                    walkOnlyCard(r, caption: "Close enough to walk").accessibilityIdentifier("dirWalkFirst")
+                }
+                // the walk counts as one of the (at most 4) options, like the web list
+                ForEach(Array(r.options.prefix(Planner.maxOpts - (walkFirst ? 1 : 0)).enumerated()), id: \.element.key) { item in
                     OptionCard(option: item.element, index: item.offset, showCriteria: r.options.count > 1,
                                selected: item.offset == model.dir.selected)
                 }
-                Text("Walking the whole way: \(TripInfo.mins(r.walkOnlyMin)) min (\(r.walkOnlyM) m), \(walkSourceText(r))")
-                    .font(.footnote).foregroundStyle(Palette.text2)
+                if !walkFirst {
+                    Text("Walking the whole way: \(TripInfo.mins(r.walkOnlyMin)) min (\(r.walkOnlyM) m), \(walkSourceText(r))")
+                        .font(.footnote).foregroundStyle(Palette.text2)
+                }
                 refiningNote
                 Text("Bus times are estimates from schedules and live predictions. They will get more accurate as we collect more ride data.")
                     .font(.footnote).foregroundStyle(Palette.text2)
@@ -282,10 +291,14 @@ struct DirectionsView: View {
         }
     }
 
-    /// Walk-only fallback (directions.js): minutes + source tag, arrival clock, "Walk the whole way", meters.
-    func walkOnlyCard(_ r: PlanResult) -> some View {
+    /// Walk-only fallback (directions.js): minutes + source tag, arrival clock, "Walk the whole way", meters. `caption`:
+    /// the walk-first card's line on top ("Close enough to walk", web walkOptionHTML).
+    func walkOnlyCard(_ r: PlanResult, caption: String? = nil) -> some View {
         Card {
             VStack(alignment: .leading, spacing: 4) {
+                if let caption {
+                    Text(caption).font(.caption.weight(.semibold)).foregroundStyle(Palette.text2)
+                }
                 let mins = Text("\(TripInfo.mins(r.walkOnlyMin))").font(.title2.weight(.bold)).monospacedDigit()
                 let arrive = Text("Arrive \(TimeFmt.clock(model.now + r.walkOnlyMin * 60))").font(.subheadline.weight(.semibold))
                 ViewThatFits(in: .horizontal) {   // large text: the arrival under the minutes, never broken inside the clock

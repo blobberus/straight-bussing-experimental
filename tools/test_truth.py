@@ -413,6 +413,43 @@ def loop_terminal_prediction_matches_the_visit_index():
 
 
 @test
+def loop_end_prediction_when_our_route_order_holds_a_stop_the_trip_skips():
+    """DC-017 (2026-10-29): our route order can hold a stop a trip skips (Midway Metra's afternoon stop), so the loop's
+    end is index 5 here while Passio numbers it 5 on the trip, not idx + 1 = 6. The end visit takes Passio's highest
+    stop_sequence for the stop; the start visit still takes stop_sequence 1."""
+    import truth_logger as TL
+    st = fake_static()
+    st.route_stops["M"] = ["A", "B", "C", "X", "D", "A"]       # X: a variant's stop this trip never serves
+    st.routes["M"] = {"short": "M", "long": "Variant Loop"}
+    reps, truth = simulate(st, ["A", "B", "C", "D", "A"], route="M")
+    made = T0 - 300
+    last = int(truth[4]) + 4
+    tr = Tracker(st)
+    # the update lists the terminal only as the trip's last stop (5): with stop 1 listed too, the visit index itself
+    # would come out 0 (Tracker index choice, the same idx + 1 assumption; reported, left as is: it rewrites rows)
+    TL.store_predictions(tr, {"entity": [tu_entity("T1", made, [("B", 2, int(truth[1])), ("C", 3, int(truth[2])),
+                                                                ("D", 4, int(truth[3])), ("A", 5, last)], veh="V1")]}, made)
+    ev = run(tr, reps)
+    assert [e["idx"] for e in ev] == [0, 1, 2, 4, 5], [e["idx"] for e in ev]
+    assert ev[-1]["pred"] is not None and ev[-1]["pred"][0] == last, (ev[-1]["pred"], last)
+    assert tr.pred_for("T1", "A", ev[-1]["epoch"], veh="V1", idx=5, loop_stop=True) is None, "without loop_last: dropped, as before"
+
+
+@test
+def gps_sweep_candidates_are_in_route_order():
+    """A loop terminal fits a route at index 0 and at the last index: the sweep's candidates are a list in route
+    order, never a set (a set's order follows Python's per-process string hashing, so the same day replayed twice
+    labelled such a visit 0 once and 4 the next; found 2026-10-29)."""
+    st = fake_static()
+    tr = Tracker(st)
+    b = st.stops["B"]
+    hits = tr._hits(b["lat"], b["lon"] - 0.0025, b["lat"], b["lon"] + 0.0001)   # driving east (route order) into B
+    got = dict(hits).get("B")
+    assert isinstance(got, list), type(got)
+    assert got == sorted(got, key=lambda x: (list(st.route_stops).index(x[0]), x[1])), got
+
+
+@test
 def predictions_at_every_target_lead():
     """predictions.csv (owner goal 2026-10-12, the 10% rule): for each target lead L the newest prediction made
     at least L before the arrival; leads with none are left out."""
@@ -1137,6 +1174,102 @@ def gps_rows_never_change_the_rules_rows():
     tr = Tracker(st)
     tr.seed([dict(zip(L.COLUMNS, next(__import__("csv").reader([row(T0, "gps", "")]))))], T0 + 60)
     assert not tr.v and tr.logged[("V1", "Q1")], "a GPS row only feeds the sweep's duplicate check"
+
+@test
+def a_feed_in_another_shape_is_counted_not_read_as_no_buses():
+    """Risk review 2026-11-01 (DC-021): if Passio renamed a field, the logger saw "no vehicles" and the run idled with
+    nobody told. feed_shape() names what is wrong; poll() counts it in err.schema (status schema_errors) and still never
+    skips a good feed. An empty entity list (night) is a good feed."""
+    import truth_logger as TL
+    head = {"gtfs_realtime_version": "2.0", "timestamp": str(T0)}
+    veh = {"id": "e1", "vehicle": {"trip": {"trip_id": "T1"}, "position": {"latitude": LAT, "longitude": LON0},
+                                   "vehicle": {"id": "V1"}, "timestamp": T0}}
+    assert TL.feed_shape({"header": head, "entity": [veh]}, "vehicle") is None
+    assert TL.feed_shape({"header": head}, "vehicle") is None                       # no buses at night
+    assert TL.feed_shape({"header": head, "entity": []}, "trip_update") is None
+    assert "timestamp" in TL.feed_shape({"entity": [veh]}, "vehicle")
+    assert "none with 'vehicle'" in TL.feed_shape({"header": head, "entity": [{"id": "e1", "vehiclePosition": {}}]}, "vehicle")
+    bad_pos = {"id": "e1", "vehicle": {"trip": {"trip_id": "T1"}, "position": {"lat": LAT}}}
+    assert "position.latitude" in TL.feed_shape({"header": head, "entity": [bad_pos]}, "vehicle")
+    assert "list" in TL.feed_shape({"header": head, "entity": {"a": 1}}, "vehicle")
+    assert "JSON object" in TL.feed_shape([1, 2], "trip_update")
+    st = fake_static()
+    tr, err = Tracker(st), TL.Errors(out=open(__import__("os").devnull, "w"))
+    feeds = {"tripUpdates": {"header": head, "entity": [{"id": "x", "tripUpdate": {}}]},
+             "vehiclePositions": {"header": head, "entity": [{"id": "e1", "vehiclePosition": {}}]}}
+
+    class W:
+        n = np = 0
+        def write(self, ev):
+            pass
+    s = TL.poll(tr, W(), T0, err, get=lambda name: feeds[name])
+    assert err.schema == 2 and err.fetch == 0 and "tripUpdates" in err.schema_first, (err.schema, err.schema_first)
+    assert s == {"veh": 0, "trip": 0, "fresh": 0, "live": 0}, s
+    feeds["vehiclePositions"] = {"header": head, "entity": [veh]}
+    feeds["tripUpdates"] = {"header": head, "entity": []}
+    TL.poll(tr, W(), T0 + 10, err, get=lambda name: feeds[name])
+    assert err.schema == 2, "a good feed is never counted"
+
+
+@test
+def only_buses_near_their_own_route_count_as_in_service():
+    """2026-11-02: the first "buses but no rows" alert came from three buses Passio still listed on trips while they drove
+    to the garage, 3 km from any stop. poll()'s summary["live"] counts only fresh reports within IN_SERVICE_M of a stop of
+    their own route (bus_polls in the status file uses it)."""
+    import truth_logger as TL
+    st = fake_static()
+    near = {"veh": "V1", "route": "R", "lat": LAT, "lon": LON0 + STEP * 1.5, "vt": T0}            # between B and C
+    far = {"veh": "V2", "route": "R", "lat": LAT + 0.03, "lon": LON0, "vt": T0}                    # 3.3 km north
+    old = {"veh": "V3", "route": "R", "lat": LAT, "lon": LON0, "vt": T0 - 600}                     # 10 min old
+    other = {"veh": "V4", "route": "S", "lat": st.stops["X"]["lat"], "lon": st.stops["X"]["lon"], "vt": T0}
+    assert TL.in_service(st, [near, far, old, other], T0) == 2, "near + the bus at its own route's stop X"
+    assert TL.in_service(st, [far, old], T0) == 0
+    assert TL.in_service(st, [dict(near, route="NOPE")], T0) == 0, "an unknown route is not in service"
+    head = {"gtfs_realtime_version": "2.0", "timestamp": str(T0)}
+    ent = lambda r: {"id": r["veh"], "vehicle": {"trip": {"trip_id": "T1", "route_id": r["route"]}, "vehicle": {"id": r["veh"]},
+                                                  "position": {"latitude": r["lat"], "longitude": r["lon"]}, "timestamp": r["vt"]}}
+
+    class W:
+        n = np = 0
+        def write(self, ev):
+            pass
+    feeds = {"tripUpdates": {"header": head, "entity": []}, "vehiclePositions": {"header": head, "entity": [ent(far)]}}
+    s = TL.poll(Tracker(st), W(), T0, TL.Errors(out=open(__import__("os").devnull, "w")), get=lambda n: feeds[n])
+    assert s["fresh"] == 1 and s["live"] == 0, s
+    feeds["vehiclePositions"]["entity"].append(ent(near))
+    s = TL.poll(Tracker(st), W(), T0, TL.Errors(out=open(__import__("os").devnull, "w")), get=lambda n: feeds[n])
+    assert s["live"] == 1, s
+
+
+@test
+def the_status_file_reports_outages_and_polls_with_buses():
+    """Risk review 2026-11-01 (DC-021): on Oct 28 every feed read timed out from 7:31 to 8:11 PM while the run stayed green.
+    The status file now carries bus_polls (polls that saw a bus), max_fail_s and fail_spans (stretches of 2 min or more
+    with no readable vehicle feed) and schema_errors, for tools/health.py."""
+    import subprocess
+    d = Path(tempfile.mkdtemp(prefix="sb-truth-"))
+    status = d / "s.json"
+    child = d / "child.py"
+    child.write_text("\n".join([
+        "import sys",
+        f"sys.path.insert(0, {str(Path(__file__).resolve().parent)!r})",
+        f"sys.argv = ['truth_logger.py', '--duration', '0', '--interval', '5', '--out', {str(d / 'run.csv')!r},",
+        f"            '--status-file', {str(status)!r}, '--once']",
+        "import truth_logger as TL",
+        "def fake(name, timeout=15):",
+        "    raise TimeoutError('The read operation timed out')",
+        "orig = TL.poll",
+        "TL.poll = lambda *a, **k: orig(*a, **{**k, 'get': fake})   # no network: every read times out",
+        "TL.main()", ""]), encoding="utf-8")
+    r = subprocess.run([sys.executable, str(child)], cwd=str(Path(__file__).resolve().parent.parent),
+                       capture_output=True, text=True, timeout=60)
+    assert status.exists(), r.stderr[-800:]
+    s = json.loads(status.read_text(encoding="utf-8"))
+    for k in ("bus_polls", "max_fail_s", "fail_spans", "schema_errors", "schema_first"):
+        assert k in s, (k, s)
+    assert s["bus_polls"] == 0 and s["fetch_errors"] == 2 and s["schema_errors"] == 0, s
+    assert s["max_fail_s"] >= 0 and s["fail_spans"] == [], s          # one failed poll: not a 2-min stretch
+
 
 def main():
     fails = 0

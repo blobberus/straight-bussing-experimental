@@ -139,12 +139,13 @@ struct MapScreen: View {
             ForEach(buses) { b in
                 let isYou = youOnDrawnBus && b.id == youBus
                 Annotation(b.label, coordinate: b.coord.cl, anchor: .center) {
-                    Button { model.busTapped(b.rid) } label: {
-                        BusMarker(route: model.route(b.rid), bearing: b.bearing, stale: b.stale, youText: isYou ? you?.text : nil)
+                    Button { model.busTapped(b.rid, vehicleId: b.id) } label: {
+                        BusMarker(route: model.route(b.rid), bearing: b.bearing, stale: b.stale, youText: isYou ? you?.text : nil,
+                                  number: b.number, picked: model.selectedBus == SelectedBus(rid: b.rid, vehicleId: b.id))
                             .frame(minWidth: 44, minHeight: 44)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityHint("Opens the route")
+                    .accessibilityHint(b.number != nil ? "Opens the route with this bus's times" : "Opens the route")
                 }
                 .annotationTitles(.hidden)
             }
@@ -172,9 +173,12 @@ struct MapScreen: View {
             heading.mapTurned(ctx.camera.heading)   // the cone keeps pointing the real way on a rotated map
             model.mapLabels.cameraMoved { layoutLabels(proxy, scale: labelScale) }
         }
-        // a tap on empty map lowers the sheet to peek (web onMapTap). Simultaneous, so it never blocks the stop / bus
-        // buttons; `mapTapped` ignores a tap that also hit one of them.
-        .simultaneousGesture(TapGesture().onEnded { model.mapTapped() })
+        // a tap on a route line opens the line drawn on top (owner 2026-10-27; not while a trip or walk is drawn), a tap
+        // on empty map lowers the sheet to peek (web onMapTap). Simultaneous, so it never blocks the stop / bus buttons;
+        // `mapTapped` ignores a tap that also hit one of them. A pointer shortcut only: VoiceOver uses the Routes list.
+        .simultaneousGesture(SpatialTapGesture(coordinateSpace: .global).onEnded { v in
+            model.mapTapped(line: drawn == nil && walk == nil ? lineHit(v.location, proxy, layers) : nil)
+        })
         .accessibilityLabel("Shuttle map")
         // follow camera (AppModel+Follow.swift), watched by a child view so this body does not re-run on a pan or a
         // settled sheet
@@ -185,6 +189,24 @@ struct MapScreen: View {
             }
         }
         }
+    }
+
+    /// The route line under a tap (web map.js + map/geometry.js lineAt, Kit `LineTap`): only lines whose box comes near
+    /// the tap are projected; the topmost within `LineTap.reach` points plus half its width wins. Hidden routes are not
+    /// in `layers.lines`, so they are never tapped.
+    func lineHit(_ at: CGPoint, _ proxy: MapProxy, _ layers: MapLayers) -> String? {
+        let r = CGFloat(LineTap.reach + 6)
+        let corners = [CGPoint(x: at.x - r, y: at.y - r), CGPoint(x: at.x + r, y: at.y - r),
+                       CGPoint(x: at.x - r, y: at.y + r), CGPoint(x: at.x + r, y: at.y + r)]
+        let c = corners.compactMap { proxy.convert($0, from: .global) }
+        guard c.count == 4, let lat0 = c.map(\.latitude).min(), let lat1 = c.map(\.latitude).max(),
+              let lon0 = c.map(\.longitude).min(), let lon1 = c.map(\.longitude).max() else { return nil }
+        var lines: [LineTap.Line] = []
+        for l in layers.lines where l.maxLat >= lat0 && l.minLat <= lat1 && l.maxLon >= lon0 && l.minLon <= lon1 {
+            let px = l.coords.compactMap { proxy.convert($0, to: .global) }.map { SIMD2(Double($0.x), Double($0.y)) }
+            lines.append(LineTap.Line(rid: l.rid, px: px, width: Double(l.width)))
+        }
+        return LineTap.lineAt(SIMD2(Double(at.x), Double(at.y)), lines: lines)
     }
 
     /// Is every point of the trip's frame inside the visible map (above the sheet, below the chrome)? Then nothing
@@ -415,6 +437,10 @@ struct BusMarker: View {
     let bearing: Double?
     var stale = false
     var youText: String? = nil
+    /// "Bus 2": a small number on the badge when the route shows two or more buses (Kit `BusNumbers`, owner 2026-10-30).
+    var number: Int? = nil
+    /// The bus picked on its route page (its own times are shown there): an accent ring, like the web's highlight.
+    var picked = false
     var body: some View {
         ZStack {
             if youText != nil {
@@ -423,6 +449,11 @@ struct BusMarker: View {
                     .frame(width: 44, height: 38)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(.white, lineWidth: 7))
                 YouPill(text: "You").offset(y: -34)
+            }
+            if picked && youText == nil {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Palette.accentFill, lineWidth: 3)
+                    .frame(width: 40, height: 34)
             }
             if let bearing {
                 Image(systemName: "triangle.fill")
@@ -440,9 +471,20 @@ struct BusMarker: View {
                 .background(Color(hex: route?.color), in: RoundedRectangle(cornerRadius: Radius.badge, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Radius.badge, style: .continuous).stroke(.white, lineWidth: 2))
                 .shadow(color: Palette.shadow.opacity(0.3), radius: 2, y: 1)
+            if let number {
+                Text("\(number)")
+                    .font(.system(size: 10, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Color(hex: route?.color))
+                    .frame(minWidth: 15, minHeight: 15)
+                    .background(.white, in: Circle())
+                    .overlay(Circle().stroke(Color(hex: route?.color), lineWidth: 1.5))
+                    .offset(x: 16, y: -11)
+            }
         }
         .opacity(stale ? 0.5 : 1)
-        .accessibilityLabel((youText ?? "\(route?.displayName ?? "Shuttle") bus") + (stale ? ", location may be old" : ""))
+        .accessibilityLabel((youText ?? (number.map { "Bus \($0), \(route?.displayName ?? "Shuttle")" } ?? "\(route?.displayName ?? "Shuttle") bus"))
+                            + (picked ? ", showing its times" : "") + (stale ? ", location may be old" : ""))
     }
 }
 
