@@ -129,6 +129,37 @@ final class SmokeUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["tripHeadline"].exists, "no timeline of the old trip")
     }
 
+    /// Owner 2026-11-03: Retry tapped again and again while on a route must never shift the screen and end the trip by
+    /// accident. `-feed flaky` starts a trip with live data, then fails the feed until Retry is tapped. Retry sits on the
+    /// banner's leading side; six taps on the same screen point (the first one brings the feed back) keep the slot in
+    /// place, the trip keeps running, and once the finger stops the banner gives its place back with the trip still on.
+    func testRepeatedRetryDuringATripKeepsTheTrip() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "-screen", "trip", "-feed", "flaky", "-detent", "peek"]
+        app.launch()
+        let retry = app.buttons["bannerRetry"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 45), "the feed fails during the trip: Retry in the status banner")
+        let chip = app.descendants(matching: .any)["contextBar"]
+        XCTAssertTrue(chip.waitForExistence(timeout: 5), "the trip chip (its Show all ends the trip)")
+        let window = app.windows.firstMatch.frame
+        let f0 = retry.frame
+        XCTAssertLessThan(f0.midX, window.midX, "Retry on the leading side: \(f0)")
+        save(app, "53-retry-trip-light")
+        let spot = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: f0.midX - window.minX, dy: f0.midY - window.minY))
+        for _ in 0..<6 { spot.tap() }   // the same screen point every time, as a hurried finger would
+        let slot = app.descendants(matching: .any)["bannerRetry"]
+        XCTAssertTrue(slot.exists, "the banner keeps its place while the finger keeps tapping")
+        XCTAssertEqual(slot.frame.minX, f0.minX, accuracy: 1, "the slot did not move")
+        XCTAssertEqual(slot.frame.minY, f0.minY, accuracy: 1, "the slot did not move")
+        save(app, "54-retry-recovered-light")
+        XCTAssertTrue(app.descendants(matching: .any)["arrivingIn"].exists, "the trip is still on (Arriving In in the header)")
+        XCTAssertTrue(chip.exists, "the trip chip is still there")
+        waitGone(slot, 10, "the banner gives its place back once the finger stops")
+        XCTAssertTrue(app.descendants(matching: .any)["contextBar"].exists, "the trip was not ended")
+        XCTAssertTrue(app.descendants(matching: .any)["arrivingIn"].exists, "the trip was not ended")
+    }
+
     /// Turn a SwiftUI switch on: a tap on its trailing edge (the switch, not the label), then, if the value did not
     /// change (iOS 26 lays the row out differently), a tap on the inner switch control.
     func turnOn(_ toggle: XCUIElement) -> Bool {
