@@ -6,15 +6,6 @@ extension LatLon {
     var cl: CLLocationCoordinate2D { CLLocationCoordinate2D(latitude: lat, longitude: lon) }
 }
 
-extension Color {
-    /// Badge text on a route color (spec 4.3): whichever of #FFFFFF and #111114 has the higher contrast (GTFS
-    /// route_text_color is ignored when it is lower; RED #D62728 takes white at 5.0:1).
-    static func badgeText(hex: String?) -> Color {
-        let white = Color.contrast(hex: hex, against: 0xFFFFFF), ink = Color.contrast(hex: hex, against: 0x111114)
-        return white >= ink ? .white : Color(red: 17 / 255, green: 17 / 255, blue: 20 / 255)
-    }
-}
-
 // MARK: Route badge (spec 10.9)
 
 /// Route badge: the short name on the route color in a 6 pt rounded rectangle, 24 tall in rows and 20 tall inline.

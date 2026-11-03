@@ -33,6 +33,14 @@ extension Color {
                      blue: mix(rgb & 0xFF, base & 0xFF), opacity: 1)
     }
 
+    /// Badge text on a route color (docs/DESIGN-SPEC.md 4.3): whichever of #FFFFFF and #111114 has the higher contrast
+    /// (GTFS route_text_color is ignored when it is lower; RED #D62728 takes white at 5.0:1). Used by the route badge,
+    /// the bus marker, the rails and the Live Activity chip.
+    static func badgeText(hex: String?) -> Color {
+        let white = Color.contrast(hex: hex, against: 0xFFFFFF), ink = Color.contrast(hex: hex, against: 0x111114)
+        return white >= ink ? .white : Color(red: 17 / 255, green: 17 / 255, blue: 20 / 255)
+    }
+
     /// Readable text color on a '#RRGGBB' background (core/esc.js textOn, by relative luminance).
     static func textOn(hex: String?) -> Color {
         var s = (hex ?? "").trimmingCharacters(in: .whitespaces)
