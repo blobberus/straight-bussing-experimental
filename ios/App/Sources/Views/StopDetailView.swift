@@ -7,6 +7,7 @@ import StraightBussingKit
 /// Show, and the freshness line. The header's right side keeps the next arrival.
 struct StopDetailView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var typeSize
     let stopId: String
     static let maxArrivals = 10
 
@@ -58,9 +59,12 @@ struct StopDetailView: View {
                     }
                 }
                 .padding(.horizontal, Space.s1)
-                ViewThatFits(in: .horizontal) {
-                    EqualWidthHStack { actionButtons(stop) }
+                // one row sized by the words, the leftover shared (web .v-stopacts); a narrow phone wraps the last one;
+                // accessibility sizes stack all three, Directions first
+                if typeSize.isAccessibilitySize {
                     VStack(spacing: Space.s2) { actionButtons(stop) }
+                } else {
+                    FillRowLayout { actionButtons(stop) }
                 }
                 SectionTitle(text: "Arrivals")
                 if !model.liveLoaded {
@@ -109,13 +113,13 @@ struct StopDetailView: View {
         Button { model.directionsTo(stopId: stopId) } label: {
             Text("Directions").lineLimit(1).frame(maxWidth: .infinity)
         }
-        .buttonStyle(PrimaryButtonStyle())
+        .buttonStyle(PrimaryButtonStyle(hPad: Space.s3))
         .accessibilityLabel("Directions to \(stop.name)")
         .accessibilityIdentifier("stopDirections")
         Button { model.directionsFrom(stopId: stopId) } label: {
             Text("From here").lineLimit(1).frame(maxWidth: .infinity)
         }
-        .buttonStyle(SecondaryButtonStyle())
+        .buttonStyle(SecondaryButtonStyle(hPad: Space.s3))
         .accessibilityLabel("Directions from \(stop.name)")
         Button { model.toggleFavorite(stopId) } label: {
             HStack(spacing: 6) {
@@ -124,7 +128,7 @@ struct StopDetailView: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .buttonStyle(SecondaryButtonStyle())
+        .buttonStyle(SecondaryButtonStyle(hPad: Space.s3))
         .accessibilityLabel(fav ? "Remove from favorites" : "Add to favorites")
         .accessibilityValue(fav ? "Favorited" : "")
         .accessibilityIdentifier("favButton")
