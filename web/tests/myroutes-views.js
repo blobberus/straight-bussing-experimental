@@ -3,7 +3,7 @@ import { test, eq, ok } from "./lib.js";
 import { NOW, fixture, makeCtx, tick, root } from "./views-fixtures.js";
 import { runAction } from "../js/ui/actions.js";
 import { getView } from "../js/ui/router.js";
-import { renderMyRoutes, renderCustom, renderEditor, saveEditor, createPatcher, _ui, restingText } from "../js/ui/views/myroutes.js";
+import { renderMyRoutes, renderCustom, renderEditor, saveEditor, createPatcher, _ui, restingText, myRoutesMetaHTML } from "../js/ui/views/myroutes.js";
 import { renderStop } from "../js/ui/views/stop.js";
 
 const noRaw = (h) => !h.includes("<script>") && !h.includes("javascript:") && !h.includes("<img");
@@ -327,4 +327,12 @@ test("stop: favorite toggle, routes at this stop follow visibility", async () =>
   h = renderStop(fixture({ stopId: "S4", hiddenRoutes: ["R2"] }), NOW);
   ok(h.includes("None of your visible routes stop here"));
   ok(renderStop(fixture({ stopId: "S2" }), NOW).includes("Address not available"));
+});
+
+test("my routes header (DESIGN-SPEC 10.6): New once a custom route exists; the empty card keeps the primary", () => {
+  eq(myRoutesMetaHTML(fixture({ customRoutes: [] })), "", "no custom route: the empty card's New custom route is the action");
+  const h = myRoutesMetaHTML(fixture({ customRoutes: [{ id: "c1", name: "Mine", rids: ["R1"], highlight: [] }] }));
+  ok(h.includes('data-action="mr:new"') && h.includes('aria-label="New custom route"') && h.includes(">New<"), h);
+  const list = renderMyRoutes(fixture({ customRoutes: [{ id: "c1", name: "Mine", rids: ["R1"], highlight: [] }] }), NOW);
+  ok(!list.includes('data-action="mr:new"'), "not repeated in the list");
 });

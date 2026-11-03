@@ -24,7 +24,6 @@
 .rt-tools { display: flex; justify-content: flex-start; margin: 0 0 var(--s-2); }
 .rt-orderbtn { min-height: var(--tap); margin-left: calc(var(--s-2) * -1); gap: var(--s-2); }
 .rt-orderbtn .rt-toolic { width: 20px; height: 20px; flex: none; }
-.titleright .v-btn--quiet { margin-right: calc(var(--s-2) * -1); padding: 0 var(--s-2); font: var(--t-button); white-space: nowrap; }
 
 /* map-order editor */
 .rt-ordertitle { margin-top: var(--s-2); }

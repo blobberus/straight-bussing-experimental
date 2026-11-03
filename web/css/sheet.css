@@ -83,6 +83,9 @@
 .hm--stack .eta { line-height: 1; }
 .hm-cap { font: var(--t-caption); color: var(--label-2); }
 .hm--text { font: var(--t-row-detail); color: var(--label-2); white-space: normal; text-align: right; }
+/* a header action ("Edit map order", "New"): a text button in sectionTitle, 44 pt tall, flush with the edge */
+.titleright .v-btn--quiet { min-height: var(--tap); margin-right: calc(var(--s-2) * -1); padding: 0 var(--s-2); gap: var(--s-1); font: var(--t-section); white-space: nowrap; }
+.titleright .v-btn--quiet .ic { width: var(--i-inline); height: var(--i-inline); }
 
 /* expanded state stops below the status banner (always visible for safety; ui/pill.js keeps --pill-h = its measured
    height), so the banner never covers the grab bar. The trip chip does NOT change it: it hides when expanded

@@ -119,7 +119,7 @@ export function renderMyRoutes(state, now = nowS()) {
   const customs = state.customRoutes || [];
   let h = '<div class="mr">';   // sections are keyed so a patch never confuses one with another
   if (!customs.some((c) => c.id === ui.swiped)) ui.swiped = null;
-  h += `<div class="mr-hrow" data-key="h-custom"><h2 class="mr-h">Custom routes</h2>${customs.length ? `<button type="button" class="v-btn v-btn--quiet" data-action="mr:new">${PLUS}New</button>` : ""}</div>`;
+  h += `<div class="mr-hrow" data-key="h-custom"><h2 class="mr-h">Custom routes</h2></div>`;   // "New" is the header's action (myRoutesMetaHTML)
   if (customs.length) h += '<div class="v-card mr-clist" data-key="clist">' + customs.map((c) => customRow(c, state)).join("") + "</div>"
     + '<p class="v-foot mr-hint" data-key="hint">Tap a custom route to show it on the map. Swipe left or tap ••• for details, edit or delete.</p>';
   else h += '<div class="mr-empty" data-key="cempty"><p class="v-prim">Save the routes you ride</p><p class="v-sec">Group routes into a named set, like your commute, and show just those on the map with one tap.</p>'
@@ -312,8 +312,19 @@ function unmountEditor() {
 /* ---------------- registration ---------------- */
 
 const listView = selfPatching((state, now) => renderMyRoutes(state, now));
+/**
+ * The My Routes header's trailing action (DESIGN-SPEC 10.6: "My Routes" + "New"; the iPhone app shows it once a custom
+ * route exists; with none, the empty card's "New custom route" is the one primary action).
+ * @param {object} state
+ * @returns {string}
+ */
+export function myRoutesMetaHTML(state) {
+  return (state.customRoutes || []).length ? `<button type="button" class="v-btn v-btn--quiet mr-newbtn" data-action="mr:new" aria-label="New custom route">${PLUS}New</button>` : "";
+}
+
 registerView("myroutes", {
   title: () => "My Routes",
+  metaHTML: (state) => myRoutesMetaHTML(state),
   detent: "half",
   tab: "myroutes",
   render: (state) => renderMyRoutes(state),
