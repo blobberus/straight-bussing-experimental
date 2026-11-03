@@ -83,17 +83,15 @@
 .sb-map .leaflet-marker-icon.sb-favicon:focus-visible .sb-fav{outline:2px solid var(--sb-accent);outline-offset:3px}
 .sb-sel.sb-sel-fav{fill:none}
 
-/* building and place names (map/landmarks.js, owner 2026-10-13): text only, above the route lines, a halo in the
-   map background color so a line under a letter never cuts it; never interactive */
-.sb-map{--sb-lm:#2c4a66;--sb-lm-halo:#ffffff;--sb-lm-plate:rgba(255,255,255,.5)}
-.sb-map.sb-dark{--sb-lm:#bcd0e2;--sb-lm-halo:#18181b;--sb-lm-plate:rgba(24,24,27,.5)}
+/* building and place names (map/landmarks.js, owner 2026-10-13; DESIGN-SPEC 11.5): above the route lines (owner rule) but
+   lighter than them: mapLandmark Semibold (was Bold navy) in a quiet slate, #565C66 / #B4B9C2 (6.0:1 and 8.9:1 on the
+   land), a 1.5 px halo in the land color in four directions (was ten shadows and a plate); never interactive */
+.sb-map{--sb-lm:var(--map-landmark,#565c66);--sb-lm-halo:var(--sb-land)}
 .sb-lmicon{pointer-events:none}
 .sb-lm{position:absolute;left:0;top:0;display:block;white-space:nowrap;text-align:center;line-height:1.12;
-  font-weight:700;font-family:-apple-system,BlinkMacSystemFont,system-ui,"Segoe UI",Roboto,sans-serif;color:var(--sb-lm);
-  letter-spacing:.005em;pointer-events:none;border-radius:5px;background:var(--sb-lm-plate);   /* softens basemap text in the rare spot with no clear room */
-  text-shadow:0 0 2px var(--sb-lm-halo),0 0 2px var(--sb-lm-halo),1px 1px 0 var(--sb-lm-halo),-1px -1px 0 var(--sb-lm-halo),
-    1px -1px 0 var(--sb-lm-halo),-1px 1px 0 var(--sb-lm-halo),0 1.5px 0 var(--sb-lm-halo),0 -1.5px 0 var(--sb-lm-halo),
-    1.5px 0 0 var(--sb-lm-halo),-1.5px 0 0 var(--sb-lm-halo)}
+  font-weight:600;font-family:var(--font,system-ui,sans-serif);color:var(--sb-lm);letter-spacing:0;pointer-events:none;
+  text-shadow:1.5px 0 0 var(--sb-lm-halo),-1.5px 0 0 var(--sb-lm-halo),0 1.5px 0 var(--sb-lm-halo),0 -1.5px 0 var(--sb-lm-halo),
+    1px 1px 0 var(--sb-lm-halo),-1px -1px 0 var(--sb-lm-halo),1px -1px 0 var(--sb-lm-halo),-1px 1px 0 var(--sb-lm-halo)}
 .sb-map.sb-zooming .sb-lm{visibility:hidden}   /* re-placed at zoomend; a zoom never shows them overlapping */
 
 /* user location (spec 11.4): an 18 pt dot in tintFill with a 3 pt white ring and a soft shadow; the accuracy circle in

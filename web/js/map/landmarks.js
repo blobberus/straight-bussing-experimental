@@ -128,7 +128,7 @@ function measurer(font) {
     return (s) => ctx2d.measureText(s).width;
   } catch (e) { const px = parseFloat(/(\d+(\.\d+)?)px/.exec(font)?.[1] || '12'); return (s) => s.length * px * 0.58; }
 }
-const FONT = (px) => `700 ${px}px -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, sans-serif`;
+const FONT = (px) => `600 ${px}px -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif`;   // mapLandmark Semibold (spec 11.5), measured as drawn
 
 /**
  * The label layer.
