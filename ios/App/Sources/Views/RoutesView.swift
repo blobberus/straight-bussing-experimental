@@ -24,6 +24,7 @@ struct RoutesView: View {
         }
         .listStyle(.insetGrouped)
         .listSectionSpacing(.compact)
+        .contentMargins(.top, Space.s2, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .reportsSheetScroll()
         .environment(\.editMode, .constant(model.editingOrder ? .active : .inactive))

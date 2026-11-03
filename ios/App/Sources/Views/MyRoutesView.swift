@@ -138,6 +138,7 @@ struct MyRoutesView: View {
         }
         .listStyle(.insetGrouped)
         .listSectionSpacing(.compact)
+        .contentMargins(.top, Space.s2, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .reportsSheetScroll()
         .environment(\.editMode, .constant(favEdit ? .active : .inactive))
@@ -270,6 +271,7 @@ struct CustomRouteDetailView: View {
             }
             .listStyle(.insetGrouped)
             .listSectionSpacing(.compact)
+            .contentMargins(.top, Space.s2, for: .scrollContent)
             .scrollContentBackground(.hidden)
             .reportsSheetScroll()
         } else {
@@ -400,6 +402,7 @@ struct CustomRouteEditor: View {
         }
         .listStyle(.insetGrouped)
         .listSectionSpacing(.compact)
+        .contentMargins(.top, Space.s2, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .reportsSheetScroll()
         .onAppear {
