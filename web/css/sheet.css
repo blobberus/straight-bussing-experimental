@@ -87,6 +87,12 @@
 .titleright .v-btn--quiet { min-height: var(--tap); margin-right: calc(var(--s-2) * -1); padding: 0 var(--s-2); gap: var(--s-1); font: var(--t-section); white-space: nowrap; }
 .titleright .v-btn--quiet .ic { width: var(--i-inline); height: var(--i-inline); }
 
+/* accessibility sizes (html[data-text="ax"], spec 13.7): the trailing summary moves under the title instead of squeezing it */
+html[data-text="ax"] .titleline { flex-wrap: wrap; row-gap: 0; }
+html[data-text="ax"] .titleright { flex-basis: 100%; max-width: none; justify-content: flex-start; padding-bottom: var(--s-2); }
+html[data-text="ax"] .titleline:has(.back:not([hidden])) .titleright { padding-left: calc(var(--tap) - 14px + var(--s-3)); }
+html[data-text="ax"] .titleright .v-btn--quiet { margin-left: calc(var(--s-2) * -1); }
+
 /* expanded state stops below the status banner (always visible for safety; ui/pill.js keeps --pill-h = its measured
    height), so the banner never covers the grab bar. The trip chip does NOT change it: it hides when expanded
    (base.css), so showing or clearing a route never moves the sheet or its content. The simulated-buses chip is small

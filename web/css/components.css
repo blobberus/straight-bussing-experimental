@@ -36,6 +36,16 @@ button.row, button.v-row, a.v-row { cursor: pointer; }
 button.row:active, button.v-row:active { background: var(--fill-pressed); }
 .row:focus-visible, .v-row:focus-visible { outline: 2px solid var(--tint); outline-offset: -2px; border-radius: var(--r-control); }
 .rowvis { display: flex; align-items: center; gap: var(--s-3); flex: 1; min-width: 0; }
+/* accessibility sizes (spec 10.8): the leading badge goes above the title and the trailing ETA under the text, left-aligned;
+   chevrons stay trailing; separators start at the card edge inset */
+html[data-text="ax"] :is(.row, .v-row):has(> .eta, > .chip:first-child),
+html[data-text="ax"] .rowvis { flex-wrap: wrap; row-gap: var(--s-1); }
+html[data-text="ax"] :is(.row, .v-row, .rowvis) > :is(.grow, .v-grow) { flex-basis: calc(100% - 40px); }
+html[data-text="ax"] :is(.row, .v-row, .rowvis):has(> .eta) > :is(.grow, .v-grow) { flex-basis: 100%; }
+html[data-text="ax"] :is(.row, .v-row, .rowvis) > .chip:first-child { min-width: 32px; }
+html[data-text="ax"] :is(.row, .v-row, .rowvis):has(> :is(.grow, .v-grow)) > .chip:first-child { flex-basis: auto; margin-right: 100%; }
+html[data-text="ax"] :is(.row, .v-row, .rowvis) > .eta { justify-content: flex-start; min-width: 0; }
+html[data-text="ax"] :is(.row, .v-row) + :is(.row, .v-row)::before { left: var(--inset-content); }
 /* the leading slot: a route badge or a 20 icon centered in 40 */
 .row > .chip:first-child, .rowvis > .chip:first-child, .v-row > .chip:first-child { min-width: var(--leading-slot); }
 .grow, .v-grow { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
