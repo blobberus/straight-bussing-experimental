@@ -248,8 +248,8 @@ export function listHTML(state, now = nowS()) {
   // the operator's alerts stay at the top; its number and ours (the call buttons, the official page) go to the bottom,
   // under every route (owner 2026-10-17)
   const calls = (unknown || empty) && !state.routeFilter && !!operatorPhone(state, now), help = () => operatorAlertsHTML(state, now);
-  if (unknown && !state.routeFilter) h += emptyState("Live bus status unavailable", "Can't reach the shuttle feed. Routes are listed below for reference.") + help();
-  else if (empty && !state.routeFilter) h += (silentService(state, now) ? emptyState("No live locations right now", silentText(state, g.scheduled, now, OFFICIAL_PHONE)) : emptyState("No shuttles running right now", "Routes are listed below for reference.")) + help();
+  if (unknown && !state.routeFilter) h += emptyState("Live bus status unavailable", "Can't reach the shuttle feed. Routes are listed below for reference.", { icon: "wifi-off" }) + help();
+  else if (empty && !state.routeFilter) h += (silentService(state, now) ? emptyState("No live locations right now", silentText(state, g.scheduled, now, OFFICIAL_PHONE), { icon: "antenna-off" }) : emptyState("No shuttles running right now", "Routes are listed below for reference.", { icon: "bus-front" })) + help();
   h += bulkHTML(state, g, now);
   const group = (title, ids, hidden, cls) => (ids.length ? `<h3 class="v-h">${title}</h3><div class="v-list${cls ? " " + cls : ""}">${ids.map((i) => row(state, i, hidden, now)).join("")}</div>` : "");
   h += group("Running", g.running, false, "");

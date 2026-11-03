@@ -46,11 +46,11 @@ function noService(state, now) {
   // the operator's alert + who to call; the call is the primary button unless "Use my location" already is
   const help = noBusHelpHTML(state, now, { primary: !locPrimary(state) });
   // a feed outage is not a service outage: never claim "no shuttles" without live data
-  if (liveUnknown(state, now)) return emptyState(NO_LIVE, "Can't reach the shuttle feed, so we can't tell which shuttles are running. Check with the official service.") + help;
-  if ((state.buses || []).length) return emptyState("No upcoming arrivals", "No bus on your visible routes has a predicted arrival right now.") + OFFICIAL_HTML;
+  if (liveUnknown(state, now)) return emptyState(NO_LIVE, "Can't reach the shuttle feed, so we can't tell which shuttles are running. Check with the official service.", { icon: "wifi-off" }) + help;
+  if ((state.buses || []).length) return emptyState("No upcoming arrivals", "No bus on your visible routes has a predicted arrival right now.", { icon: "bus-front" }) + OFFICIAL_HTML;
   // fresh but empty feed while routes are scheduled: GPS off or service ended early, we can't tell (rider safety)
-  if (silentService(state, now)) return emptyState("No live locations right now", silentText(state, scheduledRoutes(state, now, { hidden: effectiveHidden(state) }), now, OFFICIAL_PHONE)) + help;
-  return emptyState("No shuttles running right now", "Check the official schedule for service hours.") + help;
+  if (silentService(state, now)) return emptyState("No live locations right now", silentText(state, scheduledRoutes(state, now, { hidden: effectiveHidden(state) }), now, OFFICIAL_PHONE), { icon: "antenna-off" }) + help;
+  return emptyState("No shuttles running right now", "Check the official schedule for service hours.", { icon: "bus-front" }) + help;
 }
 
 function stopCard(state, s, now, max, hero, guide) {

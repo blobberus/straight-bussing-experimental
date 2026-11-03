@@ -205,9 +205,9 @@ export function resHTML(state, now = nowS()) {
   let h = tripBarHTML(state) + (level ? '<p class="v-stale" role="status">Live data delayed. Bus times may be off.</p>' : "") + cov;
   if (!r.options.length) {
     const running = (state.buses || []).length > 0;
-    h += liveUnknown(state, now) ? emptyState("Can't plan shuttle trips right now", "The live shuttle feed can't be reached, so we can't tell which buses are running.")   // feed outage != no service
+    h += liveUnknown(state, now) ? emptyState("Can't plan shuttle trips right now", "The live shuttle feed can't be reached, so we can't tell which buses are running.", { icon: "wifi-off" })   // feed outage != no service
       : emptyState("No practical shuttle route right now", D.missed ? "The next buses leave before you could reach the stop." : running ? "Nothing runs close enough to both places."
-        : silentService(state, now) ? silentText(state, scheduledRoutes(state, now, { hidden: effectiveHidden(state) }), now, OFFICIAL_PHONE) : "No shuttles are running right now.");   // empty feed, routes scheduled
+        : silentService(state, now) ? silentText(state, scheduledRoutes(state, now, { hidden: effectiveHidden(state) }), now, OFFICIAL_PHONE) : "No shuttles are running right now.", { icon: "route" });   // empty feed, routes scheduled
     h += `<div class="v-opt v-opt--walk is-on"><div class="v-optmain"><span class="v-otop"><span class="j-walkic" aria-hidden="true">${svg("walk", 20)}</span><span class="v-otot">${mins(w.min)}<small> min walk</small></span><span class="v-oarr">Arrive ${esc(clock(now + (w.min || 0) * 60))}</span></span><span class="v-sec j-oline">${esc(walkDetail(w.m, w.source))}</span></div></div>`;
     return h + (running ? "" : noBusHelpHTML(state, now));
   }

@@ -148,7 +148,7 @@ export function renderAlerts(state, now = nowS()) {
   if (!state.liveLoaded) h += skeleton(2);
   else {
     const act = activeAlerts(state, now);
-    if (!act.length) h += emptyState("No active alerts", "Service changes will show up here.");
+    if (!act.length) h += emptyState("No active alerts", "Service changes will show up here.", { icon: "bell" });
     else h += '<ul class="v-alertlist">' + act.map((a) => alertItem(a, state, now)).join("") + "</ul>";
     if (state.failed) h += '<p class="v-foot v-foot--warn">Alerts may be out of date: the shuttle feed is not responding.</p>';
   }
