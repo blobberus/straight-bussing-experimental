@@ -55,6 +55,7 @@
 <link rel="modulepreload" href="js/ui/actions.js">
 <link rel="modulepreload" href="js/ui/theme.js">
 <link rel="modulepreload" href="js/ui/components.js">
+<link rel="modulepreload" href="js/ui/icons.js">
 <link rel="modulepreload" href="js/ui/pill.js">
 <link rel="modulepreload" href="js/ui/contextbar.js">
 <link rel="modulepreload" href="js/core/timeactive.js">
@@ -98,18 +99,18 @@
 <link rel="modulepreload" href="js/ui/views/timepick.js">
 <link rel="modulepreload" href="js/ui/wheel.js">
 <!-- MODULEPRELOAD:END -->
-<link rel="stylesheet" href="css/tokens.css?v=5">
-<link rel="stylesheet" href="css/base.css?v=5">
-<link rel="stylesheet" href="css/sheet.css?v=5">
-<link rel="stylesheet" href="css/components.css?v=5">
-<link rel="stylesheet" href="css/map.css?v=5">
-<link rel="stylesheet" href="css/views.css?v=5">
-<link rel="stylesheet" href="css/routes.css?v=5">
-<link rel="stylesheet" href="css/route.css?v=5">
-<link rel="stylesheet" href="css/myroutes.css?v=5">
-<link rel="stylesheet" href="css/journey.css?v=5">
-<link rel="stylesheet" href="css/trip.css?v=5">
-<link rel="stylesheet" href="css/settings.css?v=5">
+<link rel="stylesheet" href="css/tokens.css?v=6">
+<link rel="stylesheet" href="css/base.css?v=6">
+<link rel="stylesheet" href="css/sheet.css?v=6">
+<link rel="stylesheet" href="css/components.css?v=6">
+<link rel="stylesheet" href="css/map.css?v=6">
+<link rel="stylesheet" href="css/views.css?v=6">
+<link rel="stylesheet" href="css/routes.css?v=6">
+<link rel="stylesheet" href="css/route.css?v=6">
+<link rel="stylesheet" href="css/myroutes.css?v=6">
+<link rel="stylesheet" href="css/journey.css?v=6">
+<link rel="stylesheet" href="css/trip.css?v=6">
+<link rel="stylesheet" href="css/settings.css?v=6">
 </head>
 <body>
 <!-- #app is a plain wrapper on phones; on desktop/tablet css/base.css turns it into a 393x852 iPhone frame (js/ui/frame.js scales it) -->
@@ -120,14 +121,14 @@
 <div id="topbar" class="topbar">
   <div class="searchbar">
     <button id="searchBar" class="searchbar-btn" type="button" data-action="dir:open" data-focus="to" aria-label="Search for a destination">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-      <span class="searchbar-text">Search for a destination</span>
+      <svg class="ic" width="20" height="20" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <span class="searchbar-text"><span class="sb-long">Search for a destination</span><span class="sb-short" aria-hidden="true">Search</span></span>
     </button>
     <button id="timeBtn" class="searchbar-gear" type="button" data-action="time:open" aria-label="Lines by Time" aria-haspopup="dialog" aria-expanded="false">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></svg>
+      <svg class="ic" width="20" height="20" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
     </button>
     <button id="settingsBtn" class="searchbar-gear" type="button" data-action="settings:open" aria-label="Settings">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      <svg class="ic" width="20" height="20" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
   </div>
   <!-- Directions: the bar turns into the Start / Destination card here (views/directions.js) -->
@@ -135,7 +136,7 @@
 </div>
 
 <button id="locateBtn" class="fab" type="button" aria-label="Show my location">
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg>
+  <svg class="ic ic-off" width="20" height="20" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 11 22 2l-9 19-2-8z"/></svg><svg class="ic ic-on" width="20" height="20" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 11 22 2l-9 19-2-8z" fill="currentColor"/></svg>
 </button>
 
 <div id="pill" class="statuspill" role="status" aria-live="polite" hidden><span id="pillIcon" class="pillicon" aria-hidden="true"></span><span id="pillText" class="pilltext"></span><button id="pillRetry" class="pillbtn" type="button" data-action="retry" hidden>Retry</button><button id="pillAlert" class="pillbtn" type="button" data-action="alerts:open" aria-label="Read the service alert" hidden>See alert</button></div>
@@ -146,9 +147,9 @@
     <div id="grab" class="grab" role="slider" tabindex="0" aria-label="Resize panel" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="2" aria-valuenow="1" aria-valuetext="Half" aria-controls="content"></div>
     <div class="titleline">
       <button id="back" class="back" type="button" aria-label="Back" hidden>
-        <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 2L2 10l8 8"/></svg>
+        <svg class="ic" width="22" height="22" stroke-width="2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg>
       </button>
-      <h1 id="title" class="sheet-title" tabindex="-1">Current trip</h1>
+      <div class="titletext"><h1 id="title" class="sheet-title" tabindex="-1">Current trip</h1><p id="subtitle" class="sheet-sub"></p></div>
       <span id="titleRight" class="titleright"></span>
     </div>
   </header>
@@ -157,11 +158,11 @@
   </div>
 </section>
 
-<!-- bottom navigation (Google-Maps-style): the three sections; id stays "tabs" for the router -->
+<!-- bottom bar (DESIGN-SPEC 10.7): the three sections; selected = filled glyph + tint; id stays "tabs" for the router -->
 <nav id="tabs" class="bottomnav" aria-label="Sections">
-  <button type="button" data-tab="nearby" aria-current="page"><span class="bn-ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg></span><span class="bn-label">Current trip</span></button>
-  <button type="button" data-tab="routes"><span class="bn-ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16"/></svg></span><span class="bn-label">Routes</span></button>
-  <button type="button" data-tab="myroutes" id="myRoutesTab"><span class="bn-ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span><span class="bn-label">My Routes</span></button>
+  <button type="button" data-tab="nearby" aria-current="page"><span class="bn-ic"><svg class="ic ic-off" width="24" height="24" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 6 2 7"/><path d="M10 6h4"/><path d="m22 7-2-1"/><rect width="16" height="16" x="4" y="3" rx="2"/><path d="M4 11h16"/><path d="M8 15h.01"/><path d="M16 15h.01"/><path d="M6 19v2"/><path d="M18 21v-2"/></svg><svg class="ic ic-on" width="24" height="24" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 6 2 7"/><path d="m22 7-2-1"/><path d="M6 19v2"/><path d="M18 21v-2"/><path fill="currentColor" fill-rule="evenodd" stroke-width="1" d="M6 3h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm1.2 3a.7.7 0 0 0-.7.7V10h11V6.7a.7.7 0 0 0-.7-.7zM8 13.6a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8zm8 0a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8z"/></svg></span><span class="bn-label">Current trip</span></button>
+  <button type="button" data-tab="routes"><span class="bn-ic"><svg class="ic ic-off" width="24" height="24" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><svg class="ic ic-on" width="24" height="24" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="6" cy="19" r="3" fill="currentColor"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3" fill="currentColor"/></svg></span><span class="bn-label">Routes</span></button>
+  <button type="button" data-tab="myroutes" id="myRoutesTab"><span class="bn-ic"><svg class="ic ic-off" width="24" height="24" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg><svg class="ic ic-on" width="24" height="24" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" fill="currentColor"/></svg></span><span class="bn-label">My Routes</span></button>
 </nav>
 
 <div id="dlg" class="scrim" hidden></div>
