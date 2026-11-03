@@ -55,6 +55,8 @@ extension AppModel {
             if !config.noLocation {   // -noloc: the "Use my location" first state
                 user = DemoConfig.origin
                 locState = .granted
+            } else if config.locDenied {   // -locdenied: location turned off for the app
+                locState = .denied
             }
             seedDemo()
         } else {
@@ -124,12 +126,20 @@ extension AppModel {
     }
 
     func pollOnce() async {
-        let poll: FeedPoll
+        var poll: FeedPoll
         let gen = feedGeneration
-        if config.noBus {
+        if config.hold { return }   // -hold (CI): the loading state, nothing ever arrives
+        if config.feed == "fail" {   // -feed fail (CI): the feed cannot be reached
+            let e = URLError(.notConnectedToInternet)
+            poll = FeedPoll(vehicles: .failure(e), trips: .failure(e), alerts: .failure(e))
+        } else if config.noBus {
             poll = DemoConfig.noBusPoll(now: Date().timeIntervalSince1970)
         } else if feedSimulated {
-            poll = DemoFeed.poll(staticData: staticData, now: Date().timeIntervalSince1970, epoch: epoch)
+            // -feed late / old (CI): the simulated feed answers with data 200 s / 420 s old (delayed / out of date)
+            let age: Double = config.feed == "late" ? 200 : config.feed == "old" ? 420 : 0
+            let t0 = Date().timeIntervalSince1970
+            poll = DemoFeed.poll(staticData: staticData, now: t0 - age, epoch: epoch)
+            if config.alert { poll.alerts = DemoConfig.noBusPoll(now: t0).alerts }   // -alert (CI): the alert row
         } else {
             let started = Date().timeIntervalSince1970
             let withAlerts = started - lastAlertsPoll >= Self.alertsEveryS
@@ -748,6 +758,15 @@ extension AppModel {
             case "search":
                 openDirections()
                 demoQuery = "regnstien"
+            case "searchplace":   // the journey's first step: a place typed in Directions (spec J2)
+                openDirections()
+                demoQuery = "trader joe"
+            case "stoplong", "dirlong":   // long names (spec 13.6): the stop with the longest name, or Directions to it
+                if let s = staticData.stops.values.filter({ !(staticData.stopRoutes[$0.id] ?? []).isEmpty })
+                    .max(by: { $0.name.count < $1.name.count || ($0.name.count == $1.name.count && $0.id > $1.id) }) {
+                    if config.screen == "stoplong" { push(.stop(s.id)) }
+                    else { _ = await openDirections(to: Endpoint(label: s.name, coord: s.coord, stopId: s.id))?.value }
+                }
             default: break
             }
             // screenshots and UI tests open a screen expanded; -detent peek collapses it (the old "half" = expanded)

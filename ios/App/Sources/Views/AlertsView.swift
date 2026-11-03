@@ -1,91 +1,93 @@
 import SwiftUI
 import StraightBussingKit
 
-/// Active service alerts (ui/views/alerts.js): severity icon, title, body, affected route chips, time window,
-/// and About at the bottom. Opened from the Current trip banner or the "Service alerts" row in My Routes.
+/// Active service alerts (ui/views/alerts.js; docs/DESIGN-SPEC.md 10.18): one card per alert with its severity icon,
+/// title, the operator's text verbatim (phone numbers as call buttons), affected route badges and the time window,
+/// and About at the bottom. Opened from the Current trip alert row, the status banner or My Routes.
 struct AlertsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Space.s3) {
                 if !model.liveLoaded {
+                    Card { SkeletonRows(count: 2) }
                     Hint("Checking for service alerts\u{2026}")
                 } else {
                     let act = model.activeAlerts
                     if act.isEmpty {
-                        EmptyStateView(title: "No active alerts", message: "Service changes will show up here.")
+                        EmptyStateView(title: "No active alerts", message: "Service changes will show up here.", icon: "checkmark.circle")
                     } else {
                         ForEach(act) { a in AlertRow(alert: a) }
                     }
                     if model.liveFailed {
-                        Label("Alerts may be out of date: the shuttle feed is not responding.", systemImage: "exclamationmark.triangle")
-                            .font(.footnote).foregroundStyle(Palette.warn)
+                        InlineBanner(kind: .warn, icon: Sym.feedError, text: "Alerts may be out of date: the shuttle feed is not responding.")
                     }
                 }
                 Card {
                     Button { model.push(.about) } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "info.circle").foregroundStyle(Palette.text2).accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text("About this app").foregroundStyle(Palette.text)
-                                Text("Unofficial. Privacy, theme, official contact").font(.caption).foregroundStyle(Palette.text2)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.text3).accessibilityHidden(true)
-                        }
-                        .frame(minHeight: 48).contentShape(Rectangle())
+                        RowLayout(chevron: true) {
+                            Image(systemName: "info.circle").font(.system(size: IconSize.status)).foregroundStyle(Palette.label2)
+                                .accessibilityHidden(true)
+                        } content: {
+                            Text("About this app").font(Typo.body).foregroundStyle(Palette.label)
+                            Text("Unofficial. Privacy, theme, official contact").font(Typo.rowDetail).foregroundStyle(Palette.label2)
+                        } trailing: { EmptyView() }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(RowButtonStyle())
                 }
+                .padding(.top, Space.s2)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            .padding(.horizontal, Space.insetContent)
+            .padding(.top, Space.s1)
+            .padding(.bottom, Space.s6)
         }
+        .reportsSheetScroll()
         .accessibilityIdentifier("alertsView")
     }
 }
 
+/// One alert. `plain`: inside a List row (the row is the card already).
 struct AlertRow: View {
     @Environment(AppModel.self) private var model
     let alert: ServiceAlert
     /// tel: URLs offered elsewhere on the screen (the no-bus help's call buttons): no second button for them here.
     var hideCalls: Set<String> = []
+    var plain = false
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 0) {
-                content
-                // the operator's number (e.g. "please contact 773-655-9934") one tap away, under the text
-                AlertPhoneLinks(text: alert.description, indent: 34, hiding: hideCalls)
-            }
+        let inner = VStack(alignment: .leading, spacing: Space.s1) {
+            content
+            // the operator's number (e.g. "please contact 773-655-9934") one tap away, under the text
+            AlertPhoneLinks(text: alert.description, indent: 29, hiding: hideCalls)
         }
+        if plain { inner.padding(.vertical, Space.s2) } else { Card(padded: true) { inner } }
     }
 
-    /// Icon, title, body, route chips and time window, read as one sentence.
+    /// Icon, title, body, route badges and time window, read as one sentence.
     var content: some View {
         let severe = LiveText.isSevere(alert)
         let title = alert.header.isEmpty ? "Service alert" : alert.header
         let rids = Arrivals.alertRouteIds(alert, routes: model.staticData.routes)   // Passio's own ids too (DC-009)
         let when = LiveText.alertWindow(alert, now: model.now)
-        return HStack(alignment: .top, spacing: 10) {
-            Image(systemName: severe ? "exclamationmark.triangle.fill" : "info.circle")
-                .font(.title3).foregroundStyle(severe ? Palette.warn : Palette.text2)
+        return HStack(alignment: .firstTextBaseline, spacing: Space.s3) {
+            Image(systemName: severe ? Sym.alert : "info.circle")
+                .font(.system(size: IconSize.status, weight: .semibold)).foregroundStyle(severe ? Palette.warn : Palette.label2)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.subheadline.weight(.semibold))
+            VStack(alignment: .leading, spacing: Space.s1) {
+                Text(title).font(Typo.rowTitle).foregroundStyle(Palette.label).fixedSize(horizontal: false, vertical: true)
                 if !alert.description.isEmpty && alert.description != alert.header {
-                    Text(alert.description).font(.subheadline).foregroundStyle(Palette.text2).fixedSize(horizontal: false, vertical: true)
+                    Text(alert.description).font(Typo.body).foregroundStyle(Palette.label).fixedSize(horizontal: false, vertical: true)
                 }
                 if !rids.isEmpty || !when.isEmpty {
-                    HStack(spacing: 4) {
-                        ForEach(rids, id: \.self) { RouteChip(route: model.route($0), rid: $0, size: 11) }
-                        if !when.isEmpty { Text(when).font(.caption).foregroundStyle(Palette.text2) }
+                    FlowLayout(spacing: Space.s1, lineSpacing: Space.s1) {
+                        ForEach(rids, id: \.self) { RouteBadge(route: model.route($0), rid: $0, size: .small) }
+                        if !when.isEmpty { Text(when).font(Typo.footnote).foregroundStyle(Palette.label2).padding(.leading, rids.isEmpty ? 0 : 4) }
                     }
+                    .padding(.top, 2)
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(spoken(severe: severe, title: title, rids: rids, when: when))
     }
@@ -114,9 +116,10 @@ struct AlertPhoneLinks: View {
                 ForEach(links, id: \.url) { l in
                     if let url = URL(string: l.url) {
                         Link(destination: url) {
-                            Label("Call \(l.shown)", systemImage: "phone.fill").font(.subheadline.weight(.semibold))
-                                .frame(minHeight: 44).contentShape(Rectangle())
+                            Label("Call \(l.shown)", systemImage: "phone.fill")
+                                .frame(minHeight: Space.tap).contentShape(Rectangle())
                         }
+                        .textButtonStyle(font: Typo.rowDetail.weight(.semibold))
                         .buttonStyle(.borderless)
                         .accessibilityLabel("Call \(l.shown)")
                         .accessibilityHint("The number given in the service alert")
@@ -124,7 +127,6 @@ struct AlertPhoneLinks: View {
                 }
             }
             .padding(.leading, indent)
-            .padding(.bottom, indent > 0 ? 6 : 0)
         }
     }
 }
@@ -139,6 +141,8 @@ struct OperatorAlerts: View {
     var untiedOnly = false
     /// Numbers with their own call button on the screen (`NoBusHelp`): not repeated in the alert cards.
     var hideCalls: Set<String> = []
+    /// Inside a List row: the alerts without their own cards.
+    var plain = false
     static let maxShown = 2
 
     /// The alerts shown in full (the first `maxShown` active ones; `untiedOnly`: those tied to no known route).
@@ -152,12 +156,15 @@ struct OperatorAlerts: View {
     var body: some View {
         let act = Self.untied(model.activeAlerts, untiedOnly, model.staticData.routes)
         if !act.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "From the shuttle operator")
-                ForEach(act.prefix(Self.maxShown)) { a in AlertRow(alert: a, hideCalls: hideCalls) }
+            VStack(alignment: .leading, spacing: Space.s3) {
+                Text("From the shuttle operator").font(Typo.sectionTitle).foregroundStyle(Palette.label2)
+                    .padding(.leading, plain ? 0 : Space.insetContent)
+                    .padding(.top, plain ? Space.s2 : Space.s2)
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(act.prefix(Self.maxShown)) { a in AlertRow(alert: a, hideCalls: hideCalls, plain: plain) }
                 if act.count > Self.maxShown {
                     Button("All \(act.count) service alerts") { model.openAlerts() }
-                        .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+                        .textButtonStyle(font: Typo.sectionTitle)
                         .buttonStyle(.borderless)   // in a Routes list row: only the button opens Alerts
                 }
             }
@@ -181,10 +188,10 @@ struct NoBusHelp: View {
     var body: some View {
         let phone = LiveText.operatorPhone(OperatorAlerts.shown(model.activeAlerts, untiedOnly: untiedOnly,
                                                                 routes: model.staticData.routes))
-        VStack(spacing: 4) {
+        VStack(spacing: Space.s3) {
             // the operator's number is the primary call below: no second button for it (or ours) in the alert card
             OperatorAlerts(untiedOnly: untiedOnly, hideCalls: Set([phone?.url, OfficialContact.telURL].compactMap { $0 }))
-            OfficialContact(operatorPhone: phone).padding(.top, 4)
+            OfficialContact(operatorPhone: phone)
         }
     }
 }

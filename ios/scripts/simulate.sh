@@ -62,6 +62,19 @@ for mode in light dark; do
   shot 36-map          "$mode" 9  -screen current -detent peek
   shot 37-map-near     "$mode" 9  -screen near -detent peek
   shot 38-trip-map     "$mode" 11 -screen trip -detent peek
+  # redesign states (docs/DESIGN-SPEC.md 12 and 13): the journey collapsed, loading, errors, stale data, denied
+  # location, the alert row, long names
+  shot 42-directions-peek "$mode" 9 -screen directions -detent peek
+  shot 43-search-place "$mode" 9  -screen searchplace -detent full
+  shot 44-loading      "$mode" 6  -screen current -hold -detent full
+  shot 45-feed-fail    "$mode" 9  -screen current -feed fail -detent full
+  shot 45b-feed-fail-map "$mode" 9 -screen current -feed fail -detent peek
+  shot 46-feed-late    "$mode" 9  -screen current -feed late -detent full
+  shot 47-feed-old     "$mode" 9  -screen current -feed old -detent peek
+  shot 48-loc-denied   "$mode" 9  -screen current -noloc -locdenied -detent full
+  shot 49-alert-row    "$mode" 9  -screen current -alert -detent full
+  shot 50-stop-long    "$mode" 9  -screen stoplong
+  shot 51-dir-long     "$mode" 10 -screen dirlong
 done
 
 # Larger text (Dynamic Type): key rows must wrap, never clip or slide under the sheet. Light mode, the largest
@@ -84,6 +97,25 @@ bigshot 31-trip-text       10 -screen trip -detent full
 bigshot 32-stop-text       8  -screen stop
 bigshot 33-directions-text 9  -screen directions
 bigshot 34-routes-text     8  -screen routes
+bigshot 35-stop-long-text  8  -screen stoplong
+
+# The largest accessibility size (AX5) on the busiest screens, and larger text in dark mode
+xshot() {  # xshot <name> <size> <tag> <appearance> <wait s> <args...>
+  local name="$1" size="$2" tag="$3" mode="$4" wait="$5"; shift 5
+  xcrun simctl ui "$UDID" appearance "$mode"
+  xcrun simctl ui "$UDID" content_size "$size" || { echo "content_size $size not supported"; return; }
+  launch "$@"
+  sleep "$wait"
+  xcrun simctl io "$UDID" screenshot --type=png "$OUT/$name-$tag.png" >/dev/null && echo "shot $name-$tag"
+  xcrun simctl ui "$UDID" content_size large || true
+}
+xshot 30-current-text    accessibility-extra-extra-extra-large ax5 light 9 -screen current
+xshot 31-trip-text       accessibility-extra-extra-extra-large ax5 light 10 -screen trip -detent full
+xshot 33-directions-text accessibility-extra-extra-extra-large ax5 light 9 -screen directions
+xshot 30-current-text    accessibility-extra-large ax3-dark dark 9 -screen current
+xshot 33-directions-text extra-extra-extra-large xxxl-dark dark 9 -screen directions
+xshot 52-map-text        accessibility-extra-large ax3 light 9 -screen current -detent peek
+xcrun simctl ui "$UDID" appearance light
 
 record() {   # record <appearance>
   local mode="$1"

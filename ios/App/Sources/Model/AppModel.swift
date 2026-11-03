@@ -15,10 +15,19 @@ enum Tab: String, CaseIterable, Identifiable {
         case .myroutes: return "My Routes"
         }
     }
+    /// Outline glyph (unselected); one glyph per meaning: the location arrow only means "my location" (spec 5, O6).
     var icon: String {
         switch self {
-        case .current: return "location.north.line.fill"
-        case .routes: return "point.topleft.down.to.point.bottomright.curvepath"
+        case .current: return "bus"
+        case .routes: return Sym.routes
+        case .myroutes: return "bookmark"
+        }
+    }
+    /// Filled glyph (selected, with `tint`).
+    var iconSelected: String {
+        switch self {
+        case .current: return "bus.fill"
+        case .routes: return Sym.routesFill
         case .myroutes: return "bookmark.fill"
         }
     }
@@ -93,6 +102,15 @@ final class MapCameraModel {
     @ObservationIgnored var lastFramed: [LatLon] = []
     @ObservationIgnored var lastFramedRect: CGRect = .zero
     @ObservationIgnored var lastFrameAt: Double = 0
+    /// The map's zoom in web (Leaflet) terms, in steps of 0.5, set when the camera settles (`MapScreen.layoutLabels`):
+    /// line widths and stop sizes follow it (docs/DESIGN-SPEC.md 11.3, 11.4). Written only when the step changes.
+    var zoom: Double = 14.5
+
+    func setZoom(_ z: Double) {
+        guard z.isFinite else { return }
+        let q = (z * 2).rounded() / 2
+        if abs(q - zoom) > 0.01 { zoom = q }
+    }
 }
 
 /// A route polyline ready for MapKit (coordinates converted and color parsed once per visibility change). `rid` and
@@ -103,14 +121,17 @@ struct MapLine: Identifiable {
     let coords: [CLLocationCoordinate2D]
     let color: Color
     let width: CGFloat
+    /// The edge drawn under a line (spec 11.3): never tapped on its own (the line above it has the same route).
+    let casing: Bool
     let minLat: Double, maxLat: Double, minLon: Double, maxLon: Double
 
-    init(id: String, rid: String, coords: [CLLocationCoordinate2D], color: Color, width: CGFloat) {
+    init(id: String, rid: String, coords: [CLLocationCoordinate2D], color: Color, width: CGFloat, casing: Bool = false) {
         self.id = id
         self.rid = rid
         self.coords = coords
         self.color = color
         self.width = width
+        self.casing = casing
         minLat = coords.map(\.latitude).min() ?? 0
         maxLat = coords.map(\.latitude).max() ?? 0
         minLon = coords.map(\.longitude).min() ?? 0
@@ -121,6 +142,8 @@ struct MapLine: Identifiable {
 struct MapStop: Identifiable {
     let stop: Stop
     let isFav: Bool
+    /// The stop circle's stroke: its route's color, or the neutral `label2` where several shown routes stop (spec 11.4).
+    var color: Color = Palette.label2
     var id: String { stop.id }
 }
 
@@ -482,36 +505,79 @@ final class AppModel {
         var vis: RouteVisibility.MapVisibility
         var favs: [String]
         var version: Int
+        var dark: Bool
+        var zoom: Double
     }
 
     @ObservationIgnored private var layersMemo: (key: LayersKey, layers: MapLayers)?
+    /// The appearance and zoom the map last asked for (the label obstacles read the same layers).
+    @ObservationIgnored private var layersStyle: (dark: Bool, zoom: Double) = (false, 14.5)
 
-    /// Route lines + stops for the map. Rebuilt only when visibility, focus, map order, favorites or the static
-    /// data change (about 4,000 shape points and every route color), never on a poll, clock tick or location update.
-    var mapLayers: MapLayers {
-        let key = LayersKey(vis: mapVisibility, favs: routeState.favStops, version: staticVersion)
+    /// Route lines + stops for the map as last drawn.
+    var mapLayers: MapLayers { mapLayers(dark: layersStyle.dark, zoom: layersStyle.zoom) }
+
+    /// Route lines (each with its casing) + stops for the map. Rebuilt only when visibility, focus, map order,
+    /// favorites, the static data, the appearance or the zoom step change (about 4,000 shape points and every route
+    /// color), never on a poll, clock tick or location update.
+    func mapLayers(dark: Bool, zoom: Double) -> MapLayers {
+        layersStyle = (dark, zoom)
+        let key = LayersKey(vis: mapVisibility, favs: routeState.favStops, version: staticVersion, dark: dark, zoom: zoom)
         if let memo = layersMemo, memo.key == key { return memo.layers }
-        let layers = Self.buildLayers(key.vis, favs: key.favs, staticData)
+        let layers = Self.buildLayers(key.vis, favs: key.favs, staticData, dark: dark, zoom: zoom)
         layersMemo = (key: key, layers: layers)
         return layers
     }
 
-    static func buildLayers(_ vis: RouteVisibility.MapVisibility, favs: [String], _ S: StaticData) -> MapLayers {
+    /// Line width by zoom (spec 11.3): z13 3, z14 3.5, z15 4.5, z16 5.5, z17 6.5, z18 8, linear in between.
+    static func lineWidth(_ zoom: Double) -> CGFloat {
+        let stops: [(Double, Double)] = [(13, 3), (14, 3.5), (15, 4.5), (16, 5.5), (17, 6.5), (18, 8)]
+        if zoom <= stops[0].0 { return CGFloat(stops[0].1) }
+        for i in 1..<stops.count where zoom <= stops[i].0 {
+            let (z0, w0) = stops[i - 1], (z1, w1) = stops[i]
+            return CGFloat(w0 + (w1 - w0) * (zoom - z0) / (z1 - z0))
+        }
+        return CGFloat(stops[stops.count - 1].1)
+    }
+
+    static func buildLayers(_ vis: RouteVisibility.MapVisibility, favs: [String], _ S: StaticData, dark: Bool, zoom: Double) -> MapLayers {
         let hidden = Set(vis.hidden), focus = vis.focus.map { Set($0) }
+        let base = lineWidth(zoom)
+        // the map's land (MapKit muted standard) and the two casing colors of spec 11.3, mixed opaque (MapKit draws a
+        // polyline's color without its alpha)
+        let land: UInt32 = dark ? 0x1F2023 : 0xF3F2EE
+        let casingDefault = Color(uiColor: UIColor(rgb: dark ? 0x19191C : 0xFDFDFC))
+        let casingContrast = Color(uiColor: UIColor(rgb: dark ? 0x959596 : 0x767676))
         var lines: [MapLine] = []
-        // Bottom -> top: MapKit draws later content above earlier content.
+        // Bottom -> top: MapKit draws later content above earlier content; each line's casing right under it.
         for rid in vis.order.reversed() where !hidden.contains(rid) {
             guard let r = S.routes[rid] else { continue }
             let dim = focus.map { !$0.contains(rid) } ?? false
-            let color = dim ? Color.dimmed(hex: r.color) : Color(hex: r.color)
+            let focused = focus?.contains(rid) ?? false
+            let w = base + (focused ? 2 : 0)
+            let color = dim ? Color.mixed(hex: r.color, toward: land, amount: 0.8) : Color(hex: r.color)
+            // a route color under 3:1 against the default casing gets the opposite edge (computed, never a list)
+            let flip = Color.contrast(hex: r.color, against: dark ? 0x18191C : 0xFFFFFF) < 3
             for (i, line) in (S.shapes[rid] ?? []).enumerated() {
-                lines.append(MapLine(id: "\(rid)-\(i)", rid: rid, coords: line.map(\.cl), color: color, width: dim ? 3 : 5))
+                let coords = line.map(\.cl)
+                if !dim {
+                    lines.append(MapLine(id: "\(rid)-\(i)-c", rid: rid, coords: coords, color: flip ? casingContrast : casingDefault,
+                                         width: w + 3, casing: true))
+                }
+                lines.append(MapLine(id: "\(rid)-\(i)", rid: rid, coords: coords, color: color, width: dim ? base : w))
             }
         }
-        var ids = Set<String>()
-        for (rid, list) in S.routeStops where !hidden.contains(rid) { ids.formUnion(list) }
+        // stops of the shown routes (in the focused state only those of the focused routes; favorites always)
         let fav = Set(favs)
-        let stops = ids.compactMap { S.stops[$0] }.sorted { $0.id < $1.id }.map { MapStop(stop: $0, isFav: fav.contains($0.id)) }
+        var served: [String: [String]] = [:]
+        for (rid, list) in S.routeStops where !hidden.contains(rid) {
+            let shown = focus.map { $0.contains(rid) } ?? true
+            for sid in Set(list) where shown || fav.contains(sid) { served[sid, default: []].append(rid) }
+        }
+        let stops = served.keys.compactMap { S.stops[$0] }.sorted { $0.id < $1.id }.map { s -> MapStop in
+            let rids = served[s.id] ?? []
+            let color = rids.count == 1 ? Color(hex: S.routes[rids[0]]?.color) : Palette.label2
+            return MapStop(stop: s, isFav: fav.contains(s.id), color: color)
+        }
         // 1-3 focused routes get direction-of-travel chevrons (GTFS shape point order = travel direction)
         var chevrons: [MapChevron] = []
         if let f = vis.focus, (1...3).contains(f.count) {
@@ -607,13 +673,20 @@ final class AppModel {
     /// Long route name (web longName: long, else short, else id).
     func longName(_ rid: String) -> String { route(rid)?.displayName ?? rid }
 
-    /// Header text right of "Current trip": the next bus at the nearest stop ("53RD · 4 min"; web metaNearby).
-    var nearbyMeta: String {
+    /// The next bus at the nearest stop for the header right of "Current trip" (web metaNearby; spec 10.6: badge, ETA,
+    /// live dot).
+    var nearbyNext: (rid: String, t: Double)? {
         guard liveLoaded, let p = user ?? nearAnchor?.coord,
               let s = StationSearch.near(staticData, p, maxM: 5000, max: 1, hidden: Set(hidden)).first,
-              let a = arrivals(at: s.id).first else { return "" }
-        let m = TimeFmt.minsUntil(a.t, from: now)
-        return shortName(a.rid) + " · " + (m < 1 ? "Now" : (isStale ? "~" : "") + "\(m) min")
+              let a = arrivals(at: s.id).first else { return nil }
+        return (a.rid, a.t)
+    }
+
+    /// The same as text ("53RD · 4 min").
+    var nearbyMeta: String {
+        guard let n = nearbyNext else { return "" }
+        let m = TimeFmt.minsUntil(n.t, from: now)
+        return shortName(n.rid) + " · " + (m < 1 ? "Now" : (isStale ? "~" : "") + "\(m) min")
     }
 
     /// The merged live state for Kit functions called from views (built from the observed slices, so the

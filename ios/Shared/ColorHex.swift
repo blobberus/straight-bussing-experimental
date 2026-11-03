@@ -22,6 +22,17 @@ extension Color {
         return Color(.sRGB, red: mix((rgb >> 16) & 0xFF), green: mix((rgb >> 8) & 0xFF), blue: mix(rgb & 0xFF), opacity: 1)
     }
 
+    /// '#RRGGBB' mixed toward the opaque 0xRRGGBB `base` (the map's land): a line drawn at `1 - amount` opacity over it
+    /// (spec 11.3 focused state: unfocused lines at 0.2), opaque because MapKit ignores a polyline color's alpha.
+    static func mixed(hex: String?, toward base: UInt32, amount: Double) -> Color {
+        var s = (hex ?? "").trimmingCharacters(in: .whitespaces)
+        if s.hasPrefix("#") { s.removeFirst() }
+        let rgb = (s.count == 6 ? UInt32(s, radix: 16) : nil) ?? 0x555555
+        func mix(_ c: UInt32, _ b: UInt32) -> Double { Double(c) / 255 * (1 - amount) + Double(b) / 255 * amount }
+        return Color(.sRGB, red: mix((rgb >> 16) & 0xFF, (base >> 16) & 0xFF), green: mix((rgb >> 8) & 0xFF, (base >> 8) & 0xFF),
+                     blue: mix(rgb & 0xFF, base & 0xFF), opacity: 1)
+    }
+
     /// Readable text color on a '#RRGGBB' background (core/esc.js textOn, by relative luminance).
     static func textOn(hex: String?) -> Color {
         var s = (hex ?? "").trimmingCharacters(in: .whitespaces)

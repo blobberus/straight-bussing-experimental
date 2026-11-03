@@ -51,22 +51,26 @@ enum PlaceSearchFlow {
     }
 }
 
-/// "Showing results for Regenstein" + "Search for “regensteen” instead" (or "Did you mean …?" in exact mode).
+/// "Showing results for Regenstein" + "Search for “regensteen” instead" (or "Did you mean …?" in exact mode), above
+/// the results card (spec J2).
 struct AssumeNote: View {
     let state: PlaceUI
     let onExact: (Bool) -> Void
     var body: some View {
         if state.exact, let fix = state.fix {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Showing results for \u{201C}\(state.q)\u{201D}").font(.footnote).foregroundStyle(Palette.text2)
-                Button("Did you mean \(fix.to)?") { onExact(false) }.font(.footnote.weight(.semibold)).frame(minHeight: 44)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Showing results for \u{201C}\(state.q)\u{201D}").font(Typo.rowDetail).foregroundStyle(Palette.label2)
+                Button("Did you mean \(fix.to)?") { onExact(false) }.textButtonStyle(font: Typo.rowDetail.weight(.semibold))
             }
+            .padding(.horizontal, Space.s1)
             .accessibilityElement(children: .contain)
         } else if !state.exact, let a = state.assumed, a.big {
-            VStack(alignment: .leading, spacing: 2) {
-                (Text("Showing results for ").foregroundColor(Palette.text2) + Text(a.to).bold()).font(.footnote)
-                Button("Search for \u{201C}\(a.from)\u{201D} instead") { onExact(true) }.font(.footnote.weight(.semibold)).frame(minHeight: 44)
+            VStack(alignment: .leading, spacing: 0) {
+                (Text("Showing results for ").foregroundStyle(Palette.label2) + Text(a.to).fontWeight(.semibold).foregroundStyle(Palette.label))
+                    .font(Typo.rowDetail)
+                Button("Search for \u{201C}\(a.from)\u{201D} instead") { onExact(true) }.textButtonStyle(font: Typo.rowDetail.weight(.semibold))
             }
+            .padding(.horizontal, Space.s1)
             .accessibilityElement(children: .contain)
         }
     }
@@ -82,36 +86,33 @@ struct PlaceList: View {
     let onExact: (Bool) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Space.s3) {
             if PlaceIndex.norm(typed).count < 2 {
                 Hint("Type at least 2 letters of an address, building or place.")
             } else {
                 AssumeNote(state: state, onExact: onExact)
                 if state.items.isEmpty {
                     if state.status == .busy { Hint("Searching places\u{2026}") }
-                    else if state.status == .err { EmptyStateView(title: errorTitle, message: errorBody) }
+                    else if state.status == .err { EmptyStateView(title: errorTitle, message: errorBody, icon: Sym.feedError) }
                     else if typed.trimmingCharacters(in: .whitespaces).count < 3 { Hint("Keep typing to search more places.") }
-                    else { EmptyStateView(title: "No places found", message: "Check the spelling or try a nearby landmark.") }
+                    else { EmptyStateView(title: "No places found", message: "Check the spelling or try a nearby landmark.", icon: "mappin.slash") }
                 } else {
                     Card {
                         ForEach(Array(state.items.enumerated()), id: \.offset) { item in
-                            if item.offset > 0 { Divider() }
+                            if item.offset > 0 { RowDivider() }
                             Button { onPick(item.element) } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "mappin.and.ellipse").frame(width: 22).foregroundStyle(Palette.text2).accessibilityHidden(true)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(item.element.label).foregroundStyle(Palette.text).lineLimit(1)
-                                        Text(item.element.sub).font(.caption).foregroundStyle(Palette.text2).lineLimit(2)
-                                    }
-                                    Spacer(minLength: 0)
-                                }
-                                .frame(minHeight: 48)
-                                .contentShape(Rectangle())
+                                RowLayout {
+                                    Image(systemName: "mappin").font(.system(size: IconSize.row)).foregroundStyle(Palette.label2)
+                                        .accessibilityHidden(true)
+                                } content: {
+                                    Text(item.element.label).font(Typo.rowTitle).foregroundStyle(Palette.label).lineLimit(2)
+                                    Text(item.element.sub.commaSeparated).font(Typo.rowDetail).foregroundStyle(Palette.label2).lineLimit(2)
+                                } trailing: { EmptyView() }
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(RowButtonStyle())
                         }
                     }
-                    if state.status == .busy { Text("Searching more places\u{2026}").font(.caption).foregroundStyle(Palette.text2) }
+                    if state.status == .busy { Hint("Searching more places\u{2026}") }
                 }
             }
         }
@@ -122,7 +123,9 @@ struct PlaceList: View {
 struct PhotonNote: View {
     var body: some View {
         Text("Places near campus are searched on this iPhone; otherwise only the text you type (or its spelling fix) is sent to photon.komoot.io.")
-            .font(.caption).foregroundStyle(Palette.text2)
+            .font(Typo.footnote).foregroundStyle(Palette.label2)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, Space.s1)
     }
 }
 
@@ -130,32 +133,42 @@ struct PhotonNote: View {
 struct Hint: View {
     let text: String
     init(_ text: String) { self.text = text }
-    var body: some View { Text(text).font(.subheadline).foregroundStyle(Palette.text2).fixedSize(horizontal: false, vertical: true) }
+    var body: some View {
+        Text(text).font(Typo.rowDetail).foregroundStyle(Palette.label2).fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, Space.s1)
+    }
 }
 
-/// A search field like the web's .v-search (magnifier, clear button, 44 pt).
+/// A search field inside the sheet (spec 10.2 / 10.8): magnifier, the field on `fill`, a clear button, 44 pt.
 struct SearchField: View {
     let placeholder: String
     @Binding var text: String
     var identifier: String = ""
     var onSubmit: () -> Void = {}
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(Palette.text2).accessibilityHidden(true)
+        HStack(spacing: Space.s2) {
+            Image(systemName: "magnifyingglass").font(.system(size: IconSize.status)).foregroundStyle(Palette.label2).accessibilityHidden(true)
             TextField(placeholder, text: $text)
+                .font(Typo.body)
+                .foregroundStyle(Palette.label)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
                 .onSubmit(onSubmit)
-                .frame(minHeight: 44)
+                .frame(minHeight: Space.tap)
                 .accessibilityLabel(placeholder)
                 .accessibilityIdentifier(identifier)
             if !text.isEmpty {
-                Button { text = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.text2).tapTarget() }
-                    .accessibilityLabel("Clear")
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: IconSize.status)).foregroundStyle(Palette.label3)
+                        .frame(width: 32, height: Space.tap).contentShape(Rectangle())
+                }
+                .buttonStyle(ChromePressStyle())
+                .accessibilityLabel("Clear")
             }
         }
-        .padding(.horizontal, 12)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+        .padding(.leading, Space.s3)
+        .padding(.trailing, Space.s1)
+        .background(Palette.fill, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
     }
 }

@@ -50,6 +50,23 @@ CAPTIONS = {
     "39-map-zoomed": "Building names after a pinch zoom: laid out again for the closer view, more tiers (UI test)",
     "40-map-panned": "Building names after a pan (UI test)",
     "41-lines-by-time": "Lines by Time: date and time wheels, the lines the timetable has running then (UI test)",
+    "42-directions-peek": "Directions collapsed: the selected option on the map, its total in the header",
+    "43-search-place": "Journey step 1: a place typed in Directions, results with the place and station rows",
+    "44-loading": "Loading: row-shaped placeholders, no spinner",
+    "45-feed-fail": "Feed unreachable: the red status banner with Retry, live times unavailable, whom to call",
+    "45b-feed-fail-map": "Feed unreachable over the map, sheet collapsed",
+    "46-feed-late": "Live data delayed (200 s): the warning banner, times with ~",
+    "47-feed-old": "Live data out of date (420 s), sheet collapsed",
+    "48-loc-denied": "Location denied: the help card first, the station search right after",
+    "49-alert-row": "A service alert: the one-line alert row at the top of Current trip",
+    "50-stop-long": "Long names: the stop with the longest name (title wraps to 2 lines)",
+    "51-dir-long": "Long names: Directions to the longest-named stop (field card, place summary)",
+    "52-map-text": "Larger text over the map: the chrome stops growing at xxxLarge",
+    "35-stop-long-text": "Larger text: the longest stop name",
+    "journey-1-search": "Journey: search, place results (UI test)",
+    "journey-2-options": "Journey: place summary and route options, the best one selected (UI test)",
+    "journey-3-trip": "Journey: trip in progress, sheet expanded (UI test)",
+    "journey-4-trip-map": "Journey: trip in progress, sheet collapsed over the map (UI test)",
 }
 
 STORE_CAPTIONS = {

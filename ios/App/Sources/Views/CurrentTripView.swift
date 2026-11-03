@@ -2,15 +2,15 @@ import SwiftUI
 import UIKit
 import StraightBussingKit
 
-/// "Current trip" tab (web ui/views/nearby.js, view id `nearby`). Ship checklist item 3: the next bus in one glance,
-/// no taps, fully visible at the half detent (owner decision 2026-10-11). Order:
-/// 1. the trip in progress (timeline, its next step first) if one is started; else the next bus: the nearest stop
-///    and its next arrivals (location known, or a place chosen), else the favorite stations' next buses, else
-///    "Use my location" as the one primary action with the station search right under it;
-/// 2. the service alert row, one line, right under that block;
-/// 3. more of the same glance: "Also nearby", the walking footnote, favorites;
-/// 4. secondary actions: station / place search, "Routes to station…", "Arriving soon" without a location, and a
-///    quiet "No trip in progress" line (no card).
+/// "Current trip" tab (web ui/views/nearby.js, view id `nearby`; docs/DESIGN-SPEC.md J1). Ship checklist item 3: the
+/// next bus in one glance, no taps (owner decision 2026-10-11). Order, the same as the web:
+/// 1. the one-line service alert row;
+/// 2. the trip in progress (spec 10.17) when one is started;
+/// 3. the next bus: the nearest stop with up to 3 arrivals (location known, or a place chosen), else the favorite
+///    stations' next buses, else "Use my location" as the one primary action;
+/// 4. the station search with "Type an address or place" and "Routes to station…" in one row under it;
+/// 5. more of the same glance: "Also nearby", the walking footnote, favorites, "Arriving soon";
+/// 6. a quiet "No trip in progress" line (no card).
 /// A typed search shows its results right under the field and hides the rest. Never a dead end; location off is a
 /// first-class state.
 struct CurrentTripView: View {
@@ -26,7 +26,7 @@ struct CurrentTripView: View {
 
     struct SearchKey: Equatable { var q: String; var place: Bool; var exact: Bool }
 
-    /// What the first block under the title is built from.
+    /// What the next-bus block is built from.
     enum Lead: Equatable { case here(LatLon), place(Endpoint), favorites, nothing }
 
     var lead: Lead {
@@ -40,16 +40,18 @@ struct CurrentTripView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Space.s3) {
                 // the search field keeps one place in this stack (typing never moves focus): the content around it
                 // hides while a search is typed, so the results sit right under the field
                 if !typing { leading }
                 searchBlock
                 if typing { results } else { trailing }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            .padding(.horizontal, Space.insetContent)
+            .padding(.top, Space.s1)
+            .padding(.bottom, Space.s6)
         }
+        .reportsSheetScroll()
         .accessibilityIdentifier("currentTrip")
         .task(id: SearchKey(q: query, place: placeMode, exact: places.exact)) {
             guard placeMode else { return }
@@ -57,58 +59,79 @@ struct CurrentTripView: View {
         }
     }
 
-    // MARK: Blocks above the search field
+    // MARK: Above the search field
 
     @ViewBuilder var leading: some View {
+        AlertsBanner()
         if let p = model.tripFollow, let trip = model.activeTrip {
-            TripTimelineView(progress: p, trip: trip)   // its now card first, the alert row under it
+            TripTimelineView(progress: p, trip: trip)
         }
         switch lead {
         case .here(let u):
-            nearBlock(u, guide: true)
-            FavoritesCard()
+            heroBlock(u, guide: true)
         case .place(let a):
             anchorRow(a)
-            nearBlock(a.coord, guide: false)
-            FavoritesCard()
-            locBlock
+            heroBlock(a.coord, guide: false)
         case .favorites:
             FavoritesCard()
-            if !tripOn { AlertsBanner() }
             locBlock
         case .nothing:
             locBlock   // the one primary action, right under the title; the station search comes next
         }
     }
 
-    // MARK: Blocks under the search field
+    // MARK: Under the search field
 
     @ViewBuilder var trailing: some View {
-        if lead == .nothing {
-            if !tripOn { AlertsBanner() }
-            soonList
-        } else if lead == .favorites {
+        switch lead {
+        case .here(let u):
+            moreNearby(u, guide: true)
+            FavoritesCard()
+        case .place(let a):
+            moreNearby(a.coord, guide: false)
+            FavoritesCard()
+            locBlock
+        case .favorites, .nothing:
             soonList
         }
         if !tripOn {
-            PickButton().padding(.top, 4)
             Text("No trip in progress. To start one, search for a destination and tap Start.")
-                .font(.caption).foregroundStyle(Palette.text2)
+                .font(Typo.footnote).foregroundStyle(Palette.label2)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 2)
+                .padding(.horizontal, Space.insetContent)
+                .padding(.top, Space.s2)
         }
     }
 
     @ViewBuilder var searchBlock: some View {
         SearchField(placeholder: placeMode ? "Address, building or place" : "Search stations", text: $query,
                     identifier: "nearbySearch", onSubmit: submit)
-            .padding(.top, typing ? 0 : 6)
+            .padding(.top, typing ? 0 : Space.s1)
         if placeMode {
-            Button("Search stations instead") { placeMode = false; places = PlaceUI() }.font(.subheadline).frame(minHeight: 44)
+            Button("Search stations instead") { placeMode = false; places = PlaceUI() }
+                .textButtonStyle(font: Typo.rowDetail.weight(.semibold))
             PhotonNote()
-        } else {
-            Button("Type an address or place") { placeMode = true }.font(.subheadline).frame(minHeight: 44)
+        } else if !typing {
+            // two secondary actions in one row (spec J1), stacked when they do not fit
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Space.s4) {
+                    placeButton
+                    Spacer(minLength: 0)
+                    if !tripOn { PickButton(text: true) }
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    placeButton
+                    if !tripOn { PickButton(text: true) }
+                }
+            }
+            .padding(.top, -Space.s2)
         }
+    }
+
+    var placeButton: some View {
+        Button("Type an address or place") { placeMode = true }
+            .textButtonStyle(font: Typo.rowDetail.weight(.semibold))
+            .fixedSize()
     }
 
     // MARK: Location
@@ -118,22 +141,33 @@ struct CurrentTripView: View {
         case .asking:
             Hint("Finding your location\u{2026}").accessibilityAddTraits(.updatesFrequently)
         case .denied:
-            Card {
-                Label {
-                    Text("**Location is off.** To see stops near you, allow location for Straight Bussing in iOS Settings. You can still search below.")
-                        .font(.subheadline)
-                } icon: { Image(systemName: "location.slash") }
-                .padding(.vertical, 10)
+            // denied (spec 13.3): what is going on, the way to iOS Settings, and the station search right after
+            Card(padded: true) {
+                VStack(alignment: .leading, spacing: Space.s3) {
+                    HStack(alignment: .firstTextBaseline, spacing: Space.s3) {
+                        Image(systemName: "location.slash").font(.system(size: IconSize.status, weight: .semibold))
+                            .foregroundStyle(Palette.label2).accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Location is off").font(Typo.rowTitle).foregroundStyle(Palette.label)
+                            Text("To see stops near you, allow location for Straight Bussing in iOS Settings. You can still search below.")
+                                .font(Typo.rowDetail).foregroundStyle(Palette.label2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Button {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                    } label: { Text("Change in iOS Settings") }
+                        .secondaryButtonStyle(full: true)
+                        .accessibilityIdentifier("openLocationSettings")
+                }
             }
-            Button {
-                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-            } label: { Text("Open iOS Settings").frame(maxWidth: .infinity, minHeight: 44) }
-                .secondaryButtonStyle()
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("locationDenied")
         default:
             Button { model.locate() } label: {
-                Label("Use my location", systemImage: "location.fill").frame(maxWidth: .infinity, minHeight: 44)
+                Label("Use my location", systemImage: "location.fill")
             }
-            .primaryButtonStyle()
+            .primaryButtonStyle(full: true)
             .accessibilityHint("Your location stays on this iPhone")
             .accessibilityIdentifier("useMyLocation")
         }
@@ -141,13 +175,14 @@ struct CurrentTripView: View {
 
     func anchorRow(_ a: Endpoint) -> some View {
         Card {
-            HStack {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Showing stops near").font(.caption).foregroundStyle(Palette.text2)
-                    Text(a.label).font(.subheadline.weight(.semibold))
-                }
-                Spacer()
-                Button("Clear") { model.nearAnchor = nil }.frame(minWidth: 44, minHeight: 44)
+            RowLayout {
+                IconCircle(symbol: "mappin", size: 32)
+            } content: {
+                Text("Showing stops near").font(Typo.rowDetail).foregroundStyle(Palette.label2)
+                Text(a.label).font(Typo.rowTitle).foregroundStyle(Palette.label).lineLimit(2)
+            } trailing: {
+                Button("Clear") { model.nearAnchor = nil }
+                    .textButtonStyle(font: Typo.sectionTitle)
                     .accessibilityLabel("Clear place \(a.label)")
             }
         }
@@ -176,26 +211,25 @@ struct CurrentTripView: View {
         } else {
             let m = StationSearch.match(model.staticData.stops, stopRoutes: model.staticData.stopRoutes, query, max: 8)
             if m.isEmpty {
-                EmptyStateView(title: "No matching stations", message: "Check the spelling, or type an address instead.")
-                Button { placeMode = true } label: { Text("Search addresses and places").frame(maxWidth: .infinity, minHeight: 44) }
-                    .secondaryButtonStyle()
+                EmptyStateView(title: "No matching stations", message: "Check the spelling, or type an address instead.",
+                               icon: "magnifyingglass")
+                Button { placeMode = true } label: { Text("Search addresses and places") }
+                    .secondaryButtonStyle(full: true)
             } else {
                 Card {
-                    ForEach(Array(m.enumerated()), id: \.offset) { item in
-                        if item.offset > 0 { Divider() }
-                        Button { model.push(.stop(item.element.id)) } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "bus").frame(width: 22).foregroundStyle(Palette.text2).accessibilityHidden(true)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(item.element.name).foregroundStyle(Palette.text)
-                                    Text((model.staticData.stopRoutes[item.element.id] ?? []).map(model.shortName).joined(separator: ", "))
-                                        .font(.caption).foregroundStyle(Palette.text2)
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .frame(minHeight: 48).contentShape(Rectangle())
+                    ForEach(m, id: \.id) { s in
+                        if s.id != m.first?.id { RowDivider() }
+                        Button { model.push(.stop(s.id)) } label: {
+                            RowLayout(chevron: true) {
+                                Image(systemName: "bus").font(.system(size: IconSize.row)).foregroundStyle(Palette.label2)
+                                    .accessibilityHidden(true)
+                            } content: {
+                                Text(s.name).font(Typo.rowTitle).foregroundStyle(Palette.label).lineLimit(2)
+                                Text((model.staticData.stopRoutes[s.id] ?? []).map(model.shortName).joined(separator: ", "))
+                                    .font(Typo.rowDetail).foregroundStyle(Palette.label2).lineLimit(2)
+                            } trailing: { EmptyView() }
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(RowButtonStyle())
                     }
                 }
             }
@@ -208,33 +242,39 @@ struct CurrentTripView: View {
         StationSearch.near(model.staticData, p, maxM: Self.nearbyMaxM, max: 3, hidden: Set(model.hidden))
     }
 
-    /// The nearest stop with its next arrivals (the hero card, fully visible at the half detent), the alert row,
-    /// then two more stops (1 arrival each) and the walking footnote.
-    @ViewBuilder func nearBlock(_ p: LatLon, guide: Bool) -> some View {
+    /// The nearest stop with its next arrivals (the hero card, fully visible when expanded), then, when no bus is
+    /// reporting, why and whom to call.
+    @ViewBuilder func heroBlock(_ p: LatLon, guide: Bool) -> some View {
         let stops = near(p)
-        if stops.isEmpty {
+        if let first = stops.first {
+            StopCard(stop: first, max: 3, hero: true, guide: guide)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("nextBusBlock")
+            // no bus is reporting: why, the operator's alert in full and whom to call, before more stops
+            if model.liveLoaded && model.buses.isEmpty { NoServiceView() }
+        } else {
             EmptyStateView(title: guide ? "No stops near you" : "No stops within 5 km of this place",
                            message: guide ? "You seem to be more than 5 km from the shuttle network. Search a station or place below."
-                                          : "Try another place or search a station.")
-            if !tripOn { AlertsBanner() }
+                                          : "Try another place or search a station.",
+                           icon: "mappin.slash")
+        }
+    }
+
+    /// "Also nearby": two more stops with one arrival each, then the walking footnote.
+    @ViewBuilder func moreNearby(_ p: LatLon, guide: Bool) -> some View {
+        let stops = near(p)
+        if stops.isEmpty {
             if guide { soonList }
-        } else {
-            ForEach(Array(stops.enumerated()), id: \.element.id) { item in
-                if item.offset == 0 {
-                    StopCard(stop: item.element, max: 3, hero: true, guide: guide)
-                        .accessibilityElement(children: .contain)
-                        .accessibilityIdentifier("nextBusBlock")
-                    if !tripOn { AlertsBanner() }
-                    // no bus is reporting: why, the operator's alert in full and whom to call, before more stops
-                    if model.liveLoaded && model.buses.isEmpty { NoServiceView() }
-                } else {
-                    if item.offset == 1 { SectionTitle(text: "Also nearby") }
-                    StopCard(stop: item.element, max: 1, hero: false, guide: guide)
-                }
+        } else if stops.count > 1 {
+            SectionTitle(text: "Also nearby")
+            ForEach(stops.dropFirst(), id: \.id) { s in
+                StopCard(stop: s, max: 1, hero: false, guide: guide)
             }
             if guide {
                 Text("Leave times use a walking estimate (80 m a minute) and live bus times. Allow extra time.")
-                    .font(.caption).foregroundStyle(Palette.text2)
+                    .font(Typo.footnote).foregroundStyle(Palette.label2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Space.insetContent)
             }
         }
     }
@@ -251,11 +291,11 @@ struct CurrentTripView: View {
                 SectionTitle(text: "Arriving soon")
                 Card {
                     ForEach(Array(soon.enumerated()), id: \.offset) { item in
-                        if item.offset > 0 { Divider() }
+                        if item.offset > 0 { RowDivider() }
                         Button { model.push(.stop(item.element.stop)) } label: {
                             SoonRow(stopName: model.staticData.stops[item.element.stop]?.name ?? item.element.stop, a: item.element.a)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(RowButtonStyle())
                     }
                 }
             }
@@ -276,13 +316,22 @@ struct CurrentTripView: View {
 /// "Routes to station…" (opens the chooser: current location / select a station / type an address or place).
 struct PickButton: View {
     @Environment(AppModel.self) private var model
+    /// A text button (Current trip's row) instead of a full-width secondary button.
+    var text = false
     var body: some View {
-        Button { model.pickMode = nil; model.push(.pick) } label: {
-            Text("Routes to station\u{2026}").frame(maxWidth: .infinity, minHeight: 44)
+        if text {
+            Button("Routes to station\u{2026}") { open() }
+                .textButtonStyle(font: Typo.rowDetail.weight(.semibold))
+                .fixedSize()
+                .accessibilityIdentifier("pickOpen")
+        } else {
+            Button { open() } label: { Text("Routes to station\u{2026}") }
+                .secondaryButtonStyle(full: true)
+                .accessibilityIdentifier("pickOpen")
         }
-        .secondaryButtonStyle()
-        .accessibilityIdentifier("pickOpen")
     }
+
+    func open() { model.pickMode = nil; model.push(.pick) }
 }
 
 /// Why there are no arrivals (web nearby.js noService): a feed outage is not a service outage, and an empty feed
@@ -293,14 +342,15 @@ struct NoServiceView: View {
         if model.liveOutage {
             EmptyStateView(title: "Live times unavailable",
                            message: "Can't reach the shuttle feed, so we can't tell which shuttles are running. Check with the official service.",
-                           showOfficial: true, operatorAlerts: true)
+                           icon: Sym.feedError, showOfficial: true, operatorAlerts: true)
         } else if !model.buses.isEmpty {
-            EmptyStateView(title: "No upcoming arrivals", message: "No bus on your visible routes has a predicted arrival right now.", showOfficial: true)
+            EmptyStateView(title: "No upcoming arrivals", message: "No bus on your visible routes has a predicted arrival right now.",
+                           icon: "clock", showOfficial: true)
         } else if model.silentService, let why = model.silentText() {
-            EmptyStateView(title: "No live locations right now", message: why, showOfficial: true, operatorAlerts: true)
+            EmptyStateView(title: "No live locations right now", message: why, icon: Sym.noLive, showOfficial: true, operatorAlerts: true)
         } else {
-            EmptyStateView(title: "No shuttles running right now", message: "Check the official schedule for service hours.", showOfficial: true,
-                           operatorAlerts: true)
+            EmptyStateView(title: "No shuttles running right now", message: "Check the official schedule for service hours.",
+                           icon: "bus", showOfficial: true, operatorAlerts: true)
         }
     }
 }
@@ -320,34 +370,36 @@ struct StopCard: View {
         let list = pick(all, walkM)
         Card {
             Button { model.push(.stop(stop.id)) } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(stop.name).font(hero ? .headline : .subheadline.weight(.semibold)).foregroundStyle(Palette.text).lineLimit(2)
-                        Text(TripInfo.walkText(stop.d)).font(.caption).foregroundStyle(Palette.text2)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.text3).accessibilityHidden(true)
-                }
-                .frame(minHeight: 44).contentShape(Rectangle())
+                RowLayout(chevron: true) {
+                    EmptyView()
+                } content: {
+                    Text(stop.name).font(hero ? Typo.heroTitle : Typo.rowTitle).foregroundStyle(Palette.label).lineLimit(2)
+                    Text(Self.walkLine(stop.d)).font(Typo.rowDetail).foregroundStyle(Palette.label2)
+                } trailing: { EmptyView() }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(RowButtonStyle())
             .accessibilityHint("Opens the stop")
             if !model.liveLoaded {
-                Divider()
+                RowDivider(inset: Space.insetContent)
                 SkeletonRows(count: hero ? 2 : 1)
             } else if list.isEmpty {
-                HStack(spacing: 6) {
+                RowDivider(inset: Space.insetContent)
+                HStack(spacing: Space.s2) {
                     Text(model.liveOutage ? "Live times unavailable" : model.silentService ? "No live times right now" : "No upcoming arrivals")
-                        .font(.subheadline).foregroundStyle(Palette.text2)
+                        .font(Typo.rowDetail).foregroundStyle(Palette.label2)
                     Spacer(minLength: 0)
-                    ForEach((model.staticData.stopRoutes[stop.id] ?? []).filter { !model.hidden.contains($0) }, id: \.self) {
-                        RouteChip(route: model.route($0), rid: $0, size: 11)
+                    HStack(spacing: 2) {
+                        ForEach((model.staticData.stopRoutes[stop.id] ?? []).filter { !model.hidden.contains($0) }.prefix(5), id: \.self) {
+                            RouteBadge(route: model.route($0), rid: $0, size: .small)
+                        }
                     }
+                    .accessibilityHidden(true)
                 }
-                .padding(.bottom, 8)
+                .padding(.horizontal, Space.insetContent)
+                .padding(.vertical, Space.s3)
             } else {
                 ForEach(list, id: \.self) { a in
-                    Divider()
+                    RowDivider(inset: a == list.first ? Space.insetContent : Space.separatorInset)
                     if let w = walkM {
                         let c = TripInfo.catchNote(a.t, walkMin: w, now: model.now)
                         ArrivalButton(a: a, sub: c.text, miss: c.kind == .miss, aria: c.aria)
@@ -359,8 +411,13 @@ struct StopCard: View {
         }
     }
 
+    /// "2 min walk, 146 m" (one middle dot per line at most: a comma here, spec 10.8).
+    static func walkLine(_ d: Double) -> String {
+        "\(TripInfo.mins(Geo.walkMin(d * Geo.walkDetour))) min walk, \(Int(JS.round(d))) m"
+    }
+
     /// The first `max`, plus one more when none of those can be caught on foot (nearby.js pickArrivals). The hero
-    /// card keeps its 3 rows (it must fit the half detent): its last row becomes the first bus you can still catch.
+    /// card keeps its 3 rows: its last row becomes the first bus you can still catch.
     func pick(_ all: [Arrival], _ walkM: Double?) -> [Arrival] {
         var list = Array(all.prefix(max))
         guard let w = walkM, !list.isEmpty, all.count > max else { return list }
@@ -375,42 +432,38 @@ struct StopCard: View {
     }
 }
 
-/// "Arriving soon" row: stop name, route, ETA.
+/// "Arriving soon" row: route badge, stop name, route, ETA.
 struct SoonRow: View {
     @Environment(AppModel.self) private var model
     let stopName: String
     let a: Arrival
     var body: some View {
         let m = Swift.max(0, TimeFmt.minsUntil(a.t, from: model.now))
-        HStack(spacing: 10) {
-            RouteChip(route: model.route(a.rid), rid: a.rid)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(stopName).font(.subheadline.weight(.medium)).foregroundStyle(Palette.text).lineLimit(2)   // wrap, never cut a stop name
-                Text(model.route(a.rid)?.long ?? "").font(.caption).foregroundStyle(Palette.text2).lineLimit(1)
-            }
-            Spacer()
-            EtaText(t: a.t, now: model.now, stale: model.isStale)
+        RowLayout {
+            RouteBadge(route: model.route(a.rid), rid: a.rid)
+        } content: {
+            Text(stopName).font(Typo.rowTitle).foregroundStyle(Palette.label).lineLimit(2)   // wrap, never cut a stop name
+            Text(model.route(a.rid)?.long ?? "").font(Typo.rowDetail).foregroundStyle(Palette.label2).lineLimit(1)
+        } trailing: {
+            EtaView(t: a.t, now: model.now, stale: model.isStale).frame(minWidth: 64, alignment: .trailing)
         }
-        .frame(minHeight: 48).contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Route \(model.shortName(a.rid)) at \(stopName), \(m < 1 ? "arriving now" : "in \(m) minutes")\(model.isStale ? ", estimate" : "")")
     }
 }
 
-/// Favorites card: up to 3 favorite stations with their next visible arrival, and "All favorites".
+/// Favorites: up to 3 favorite stations with their next visible arrival, and "All favorites".
 struct FavoritesCard: View {
     @Environment(AppModel.self) private var model
     var body: some View {
         let ids = model.routeState.favStops.filter { model.staticData.stops[$0] != nil }
         if !ids.isEmpty {
-            HStack {
-                SectionTitle(text: "Favorites")
-                Spacer()
-                Button("All favorites") { model.select(.myroutes) }.font(.footnote.weight(.semibold)).frame(minHeight: 44)
+            SectionTitle(text: "Favorites") {
+                Button("All favorites") { model.select(.myroutes) }.textButtonStyle(font: Typo.sectionTitle)
             }
             Card {
                 ForEach(Array(ids.prefix(CurrentTripView.favMax).enumerated()), id: \.element) { item in
-                    if item.offset > 0 { Divider() }
+                    if item.offset > 0 { RowDivider() }
                     row(item.element)
                 }
             }
@@ -427,50 +480,51 @@ struct FavoritesCard: View {
         let label = a.map { "Favorite \(name): route \(model.shortName($0.rid)) \(m < 1 ? "arriving now" : "in \(m) minutes")\(model.isStale ? ", estimate" : "")" }
             ?? "Favorite \(name): \(unknown ? "live times unavailable" : model.liveLoaded ? "no upcoming arrivals" : "loading")"
         return Button { model.push(.stop(id)) } label: {
-            HStack(spacing: 10) {
-                if let a { RouteChip(route: model.route(a.rid), rid: a.rid) }
-                else { Image(systemName: "star.fill").foregroundStyle(Palette.star).frame(width: 24).accessibilityHidden(true) }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(name).font(.subheadline.weight(.medium)).foregroundStyle(Palette.text).lineLimit(1)
-                    if let a { Text(model.route(a.rid)?.long ?? "").font(.caption).foregroundStyle(Palette.text2).lineLimit(1) }
+            RowLayout {
+                if let a { RouteBadge(route: model.route(a.rid), rid: a.rid) }
+                else { Image(systemName: "star.fill").font(.system(size: IconSize.status)).foregroundStyle(Palette.star).accessibilityHidden(true) }
+            } content: {
+                Text(name).font(Typo.rowTitle).foregroundStyle(Palette.label).lineLimit(2)
+                if let a { Text(model.route(a.rid)?.long ?? "").font(Typo.rowDetail).foregroundStyle(Palette.label2).lineLimit(1) }
+            } trailing: {
+                if let a { EtaView(t: a.t, now: model.now, stale: model.isStale).frame(minWidth: 64, alignment: .trailing) }
+                else {
+                    Text(unknown ? "No live times" : model.liveLoaded ? "No buses soon" : "").font(Typo.rowDetail).foregroundStyle(Palette.label2)
                 }
-                Spacer()
-                if let a { EtaText(t: a.t, now: model.now, stale: model.isStale) }
-                else { Text(unknown ? "No live times" : model.liveLoaded ? "No buses soon" : "").font(.caption).foregroundStyle(Palette.text2) }
             }
-            .frame(minHeight: 48).contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RowButtonStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .accessibilityAddTraits(.isButton)
     }
 }
 
-/// Service alerts row (web alerts.js alertBanner): "Service alert: <first title>" on one line, opens Alerts. Compact,
-/// so the next bus above it stays fully visible at the half detent; at accessibility text sizes it wraps instead of
-/// truncating. Not color alone: the warning icon and the words "Service alert(s)" carry the state.
+/// Service alerts row (spec 10.18; web alerts.js alertBanner): "Service alert: <first title>" on one line in `warnBg`,
+/// opens Alerts. At accessibility text sizes it wraps instead of truncating. Not color alone: the warning icon and the
+/// words "Service alert(s)" carry the state.
 struct AlertsBanner: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
         if model.liveLoaded, let b = LiveText.alertBanner(model.activeAlerts) {
+            let shape = RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
             Button { model.push(.alerts) } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.warn).accessibilityHidden(true)
-                    (Text(b.head + ": ").fontWeight(.semibold).foregroundStyle(Palette.text) + Text(b.line).foregroundStyle(Palette.text2))
-                        .font(.subheadline)
+                HStack(spacing: Space.s3) {
+                    Image(systemName: Sym.alert).font(.system(size: IconSize.status)).foregroundStyle(Palette.warn).accessibilityHidden(true)
+                    (Text(b.head + ": ").fontWeight(.semibold).foregroundStyle(Palette.label) + Text(b.line).foregroundStyle(Palette.label))
+                        .font(Typo.rowDetail)
                         .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.text3).accessibilityHidden(true)
+                    Image(systemName: "chevron.forward").font(.footnote.weight(.semibold)).foregroundStyle(Palette.label2).accessibilityHidden(true)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
-                .frame(minHeight: 44)
-                .background(Palette.warnBg, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-                .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+                .padding(.horizontal, Space.insetContent)
+                .padding(.vertical, Space.s3)
+                .frame(minHeight: Space.rowMin)
+                .background(Palette.warnBg, in: shape)
+                .contentShape(shape)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ChromePressStyle())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(b.head): \(b.line). Open alerts")
             .accessibilityAddTraits(.isButton)

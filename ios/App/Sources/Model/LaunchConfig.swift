@@ -14,6 +14,12 @@ import StraightBussingKit
 ///   -theme light|dark     force the color scheme
 ///   -noloc                with -demo: no location and no favorites (the "Use my location" first state)
 ///   -nobus                with -demo: no bus reporting, with the operator's real help alert (the no-bus state)
+///   -feed fail|late|old   with -demo: the feed unreachable, 200 s old (delayed) or 420 s old (out of date)
+///   -alert                with -demo: the operator's service alert is up (the alert row)
+///   -locdenied            with -demo -noloc: location denied (the help card)
+///   -hold                 with -demo: never polls (the loading state)
+/// Screens for the redesign gallery: stoplong / dirlong (the longest stop name), searchplace (a place query typed in
+/// Directions).
 struct LaunchConfig {
     var demo = false
     var screen: String?
@@ -22,6 +28,10 @@ struct LaunchConfig {
     var theme: String?
     var noLocation = false
     var noBus = false
+    var feed: String?
+    var alert = false
+    var locDenied = false
+    var hold = false
 
     static func parse(_ args: [String] = ProcessInfo.processInfo.arguments) -> LaunchConfig {
         var c = LaunchConfig()
@@ -36,6 +46,10 @@ struct LaunchConfig {
         c.theme = value(after: "-theme")
         c.noLocation = c.demo && args.contains("-noloc")
         c.noBus = c.demo && args.contains("-nobus")
+        c.feed = c.demo ? value(after: "-feed") : nil
+        c.alert = c.demo && args.contains("-alert")
+        c.locDenied = c.demo && args.contains("-locdenied")
+        c.hold = c.demo && args.contains("-hold")
         return c
     }
 }

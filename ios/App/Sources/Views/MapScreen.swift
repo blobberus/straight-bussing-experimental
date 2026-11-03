@@ -2,16 +2,19 @@ import MapKit
 import SwiftUI
 import StraightBussingKit
 
-/// The live map (web/js/map): route lines in route colors stacked by draw order (focused routes on top,
-/// others dimmed), stops, live buses with heading, the user's position, and a started/selected trip. During a
-/// started trip (Kit `TripYou`, web ui/tripmap.js) you are drawn where the trip says: on the bus you ride (a ring and
-/// "You" on its marker; the GPS dot steps back), the boarding stop as a guess ("You (est.)") without GPS, else the
-/// normal GPS dot; your stops carry "Board here" / the get-off count, the same numbers as the card and the alerts.
+/// The live map (web/js/map; docs/DESIGN-SPEC.md section 11): Apple's standard map, flat and muted, with points of
+/// interest off; route lines in route colors stacked by draw order, each on a casing that flips to the opposite edge
+/// when the route color is too close to the default one (computed from the color); two emphasis levels (network /
+/// focused: a route page, a trip, a custom route); stops as small circles in their route's color from zoom 14; live
+/// buses as route-colored markers with a heading notch; the user's position; a started or selected trip (bus legs on
+/// the road shape, walking dots, the destination pin, "Board here" / "Get off" callouts). During a started trip (Kit
+/// `TripYou`, web ui/tripmap.js) you are drawn where the trip says: on the bus you ride (a ring and "You" on its
+/// marker; the GPS dot steps back), the boarding stop as a guess ("You (est.)") without GPS, else the normal GPS dot.
 ///
-/// Cheap to re-evaluate on purpose: lines and stops come from `AppModel.mapLayers` (cached per visibility
-/// change), bus staleness is computed at poll time, the camera lives in its own observable, the real user
-/// location is MapKit's `UserAnnotation` (no redraw per location update) and the bottom inset is applied by
-/// the caller, so this body only re-runs when buses, the trip/plan or the visible routes change.
+/// Cheap to re-evaluate on purpose: lines and stops come from `AppModel.mapLayers` (cached per visibility, appearance
+/// and zoom step), bus staleness is computed at poll time, the camera lives in its own observable, the real user
+/// location is MapKit's `UserAnnotation` (no redraw per location update) and the bottom inset is applied by the
+/// caller, so this body only re-runs when buses, the trip/plan, the visible routes or the zoom step change.
 ///
 /// Building and place names (owner 2026-10-13, web map/landmarks.js): text annotations under everything else, placed
 /// by the Kit (`Landmarks.place`) when the camera stops moving (`layoutLabels`), kept in `AppModel.mapLabels`; Apple's
@@ -19,6 +22,7 @@ import StraightBussingKit
 struct MapScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.colorScheme) private var scheme
 
     /// The trip drawn on the map: the started one, else the selected Directions option.
     var plan: TripOption? {
@@ -34,11 +38,16 @@ struct MapScreen: View {
         return r.walkOnlyCoords ?? [f, t]
     }
 
+    /// Walking path: round 4 pt dots in `tintFill` (Apple Maps style, spec 11.4).
+    static let walkStroke = StrokeStyle(lineWidth: 4, lineCap: .round, dash: [0.01, 8])
+
     var body: some View {
         @Bindable var camera = model.mapCamera
-        let layers = model.mapLayers
+        let zoom = camera.zoom
+        let layers = model.mapLayers(dark: scheme == .dark, zoom: zoom)
         let buses = model.mapBuses.filter { !layers.hidden.contains($0.rid) }
         let drawn = plan, ring = ringed   // once per body, not once per stop
+        let openStop: String? = { if case .stop(let id)? = model.page { return id }; return nil }()
         // you on the started trip (Kit TripYou, the same evaluation as the card, the alerts and the Live Activity)
         let you = model.activeTrip != nil ? model.tripYou : nil
         let youBus: String? = you.flatMap { $0.onBus && $0.point != nil ? $0.vehicleId : nil }
@@ -56,6 +65,11 @@ struct MapScreen: View {
         let heading = model.location.heading
         let coned = heading.active
         let walk = walkOnly
+        // stops from zoom 14 (spec 11.4); favorites and highlighted stops always
+        let showStops = zoom >= 14
+        let bigStops = zoom >= 16
+        let stops = layers.stops.filter { showStops || $0.isFav || ring.contains($0.id) }
+        let legW = AppModel.lineWidth(zoom) + 2
         // the map labels: drawn from the last layout; laid out again on camera end or when what they avoid changes
         let placed = model.mapLabels.placed
         let labelScale = MapLabelModel.scale(typeSize)
@@ -75,30 +89,33 @@ struct MapScreen: View {
                     .stroke(l.color, style: StrokeStyle(lineWidth: l.width, lineCap: .round, lineJoin: .round))
             }
             if let o = drawn {
+                // bus legs along the route's road shape between the stops (Kit Geometry.alongShape), cached, on a casing
+                ForEach(Array(o.busLegs.enumerated()), id: \.offset) { item in
+                    let path = model.roadPath(item.element).map(\.cl)
+                    MapPolyline(coordinates: path)
+                        .stroke(Palette.busRing, style: StrokeStyle(lineWidth: legW + 3, lineCap: .round, lineJoin: .round))
+                    MapPolyline(coordinates: path)
+                        .stroke(Color(hex: model.route(item.element.rid)?.color), style: StrokeStyle(lineWidth: legW, lineCap: .round, lineJoin: .round))
+                }
                 ForEach(Array(o.walkLegs.enumerated()), id: \.offset) { item in
                     MapPolyline(coordinates: (item.element.coords ?? [item.element.from.coord, item.element.to.coord]).map(\.cl))
-                        .stroke(.blue, style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [2, 7]))
-                }
-                // bus legs along the route's road shape between the stops (Kit Geometry.alongShape), cached
-                ForEach(Array(o.busLegs.enumerated()), id: \.offset) { item in
-                    MapPolyline(coordinates: model.roadPath(item.element).map(\.cl))
-                        .stroke(Color(hex: model.route(item.element.rid)?.color), style: StrokeStyle(lineWidth: 8, lineCap: .round, lineJoin: .round))
+                        .stroke(Palette.tintFill, style: Self.walkStroke)
                 }
                 if let last = o.legs.last {
                     let end = last.walk?.to.coord ?? last.bus?.alight.coord ?? LatLon(lat: 0, lon: 0)
-                    Marker("Destination", systemImage: "mappin", coordinate: end.cl).tint(.red)
+                    Marker("Destination", systemImage: "mappin", coordinate: end.cl).tint(Palette.dangerFill)
                 }
             }
             if let w = walk, let end = w.last {
                 MapPolyline(coordinates: w.map(\.cl))
-                    .stroke(.blue, style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [2, 7]))
-                Marker("Destination", systemImage: "mappin", coordinate: end.cl).tint(.red)
+                    .stroke(Palette.tintFill, style: Self.walkStroke)
+                Marker("Destination", systemImage: "mappin", coordinate: end.cl).tint(Palette.dangerFill)
             }
             // direction-of-travel chevrons along 1-3 focused routes (decorative, never intercept taps)
             ForEach(layers.chevrons) { c in
                 Annotation("", coordinate: c.coord, anchor: .center) {
                     Image(systemName: "chevron.up")
-                        .font(.system(size: 9, weight: .black))
+                        .font(.system(size: 8, weight: .black))
                         .foregroundStyle(.white)
                         .padding(2)
                         .background(c.color, in: Circle())
@@ -108,9 +125,10 @@ struct MapScreen: View {
                 }
                 .annotationTitles(.hidden)
             }
-            ForEach(layers.stops) { s in
+            ForEach(stops) { s in
                 Annotation(s.stop.name, coordinate: s.stop.coord.cl, anchor: .center) {
-                    StopDot(id: s.id, isFav: s.isFav, faded: drawn != nil, ring: ring.contains(s.id)) { model.stopTapped(s.id) }
+                    StopDot(id: s.id, isFav: s.isFav, faded: drawn != nil, ring: ring.contains(s.id), big: bigStops, color: s.color,
+                            name: s.id == openStop ? s.stop.name : nil) { model.stopTapped(s.id) }
                         .equatable()
                         .accessibilityLabel(s.isFav ? "Favorite stop \(s.stop.name)" : "Stop \(s.stop.name)")
                 }
@@ -119,10 +137,9 @@ struct MapScreen: View {
             // the trip's stops: "Board here" and the get-off count (the card's and the alerts' numbers) under their
             // stops, as on the web (the destination marker and the You pill sit above their points); never in the way of a tap
             ForEach(labels, id: \.self) { l in
-                let board = l.text == "Board here"
                 Annotation("", coordinate: l.point.cl, anchor: UnitPoint.top) {
-                    TripStopLabel(text: l.text, off: !board)
-                        .padding(.top, 12)
+                    TripStopLabel(text: l.text)
+                        .padding(.top, 10)
                         .allowsHitTesting(false)
                         .accessibilityLabel("\(l.text), \(l.stopName)")
                 }
@@ -164,7 +181,7 @@ struct MapScreen: View {
                 UserAnnotation(anchor: .center) { _ in UserDot(heading: heading) }
             }
         }
-        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
+        .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
         .mapControls { MapCompass() }
         // the names are laid out when the camera stops, not on every frame of a pan or zoom: each frame only notes the
         // time, the layout runs once the camera has been still for 0.3 s (with .onEnd alone, the names stayed where an
@@ -193,7 +210,7 @@ struct MapScreen: View {
 
     /// The route line under a tap (web map.js + map/geometry.js lineAt, Kit `LineTap`): only lines whose box comes near
     /// the tap are projected; the topmost within `LineTap.reach` points plus half its width wins. Hidden routes are not
-    /// in `layers.lines`, so they are never tapped.
+    /// in `layers.lines`, so they are never tapped; casings are skipped (their line has the same route).
     func lineHit(_ at: CGPoint, _ proxy: MapProxy, _ layers: MapLayers) -> String? {
         let r = CGFloat(LineTap.reach + 6)
         let corners = [CGPoint(x: at.x - r, y: at.y - r), CGPoint(x: at.x + r, y: at.y - r),
@@ -202,7 +219,7 @@ struct MapScreen: View {
         guard c.count == 4, let lat0 = c.map(\.latitude).min(), let lat1 = c.map(\.latitude).max(),
               let lon0 = c.map(\.longitude).min(), let lon1 = c.map(\.longitude).max() else { return nil }
         var lines: [LineTap.Line] = []
-        for l in layers.lines where l.maxLat >= lat0 && l.minLat <= lat1 && l.maxLon >= lon0 && l.minLon <= lon1 {
+        for l in layers.lines where !l.casing && l.maxLat >= lat0 && l.minLat <= lat1 && l.maxLon >= lon0 && l.minLon <= lon1 {
             let px = l.coords.compactMap { proxy.convert($0, to: .global) }.map { SIMD2(Double($0.x), Double($0.y)) }
             lines.append(LineTap.Line(rid: l.rid, px: px, width: Double(l.width)))
         }
@@ -237,18 +254,21 @@ extension MapScreen {
     /// of the visible map (the web's zoom; a rotated map keeps it), the names shown at that zoom inside the visible box,
     /// projected by MapKit, then the Kit's placement inside the visible map (below the floating chrome, above the
     /// sheet). Called on camera end, a resized visible map, new obstacles, new landmarks or a new text size; it reads
-    /// the model outside any view body, so only a changed result redraws the map.
+    /// the model outside any view body, so only a changed result redraws the map. The zoom also sets the line widths
+    /// and stop sizes (`MapCameraModel.setZoom`, written only when its 0.5 step changes).
     func layoutLabels(_ proxy: MapProxy, scale: Double) {
         let labels = model.mapLabels
         let view = model.mapCamera.visibleRect
         // the expanded sheet covers the map: no names under it
-        guard !labels.landmarks.isEmpty, view.width >= 80, view.height >= 60 else { labels.show([]); return }
+        guard view.width >= 80, view.height >= 60 else { labels.show([]); return }
         let mid = CGPoint(x: view.midX, y: view.midY)
         guard let a = proxy.convert(CGPoint(x: mid.x - 50, y: mid.y), from: .global),
               let b = proxy.convert(CGPoint(x: mid.x + 50, y: mid.y), from: .global) else { return }
         let la = LatLon(lat: a.latitude, lon: a.longitude), lb = LatLon(lat: b.latitude, lon: b.longitude)
         guard la.isValid, lb.isValid else { return }
         let zoom = Landmarks.zoom(metersPerPoint: Geo.hav(la, lb) / 100, latitude: (la.lat + lb.lat) / 2)
+        model.mapCamera.setZoom(zoom)
+        guard !labels.landmarks.isEmpty else { labels.show([]); return }
         let corners = [CGPoint(x: view.minX, y: view.minY), CGPoint(x: view.maxX, y: view.minY),
                        CGPoint(x: view.minX, y: view.maxY), CGPoint(x: view.maxX, y: view.maxY)]
         let geo = corners.compactMap { proxy.convert($0, from: .global) }.map { LatLon(lat: $0.latitude, lon: $0.longitude) }
@@ -276,13 +296,13 @@ extension MapScreen {
         }
         let ring = ringed
         for s in model.mapLayers.stops {
-            // StopDot: ring 26 + its 3 pt stroke, star 18, dot 9 + its border (the web's stop circle: 2 x LABEL.STOP_R)
-            let d: Double = ring.contains(s.id) ? 30 : s.isFav ? 20 : 2 * Landmarks.stopR
+            // StopDot: ring 22 + its 3 pt stroke, star 20, dot 10 + its border (the web's stop circle: 2 x LABEL.STOP_R)
+            let d: Double = ring.contains(s.id) ? 26 : s.isFav ? 22 : 2 * Landmarks.stopR
             at(s.stop.coord, d, d)
         }
         if model.activeTrip != nil, let y = model.tripYou {
-            // "Board here" / the get-off count: 12 pt bold in a tag, 12 pt under its stop (TripStopLabel)
-            for l in y.stopLabels { at(l.point, Landmarks.textWidth(l.text, size: 12) + 20, 24, dy: 12 + 12) }
+            // "Board here" / the get-off count: a 24 pt callout 10 pt under its stop (TripStopLabel)
+            for l in y.stopLabels { at(l.point, Landmarks.textWidth(l.text, size: 13) + 24, 30, dy: 10 + 15) }
             // "You (est.)" at the boarding stop: the 44 pt marker with its pill above
             if let p = y.point, y.source == .stop { at(p, 90, 70, dy: -12) }
         }
@@ -335,24 +355,22 @@ struct LabelWatcher: View {
     }
 }
 
-/// A building or place name on the map (web .sb-lm): bold slate-blue text with a halo in the map's background color (8
-/// offset copies: SwiftUI has no text stroke) on a faint plate (the halo color at 50%, corner radius 5), in exactly the
-/// line breaks and the box the Kit placed (each line 1.12 em tall), padded on the side facing its building by the
-/// placement's gap. Decorative: never takes a tap (the stops and buses near it keep theirs) and hidden from VoiceOver
-/// (stops and buses keep their own labels). Equatable, so a map redraw for a bus move does not redraw the names.
+/// A building or place name on the map (spec 11.5, web .sb-lm): `mapLandmark` Semibold in a quiet slate, with a 1.5 pt
+/// halo in the land color (four offset copies: SwiftUI has no text stroke), no plate, in exactly the line breaks and
+/// the box the Kit placed (each line 1.12 em tall), padded on the side facing its building by the placement's gap.
+/// Decorative: never takes a tap and hidden from VoiceOver (stops and buses keep their own labels). Equatable, so a
+/// map redraw for a bus move does not redraw the names.
 struct LandmarkLabel: View, Equatable {
     let label: PlacedLandmark
 
-    static let haloOffsets: [CGSize] = (0..<8).map { i in
-        let a = Double(i) * .pi / 4
-        return CGSize(width: cos(a) * Landmarks.halo, height: sin(a) * Landmarks.halo)
-    }
+    static let haloOffsets: [CGSize] = [CGSize(width: Landmarks.halo, height: 0), CGSize(width: -Landmarks.halo, height: 0),
+                                        CGSize(width: 0, height: Landmarks.halo), CGSize(width: 0, height: -Landmarks.halo)]
 
     var body: some View {
         let size = CGFloat(label.size), lineH = CGFloat(label.size * Landmarks.lineHeightEm)
         let lines = VStack(spacing: 0) {
             ForEach(Array(label.lines.enumerated()), id: \.offset) { item in
-                Text(item.element).font(.system(size: size, weight: .bold)).lineLimit(1).fixedSize().frame(height: lineH)
+                Text(item.element).font(.system(size: size, weight: .semibold)).lineLimit(1).fixedSize().frame(height: lineH)
             }
         }
         ZStack {
@@ -362,7 +380,6 @@ struct LandmarkLabel: View, Equatable {
             lines.foregroundStyle(Palette.mapLabel)
         }
         .frame(width: CGFloat(label.plateWidth), height: CGFloat(label.plateHeight))
-        .background(Palette.mapLabelHalo.opacity(0.5), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
         .padding(.top, CGFloat(label.padTop))
         .padding(.bottom, CGFloat(label.padBottom))
         .padding(.leading, CGFloat(label.padLeading))
@@ -392,9 +409,11 @@ struct FollowWatcher: View {
     }
 }
 
-/// Equatable on what it shows (the tap closure is new on every map body, so without this SwiftUI would redraw all
-/// ~90 stops whenever buses move). Annotation content must not read the model from the environment: MapKit hosts
-/// it outside the normal view tree.
+/// A stop (spec 11.4): a `bgCard` circle with its route's color as the stroke (neutral where several routes stop), 8 pt
+/// up to zoom 15 and 10 pt from zoom 16; the open or highlighted stop is 16 pt with a 3 pt `tint` ring and, when open,
+/// its name; favorites are a white star on a gold disc. 44 pt hit area. Equatable on what it shows (the tap closure is
+/// new on every map body, so without this SwiftUI would redraw all stops whenever buses move). Annotation content must
+/// not read the model from the environment: MapKit hosts it outside the normal view tree.
 struct StopDot: View, Equatable {
     var id: String
     var isFav: Bool
@@ -402,24 +421,35 @@ struct StopDot: View, Equatable {
     var faded = false
     /// Highlighted (Routes to station candidate or the open stop).
     var ring = false
+    /// Zoom 16 and closer: the larger circle.
+    var big = false
+    var color: Color = Palette.label2
+    /// The open stop's name under it (`mapCallout`).
+    var name: String? = nil
     var action: () -> Void
 
     static func == (a: StopDot, b: StopDot) -> Bool {
-        a.id == b.id && a.isFav == b.isFav && a.faded == b.faded && a.ring == b.ring
+        a.id == b.id && a.isFav == b.isFav && a.faded == b.faded && a.ring == b.ring && a.big == b.big && a.color == b.color
+            && a.name == b.name
     }
 
     var body: some View {
         Button(action: action) {
             ZStack {
-                if ring {
-                    Circle().stroke(Palette.accent, lineWidth: 3).frame(width: 26, height: 26)
-                        .background(Circle().fill(Palette.accent.opacity(0.18)))
-                }
                 if isFav {
-                    Image(systemName: "star.circle.fill").font(.system(size: 18)).foregroundStyle(.white, Palette.starBadge)
-                        .opacity(faded ? 0.45 : 1)
+                    Image(systemName: "star.circle.fill").font(.system(size: 20)).foregroundStyle(.white, Palette.starBadge)
+                        .overlay { if ring { Circle().strokeBorder(Palette.tint, lineWidth: 3).frame(width: 26, height: 26) } }
+                        .opacity(faded && !ring ? 0.45 : 1)
+                } else if ring {
+                    Circle().fill(Palette.bgCard).frame(width: 16, height: 16)
+                        .overlay(Circle().strokeBorder(Palette.tint, lineWidth: 3))
+                        .shadow(color: Palette.shadow.opacity(0.3), radius: 1.5, y: 1)
                 } else {
-                    Circle().fill(.white).frame(width: 9, height: 9).overlay(Circle().stroke(.gray, lineWidth: 2))
+                    Circle().fill(Palette.bgCard).frame(width: big ? 10 : 8, height: big ? 10 : 8)
+                        .overlay(Circle().strokeBorder(color, lineWidth: big ? 2.5 : 2))
+                }
+                if let name {
+                    StopNameLabel(text: name).offset(y: 24)
                 }
             }
             .frame(width: 44, height: 44)   // 44 pt tap target (web: 44 px halo)
@@ -429,78 +459,103 @@ struct StopDot: View, Equatable {
     }
 }
 
-/// Rounded-square badge in the route color with the route chip text and a heading triangle (map/layers.js). The bus
-/// you ride on a started trip (`youText` set, TripYou.text) gets an accent ring and a "You" pill: it moves with the
-/// bus, glide included; VoiceOver reads the trip sentence ("You are on Bus 101. Get off in 2 stops: X").
+/// The open stop's name on the map: `mapCallout` with a land-colored halo.
+struct StopNameLabel: View {
+    let text: String
+    var body: some View {
+        let t = Text(text).font(Typo.mapCallout).lineLimit(1).fixedSize()
+        ZStack {
+            ForEach(0..<LandmarkLabel.haloOffsets.count, id: \.self) { i in
+                t.foregroundStyle(Palette.mapLabelHalo).offset(LandmarkLabel.haloOffsets[i])
+            }
+            t.foregroundStyle(Palette.label)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// A bus on the map (spec 11.4): a 26 pt rounded rectangle in the route color with the short name (never cut; 10 pt
+/// over 5 characters), a 2 pt ring (white, near-black in dark mode), a soft shadow, and a notch in the route color on
+/// the ring edge turning with the bearing. Numbered buses carry their number inside after a thin divider ("AP/DX │ 2",
+/// owner 2026-10-30), never as an overlapping disc. The picked bus has a 3 pt `tint` outline; the bus you ride on a
+/// started trip (`youText`) a `tintFill` ring and a "You" pill; a stale bus is drawn at 50%. VoiceOver reads the trip
+/// sentence ("You are on Bus 101. Get off in 2 stops: X").
 struct BusMarker: View {
     let route: Route?
     let bearing: Double?
     var stale = false
     var youText: String? = nil
-    /// "Bus 2": a small number on the badge when the route shows two or more buses (Kit `BusNumbers`, owner 2026-10-30).
+    /// "Bus 2": its number when the route shows two or more buses (Kit `BusNumbers`, owner 2026-10-30).
     var number: Int? = nil
-    /// The bus picked on its route page (its own times are shown there): an accent ring, like the web's highlight.
+    /// The bus picked on its route page (its own times are shown there).
     var picked = false
+
     var body: some View {
+        let text = route?.chipText ?? "Bus"
+        let long = text.count > 5
+        let fg = Color.badgeText(hex: route?.color)
+        // the marker's width (estimated from the text, for the notch's distance from the center)
+        let w = max(32, CGFloat(text.count) * (long ? 6.4 : 7.2) + 14 + (number != nil ? 16 : 0))
+        let shape = RoundedRectangle(cornerRadius: Radius.busMarker, style: .continuous)
         ZStack {
-            if youText != nil {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Palette.accentFill, lineWidth: 3)
-                    .frame(width: 44, height: 38)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(.white, lineWidth: 7))
-                YouPill(text: "You").offset(y: -34)
-            }
-            if picked && youText == nil {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Palette.accentFill, lineWidth: 3)
-                    .frame(width: 40, height: 34)
-            }
             if let bearing {
+                let rad = bearing * .pi / 180
+                let reach = 19 + max(0, w / 2 - 15) * CGFloat(abs(sin(rad)))
                 Image(systemName: "triangle.fill")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(Color(hex: route?.color))
-                    .offset(y: -19)
+                    .offset(y: -reach)
                     .rotationEffect(.degrees(bearing))
             }
-            Text(route?.chipText ?? "Bus")
-                .font(.system(size: 11, weight: .heavy, design: .rounded))
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .foregroundStyle(Color.textOn(hex: route?.color))
-                .frame(width: 30, height: 24)
-                .background(Color(hex: route?.color), in: RoundedRectangle(cornerRadius: Radius.badge, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: Radius.badge, style: .continuous).stroke(.white, lineWidth: 2))
-                .shadow(color: Palette.shadow.opacity(0.3), radius: 2, y: 1)
-            if let number {
-                Text("\(number)")
-                    .font(.system(size: 10, weight: .heavy, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(Color(hex: route?.color))
-                    .frame(minWidth: 15, minHeight: 15)
-                    .background(.white, in: Circle())
-                    .overlay(Circle().stroke(Color(hex: route?.color), lineWidth: 1.5))
-                    .offset(x: 16, y: -11)
+            HStack(spacing: 4) {
+                Text(text).font(long ? Typo.mapBadgeLong : Typo.mapBadge).lineLimit(1).fixedSize()
+                if let number {
+                    Rectangle().fill(fg.opacity(0.4)).frame(width: 1, height: 12)
+                    Text("\(number)").font(Typo.mapBadge).monospacedDigit().fixedSize()
+                }
+            }
+            .foregroundStyle(fg)
+            .padding(.horizontal, 7)
+            .frame(minWidth: 32, minHeight: 26)
+            .background(Color(hex: route?.color), in: shape)
+            // the 2 pt ring outside the badge
+            .padding(2)
+            .background(Palette.busRing, in: RoundedRectangle(cornerRadius: Radius.busMarker + 2, style: .continuous))
+            .overlay {
+                if youText != nil {
+                    RoundedRectangle(cornerRadius: Radius.busMarker + 6, style: .continuous)
+                        .strokeBorder(Palette.tintFill, lineWidth: 3).padding(-4)
+                } else if picked {
+                    RoundedRectangle(cornerRadius: Radius.busMarker + 6, style: .continuous)
+                        .strokeBorder(Palette.tint, lineWidth: 3).padding(-4)
+                }
+            }
+            .shadow(color: Palette.shadow.opacity(0.3), radius: 1.5, y: 1)
+            if youText != nil {
+                YouPill(text: "You").offset(y: -32)
             }
         }
         .opacity(stale ? 0.5 : 1)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel((youText ?? (number.map { "Bus \($0), \(route?.displayName ?? "Shuttle")" } ?? "\(route?.displayName ?? "Shuttle") bus"))
                             + (picked ? ", showing its times" : "") + (stale ? ", location may be old" : ""))
     }
 }
 
-/// The small "You" pill (accent fill, white text 4.6:1; the word carries the meaning, not the color).
+/// The small "You" pill (`tintFill`, white text 4.7:1; the word carries the meaning, not the color).
 struct YouPill: View {
     let text: String
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .heavy, design: .rounded))
+            .font(Typo.mapBadge)
             .lineLimit(1)
             .fixedSize()
-            .foregroundStyle(.white)
-            .padding(.horizontal, 7).padding(.vertical, 2)
-            .background(Palette.accentFill, in: Capsule())
-            .overlay(Capsule().stroke(.white, lineWidth: 1.5))
-            .shadow(color: Palette.shadow.opacity(0.25), radius: 2, y: 1)
+            .foregroundStyle(Palette.onFill)
+            .padding(.horizontal, 7).frame(minHeight: 18)
+            .background(Palette.tintFill, in: Capsule())
+            .overlay(Capsule().strokeBorder(.white, lineWidth: 1.5))
+            .shadow(color: Palette.shadow.opacity(0.25), radius: 1.5, y: 1)
     }
 }
 
@@ -511,41 +566,56 @@ struct YouMarker: View {
     var body: some View {
         ZStack {
             if guess {
-                Circle().fill(Palette.card).frame(width: 22, height: 22)
-                    .overlay(Circle().stroke(Palette.accentFill, style: StrokeStyle(lineWidth: 3, dash: [4, 3])))
+                Circle().fill(Palette.bgCard).frame(width: 22, height: 22)
+                    .overlay(Circle().stroke(Palette.tintFill, style: StrokeStyle(lineWidth: 3, dash: [4, 3])))
             } else {
-                Circle().fill(Palette.accentFill).frame(width: 20, height: 20).overlay(Circle().stroke(.white, lineWidth: 3))
+                Circle().fill(Palette.tintFill).frame(width: 18, height: 18).overlay(Circle().strokeBorder(.white, lineWidth: 3))
             }
             YouPill(text: guess ? "You (est.)" : "You").offset(y: -24)
         }
         .frame(width: 44, height: 44)
-        .shadow(color: Palette.shadow.opacity(0.25), radius: 2, y: 1)
+        .shadow(color: Palette.shadow.opacity(0.25), radius: 1.5, y: 1)
     }
 }
 
-/// A label on one of the trip's stops ("Board here", "Get off in 2 stops"); the get-off label has an accent outline.
+/// A trip callout under one of the trip's stops ("Board here", "Get off in 2 stops"; spec 11.4): a 24 pt `tintFill`
+/// capsule with `onFill` text and a 6 pt pointer up to its stop.
 struct TripStopLabel: View {
     let text: String
-    let off: Bool
     var body: some View {
-        Text(text)
-            .font(.system(size: 12, weight: .bold))
-            .lineLimit(1)
-            .fixedSize()
-            .foregroundStyle(Palette.text)
-            .padding(.horizontal, 8).padding(.vertical, 2)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: Radius.tag, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Radius.tag, style: .continuous)
-                .stroke(off ? Palette.accentFill : Palette.text3.opacity(0.5), lineWidth: off ? 2 : 1))
-            .shadow(color: Palette.shadow.opacity(0.2), radius: 2, y: 1)
-            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        VStack(spacing: 0) {
+            CalloutPointer().fill(Palette.tintFill).frame(width: 12, height: 6)
+            Text(text)
+                .font(Typo.mapCallout)
+                .lineLimit(1)
+                .fixedSize()
+                .foregroundStyle(Palette.onFill)
+                .padding(.horizontal, 10)
+                .frame(height: 24)
+                .background(Palette.tintFill, in: Capsule())
+        }
+        .shadow(color: Palette.shadow.opacity(0.25), radius: 1.5, y: 1)
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 }
 
-/// Your location: a blue dot with a soft halo; with `heading` (the real location while the compass reads), the
-/// heading cone behind it (web css .sb-mecone): a blue wedge fading outward, `UserHeading.spread` wide, pointing the
-/// way the phone faces. Annotations stay upright on a rotated map, so the cone turns by the compass minus the map's
-/// rotation; the turn animates the short way (Kit `HeadingCone.unwrap`), not at all under Reduce Motion.
+/// The callout's pointer: a small triangle pointing up.
+struct CalloutPointer: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.midX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Your location (spec 11.4): an 18 pt `tintFill` dot with a 3 pt white ring and an accuracy halo; with `heading` (the
+/// real location while the compass reads), the heading cone behind it (web css .sb-mecone): a `tintFill` wedge fading
+/// outward, `UserHeading.spread` wide, pointing the way the phone faces. Annotations stay upright on a rotated map, so
+/// the cone turns by the compass minus the map's rotation; the turn animates the short way (Kit `HeadingCone.unwrap`),
+/// not at all under Reduce Motion.
 struct UserDot: View {
     var heading: UserHeading? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -554,7 +624,7 @@ struct UserDot: View {
         ZStack {
             if let h = heading, h.active {
                 HeadingWedge(spread: h.spread)
-                    .fill(RadialGradient(colors: [Color.blue.opacity(0.5), Color.blue.opacity(0.22), Color.blue.opacity(0)],
+                    .fill(RadialGradient(colors: [Palette.tintFill.opacity(0.35), Palette.tintFill.opacity(0.15), Palette.tintFill.opacity(0)],
                                          center: .center, startRadius: 6, endRadius: 46))
                     .frame(width: 92, height: 92)
                     .rotationEffect(.degrees(h.turn - h.mapTurn))
@@ -562,8 +632,11 @@ struct UserDot: View {
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
-            Circle().fill(.blue.opacity(0.18)).frame(width: 34, height: 34)
-            Circle().fill(.blue).frame(width: 14, height: 14).overlay(Circle().stroke(.white, lineWidth: 3))
+            Circle().fill(Palette.tintFill.opacity(0.10)).frame(width: 40, height: 40)
+                .overlay(Circle().strokeBorder(Palette.tintFill.opacity(0.25), lineWidth: 1))
+            Circle().fill(Palette.tintFill).frame(width: 18, height: 18)
+                .overlay(Circle().strokeBorder(.white, lineWidth: 3))
+                .shadow(color: Palette.shadow.opacity(0.3), radius: 1.5, y: 1)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("My location")

@@ -3,24 +3,26 @@ import SwiftUI
 import UIKit
 import StraightBussingKit
 
-/// Google-Maps-style layout (web v2.4): full-screen map, floating destination search bar with the Settings gear (in
-/// Directions the bar itself turns into the Start / Destination card, in place, and back again when Directions
-/// closes), the status pill and the map context bar under it, a bottom sheet with two resting states (collapsed /
-/// expanded, owner spec 2026-10-12) on the bottom tab bar.
+/// The map screen (docs/DESIGN-SPEC.md 10.1 to 10.7, 10.19): the full-screen map; floating over it the search capsule
+/// with Lines by Time and Settings (in Directions it turns into the Start / Destination card, in place), one status
+/// banner when the feed needs a warning, the demo chip, the trip / filter chip and the locate button; the opaque bottom
+/// sheet with two resting states (owner 2026-10-12) on the bottom bar; toasts just above the sheet.
 struct RootView: View {
     @Environment(AppModel.self) private var model
-    static let tabBarHeight: CGFloat = 56
-    /// Measured height of the floating chrome above the sheet (search bar or Directions card, status pill, context
-    /// bar): a long stale message, large text or the Directions card makes it taller, and the expanded sheet must
-    /// stay below it.
-    @State private var chromeH: CGFloat = 50
-    /// The keyboard is up: the tab bar steps aside so the sheet keeps its room for suggestions.
+    /// Measured height of the floating chrome the expanded sheet stays below (search bar or Directions card, status
+    /// banner, demo chip): a long warning, large text or the Directions card makes it taller.
+    @State private var chromeH: CGFloat = 48
+    /// Measured height of the bottom bar (49 pt, more with larger text).
+    @State private var tabH: CGFloat = Space.tabBar
+    /// The keyboard is up: the bottom bar steps aside so the sheet keeps its room for suggestions.
     @State private var keyboardUp = false
     /// The sheet's settled visible height: the map's bottom padding follows it, so the map never re-centers while the
     /// sheet is still moving (owner 2026-10-12: no hitch).
     @State private var settledSheetH: CGFloat = 0
     /// Directions' typed text, focus and suggestions, shared by the top card and the sheet below it.
     @State private var dirUI = DirectionsUI()
+    /// Whether the sheet's content has scrolled under its header (the header hairline, spec 10.6).
+    @State private var sheetScroll = SheetScroll()
     @Namespace private var searchNS
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -29,19 +31,21 @@ struct RootView: View {
         GeometryReader { geo in
             let inDirections = model.page == .directions
             // On the Routes list the list's own bar says the same thing with the same button (one action per intent).
-            let ctx = ContextBar.shows(model) && model.detent != .full && !(model.tab == .routes && model.page == nil)
-            let topReserved: CGFloat = chromeH > 1 ? chromeH + 14 : 8
-            let tabH: CGFloat = keyboardUp ? 0 : Self.tabBarHeight
-            let available = max(200, geo.size.height - tabH - topReserved)
-            let mapRects = MapRects.of(geo, chromeH: chromeH, sheetH: settledSheetH, tabH: tabH)
+            let chip = TripChip.shows(model) && model.detent != .full && !(model.tab == .routes && model.page == nil) && !inDirections
+            let topReserved: CGFloat = Space.s2 + chromeH + Space.s2
+            let barH: CGFloat = keyboardUp ? 0 : tabH
+            let available = max(200, geo.size.height - barH - topReserved)
+            // the trip chip sits under the measured chrome: the follow camera keeps you out from under it too
+            let mapRects = MapRects.of(geo, chromeH: chromeH + (chip ? 36 + Space.gapChrome : 0), sheetH: settledSheetH, tabH: barH)
+            let showLocate = model.detent != .full
             ZStack(alignment: .bottom) {
                 // The inset is applied here, not passed in: MapScreen has no inputs, so a settled sheet only
                 // relayouts the map instead of re-running its body.
                 MapScreen()
-                    .safeAreaPadding(.bottom, settledSheetH + tabH)
+                    .safeAreaPadding(.bottom, settledSheetH + barH)
                     .ignoresSafeArea()
-                VStack(spacing: 8) {
-                    VStack(spacing: 8) {
+                VStack(spacing: Space.gapChrome) {
+                    VStack(spacing: Space.gapChrome) {
                         // the bar and the card are one element that changes shape (matchedGeometryEffect; Reduce
                         // Motion: a crossfade)
                         if inDirections {
@@ -53,18 +57,30 @@ struct RootView: View {
                                 .modifier(SearchMorphEffect(ns: searchNS, on: !reduceMotion))
                                 .transition(.opacity)
                         }
-                        StatusPill()
-                        if ctx && !inDirections { ContextBar() }
+                        StatusBanner()
+                        if model.simulating {
+                            HStack(alignment: .top, spacing: Space.gapChrome) {
+                                DemoChip()
+                                Spacer(minLength: 0)
+                                if showLocate { LocateButton() }
+                            }
+                        }
                     }
-                    .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.38, dampingFraction: 0.86), value: inDirections)
+                    .animation(Motion.pick(Motion.morph, reduce: reduceMotion), value: inDirections)
                     .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { h in
-                        if abs(h - chromeH) > 0.5 { withAnimation(.easeOut(duration: 0.2)) { chromeH = h } }
+                        if abs(h - chromeH) > 0.5 { withAnimation(Motion.quick) { chromeH = h } }
                     }
-                    if model.detent != .full { LocateButton().frame(maxWidth: .infinity, alignment: .trailing) }
+                    if chip || (showLocate && !model.simulating) {
+                        HStack(alignment: .top, spacing: Space.gapChrome) {
+                            if chip { TripChip() }
+                            Spacer(minLength: 0)
+                            if showLocate && !model.simulating { LocateButton() }
+                        }
+                    }
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, 4)
+                .padding(.horizontal, Space.insetChrome)
+                .padding(.top, Space.s2)
                 VStack(spacing: 0) {
                     BottomSheet(detent: $model.detent, available: available, onSettled: { _, h in
                         if abs(h - settledSheetH) > 0.5 { settledSheetH = h }
@@ -73,11 +89,21 @@ struct RootView: View {
                     } content: {
                         SheetContent()
                     }
-                    if !keyboardUp { TabBar() }
+                    if !keyboardUp {
+                        TabBar()
+                            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { h in
+                                if abs(h - tabH) > 0.5 { tabH = h }
+                            }
+                    }
                 }
             }
-            // Above the sheet in both states, like a system banner.
-            .overlay(alignment: .top) { ToastBanner().padding(.horizontal, 12).padding(.top, 4) }
+            // just above the collapsed sheet, or above the bottom bar when the sheet is expanded; never over the search
+            // bar, the sheet title or Settings (spec 10.19)
+            .overlay(alignment: .bottom) {
+                ToastBanner()
+                    .padding(.horizontal, Space.insetChrome)
+                    .padding(.bottom, (model.detent == .peek ? settledSheetH : 0) + barH + Space.s3)
+            }
             // the trip's follow camera keeps its frame inside what the rider can see of the map
             .onChange(of: mapRects, initial: true) { _, r in
                 let cam = model.mapCamera
@@ -86,6 +112,11 @@ struct RootView: View {
             }
         }
         .environment(dirUI)
+        .environment(sheetScroll)
+        .onChange(of: model.page) { _, _ in sheetScroll.scrolled = false }
+        // a light tap when a trip starts or ends (spec 9: Start), none for live updates
+        .sensoryFeedback(.impact(weight: .light), trigger: model.activeTrip != nil)
+        .onChange(of: model.tab) { _, _ in sheetScroll.scrolled = false }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardUp = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardUp = false }
         .sheet(isPresented: $model.showSettings) { SettingsView() }
@@ -115,6 +146,30 @@ struct RootView: View {
     }
 }
 
+/// Whether the expanded sheet's content has scrolled under its header: the header shows a hairline then (spec 10.6).
+@MainActor @Observable
+final class SheetScroll {
+    var scrolled = false
+}
+
+extension View {
+    /// Report this scroll view's offset to the sheet header (iOS 18+; on iOS 17 the hairline stays off).
+    func reportsSheetScroll() -> some View { modifier(SheetScrollReporter()) }
+}
+
+struct SheetScrollReporter: ViewModifier {
+    @Environment(SheetScroll.self) private var scroll
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: Bool.self, of: { g in g.contentOffset.y + g.contentInsets.top > 1 }) { _, v in
+                if scroll.scrolled != v { scroll.scrolled = v }
+            }
+        } else {
+            content
+        }
+    }
+}
+
 /// The search bar and the Directions card are one element that changes shape (owner 2026-10-12, like Google Maps):
 /// a matched geometry between them; Reduce Motion: none (they crossfade).
 struct SearchMorphEffect: ViewModifier {
@@ -125,114 +180,156 @@ struct SearchMorphEffect: ViewModifier {
     }
 }
 
-/// Floating "Search for a destination" bar with the clock (Lines by Time) and the Settings gear at its right end. A tap
-/// opens Directions: the bar turns into the Start / Destination card in place, keyboard on Destination.
+/// Floating search capsule (spec 10.1): 48 tall, system material, the magnifier and "Search for a destination" in
+/// `label2`, then Lines by Time and Settings as 44 pt icon buttons. A tap opens Directions: the capsule turns into the
+/// Start / Destination card in place, keyboard on Destination. Text stops growing at xxxLarge; at accessibility sizes
+/// the placeholder shortens to "Search".
 struct SearchBar: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
         HStack(spacing: 0) {
             Button { model.dirActiveTo = true; model.openDirections() } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass").font(.body.weight(.semibold))
-                    Text("Search for a destination").foregroundStyle(Palette.text2)
-                    Spacer()
+                HStack(spacing: Space.s3) {
+                    Image(systemName: "magnifyingglass").font(.title3).foregroundStyle(Palette.label2)
+                        .accessibilityHidden(true)
+                    Text(typeSize.isAccessibilitySize ? "Search" : "Search for a destination")
+                        .font(Typo.body).foregroundStyle(Palette.label2).lineLimit(1)
+                    Spacer(minLength: 0)
                 }
-                .padding(.leading, 16)
-                .frame(minHeight: 50)
+                .padding(.leading, Space.insetContent)
+                .frame(minHeight: Space.searchHeight)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ChromePressStyle())
             .accessibilityIdentifier("searchBar")
             .accessibilityLabel("Search for a destination")
             Button { model.showTimePick = true } label: {
-                Image(systemName: "clock").font(.title3).frame(width: 46, height: 50)
+                Image(systemName: "clock").font(.title3).foregroundStyle(Palette.label).frame(width: Space.tap, height: Space.tap)
             }
+            .buttonStyle(ChromePressStyle())
             .accessibilityIdentifier("timeButton")
             .accessibilityLabel("Lines by Time")
             .accessibilityHint("Check which lines the timetable has running at a time you pick")
+            .accessibilityShowsLargeContentViewer { Label("Lines by Time", systemImage: "clock") }
             Button { model.showSettings = true } label: {
-                Image(systemName: "gearshape").font(.title3).frame(width: 50, height: 50)
+                Image(systemName: "gearshape").font(.title3).foregroundStyle(Palette.label).frame(width: Space.tap, height: Space.tap)
             }
+            .buttonStyle(ChromePressStyle())
             .accessibilityIdentifier("settingsButton")
             .accessibilityLabel("Settings")
+            .accessibilityShowsLargeContentViewer { Label("Settings", systemImage: "gearshape") }
+            .padding(.trailing, 2)
         }
+        .frame(minHeight: Space.searchHeight)
         .background(.regularMaterial, in: Capsule())
-        .shadow(color: Palette.shadow.opacity(0.15), radius: 8, y: 2)
+        .elevation(.floating, in: Capsule())
         // map chrome: grows with text size, but not so far that it hides the map (the sheet holds the content)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 }
 
-/// The status pill (web main.js renderPill): stale / failed live data is always flagged, and a fresh empty feed
-/// says whether the schedule has routes in service (ship checklist item 1). Same words as the web. While the
-/// Settings switch simulates buses it reads "Simulated buses" instead (the one quiet indicator; a tap opens
-/// Settings at the switch). The `-demo` launch argument never shows that: its pill is the normal one.
-struct StatusPill: View {
+/// Press feedback on floating chrome: opacity .6 (text and icon buttons, spec 9 `mPress`).
+struct ChromePressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.6 : 1)
+            .animation(Motion.press, value: configuration.isPressed)
+    }
+}
+
+/// The status banner (spec 10.3; web main.js renderPill): stale or failed live data is always flagged and a fresh empty
+/// feed says whether the schedule has routes in service (ship checklist item 1). One banner at a time, full width,
+/// opaque `warnBg` (delayed, out of date, no live locations, no shuttles) or `dangerBg` (unreachable), same words as
+/// the web, the first sentence Semibold, Retry / See alert as a 44 pt text button. A change is announced once.
+struct StatusBanner: View {
     @Environment(AppModel.self) private var model
     var body: some View {
-        if model.simulating {
-            SimulatedPill()
-        } else if let p = model.statusPill {
-            HStack(spacing: 8) {
-                Image(systemName: icon(p)).accessibilityHidden(true)
-                // safety text: never truncated (the sheet makes room, RootView measures this stack)
-                Text(p.text).font(.footnote.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+        if !model.simulating, let p = model.statusPill {
+            let shape = RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+            let parts = Self.split(p.text)
+            HStack(alignment: .center, spacing: Space.s3) {
+                Image(systemName: icon(p)).font(.system(size: IconSize.status, weight: .semibold))
+                    .foregroundStyle(p.kind == .err ? Palette.danger : Palette.warn)
+                    .accessibilityHidden(true)
+                (Text(parts.lead).fontWeight(.semibold) + Text(parts.rest.isEmpty ? "" : " " + parts.rest))
+                    .font(Typo.rowDetail).foregroundStyle(Palette.label)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 if p.retry {
-                    Button { Task { await model.pollOnce() } } label: {
-                        Text("Retry").font(.footnote.weight(.bold)).underline()
-                            .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Retry loading live data")
+                    Button("Retry") { Task { await model.pollOnce() } }
+                        .textButtonStyle(font: Typo.sectionTitle)
+                        .accessibilityLabel("Retry loading live data")
                 } else if p.alert {
                     // no bus is reporting and the operator posted an alert: it may say why (rider safety)
-                    Button { model.openAlerts() } label: {
-                        Text("See alert").font(.footnote.weight(.bold)).underline()
-                            .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Read the service alert")
-                    .accessibilityIdentifier("pillAlert")
+                    Button("See alert") { model.openAlerts() }
+                        .textButtonStyle(font: Typo.sectionTitle)
+                        .accessibilityLabel("Read the service alert")
+                        .accessibilityIdentifier("pillAlert")
                 }
             }
-            .padding(.horizontal, 12).padding(.vertical, p.retry || p.alert ? 0 : 7)
-            .foregroundStyle(p.kind == .err ? Color.white : p.kind == .warn ? Self.onYellow : Color.primary)
-            .background(pillStyle(p), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .padding(.leading, Space.insetContent)
+            .padding(.trailing, p.retry || p.alert ? Space.s2 : Space.insetContent)
+            .padding(.vertical, p.retry || p.alert ? 0 : Space.s3)
+            .frame(maxWidth: .infinity, minHeight: Space.tap, alignment: .leading)
+            .background(p.kind == .err ? Palette.dangerBg : Palette.warnBg, in: shape)
+            .elevation(.floating, in: shape)
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
-            .shadow(color: Palette.shadow.opacity(0.12), radius: 4, y: 1)
             .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.updatesFrequently)
             .accessibilityIdentifier("statusPill")
+            .onAppear { AccessibilityNotification.Announcement(p.text).post() }
+            .onChange(of: p) { _, v in AccessibilityNotification.Announcement(v.text).post() }
         }
+    }
+
+    /// The first sentence (Semibold) and the rest.
+    static func split(_ s: String) -> (lead: String, rest: String) {
+        guard let r = s.range(of: ". ") else { return (s, "") }
+        return (String(s[..<r.lowerBound]) + ".", String(s[r.upperBound...]))
     }
 
     func icon(_ p: LiveText.Pill) -> String {
         switch p.kind {
-        case .err: return "wifi.exclamationmark"
-        case .warn: return model.staleLevel == .fresh ? "antenna.radiowaves.left.and.right.slash" : "clock.badge.exclamationmark"
+        case .err: return Sym.feedError
+        case .warn: return model.staleLevel == .fresh ? Sym.noLive : Sym.delayed
         case .info: return "bus"
-        }
-    }
-
-    /// Dark text on the yellow pill in both themes (12:1).
-    static let onYellow = Palette.fixed(0x111114)
-
-    /// Feed error: the danger fill (white 5.7:1). Delayed data: system yellow, the strongest warning on the map
-    /// (deliberately louder than the web's gold tint; rider safety first).
-    func pillStyle(_ p: LiveText.Pill) -> AnyShapeStyle {
-        switch p.kind {
-        case .err: return AnyShapeStyle(Palette.dangerFill)
-        case .warn: return AnyShapeStyle(Color.yellow.opacity(0.95))
-        case .info: return AnyShapeStyle(.regularMaterial)
         }
     }
 }
 
-/// Map context bar (web ui/contextbar.js): why the map shows fewer routes than usual, with a one-tap way out.
-struct ContextBar: View {
+/// "Simulated buses" (spec 10.3 chip): the Settings switch is on (never in `-demo`). Quiet, yet never mistaken for live
+/// service (the flask and the words); a tap opens Settings at the switch to turn it off.
+struct DemoChip: View {
     @Environment(AppModel.self) private var model
-    static let maxChips = 4
+    var body: some View {
+        Button { model.openSimulatedSetting() } label: {
+            HStack(spacing: Space.s2) {
+                Image(systemName: Sym.simulated).font(.system(size: IconSize.inline, weight: .semibold)).accessibilityHidden(true)
+                Text(AppModel.simulatedPillText).font(Typo.footnote.weight(.semibold)).lineLimit(1)
+                Image(systemName: "info.circle").font(.system(size: IconSize.inline, weight: .semibold)).foregroundStyle(Palette.tint)
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(Palette.label)
+            .padding(.horizontal, Space.s3)
+            .frame(minHeight: 32)
+            .background(.regularMaterial, in: Capsule())
+            .elevation(.floating, in: Capsule())
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(ChromePressStyle())
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .accessibilityLabel("Simulated buses, not real shuttles")
+        .accessibilityHint("Opens Settings to turn simulated buses off")
+        .accessibilityIdentifier("simulatedPill")
+    }
+}
+
+/// The trip and filter chip (spec 10.5, web ui/contextbar.js): why the map shows fewer routes than usual, with a
+/// one-tap way out. Route badges (up to 3, then "+N"), the label, then Show all / Clear. Only the label truncates.
+struct TripChip: View {
+    @Environment(AppModel.self) private var model
+    static let maxBadges = 3
 
     static func shows(_ m: AppModel) -> Bool {
         (m.routeState.journey.map { !$0.rids.isEmpty } ?? false) || m.routeState.timeView != nil
@@ -241,79 +338,88 @@ struct ContextBar: View {
 
     var body: some View {
         let s = model.routeState
-        HStack(spacing: 8) {
-            if let j = s.journey, !j.rids.isEmpty {
-                let rids = j.rids.filter { model.route($0) != nil }
-                (Text("Only showing routes for: ").foregroundColor(Palette.text2) + Text(j.label).fontWeight(.semibold))
-                    .font(.footnote).lineLimit(2)
-                ForEach(rids.prefix(Self.maxChips), id: \.self) { RouteChip(route: model.route($0), rid: $0, size: 11) }
-                if rids.count > Self.maxChips { Text("+\(rids.count - Self.maxChips)").font(.caption).foregroundStyle(Palette.text2) }
-                Spacer(minLength: 0)
-                Button { model.endJourney() } label: {
-                    Text("Show all").font(.footnote.weight(.bold)).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                }
-                .accessibilityHint("Shows every route on the map again")
-            } else if let tv = s.timeView {
-                let rest = tv.name.hasPrefix(TimeActive.prefix) ? String(tv.name.dropFirst(TimeActive.prefix.count)).trimmingCharacters(in: .whitespaces) : tv.name
-                (Text(tv.name.hasPrefix(TimeActive.prefix) ? "\(TimeActive.prefix) " : "Showing ").foregroundColor(Palette.text2)
-                    + Text(rest).fontWeight(.semibold)).font(.footnote).lineLimit(2)
-                Spacer(minLength: 0)
-                Button { model.apply(Custom.clearTimeView(model.routeState)) } label: {
-                    Text("Clear").font(.footnote.weight(.bold)).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                }
-                .accessibilityLabel("Clear \(tv.name), show your usual routes")
-            } else if let c = RouteVisibility.activeCustomRoute(s) {
-                (Text("My route: ").foregroundColor(Palette.text2) + Text(c.name).fontWeight(.semibold)).font(.footnote).lineLimit(2)
-                Spacer(minLength: 0)
-                Button { model.apply(Custom.clearCustom(model.routeState)) } label: {
-                    Text("Clear").font(.footnote.weight(.bold)).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                }
-                .accessibilityLabel("Clear my route \(c.name)")
-            }
+        if let j = s.journey, !j.rids.isEmpty {
+            let label = j.kind == .plan ? "Trip to \(model.activeTrip?.label ?? j.label)" : "Routes to \(j.label)"
+            chip(rids: j.rids, label: label, action: "Show all", spoken: "Only showing routes for \(label)",
+                 hint: "Shows every route on the map again") { model.endJourney() }
+        } else if let tv = s.timeView {
+            chip(rids: tv.rids, label: tv.name, action: "Clear", spoken: "Showing \(tv.name)",
+                 hint: "Clear \(tv.name), show your usual routes") { model.apply(Custom.clearTimeView(model.routeState)) }
+        } else if let c = RouteVisibility.activeCustomRoute(s) {
+            chip(rids: c.rids, label: c.name, action: "Clear", spoken: "My route: \(c.name)",
+                 hint: "Clear my route \(c.name), show your usual routes") { model.apply(Custom.clearCustom(model.routeState)) }
         }
-        .padding(.leading, 12).padding(.trailing, 4)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-        .shadow(color: Palette.shadow.opacity(0.12), radius: 4, y: 1)
+    }
+
+    func chip(rids all: [String], label: String, action: String, spoken: String, hint: String, run: @escaping () -> Void) -> some View {
+        let rids = all.filter { model.route($0) != nil }
+        return HStack(spacing: Space.s2) {
+            HStack(spacing: 2) {
+                ForEach(rids.prefix(Self.maxBadges), id: \.self) { RouteBadge(route: model.route($0), rid: $0, size: .small) }
+                if rids.count > Self.maxBadges {
+                    Text("+\(rids.count - Self.maxBadges)").font(Typo.caption).foregroundStyle(Palette.label2).padding(.leading, 2)
+                }
+            }
+            .fixedSize()
+            .accessibilityHidden(true)
+            Text(label).font(Typo.footnote.weight(.semibold)).foregroundStyle(Palette.label).lineLimit(1)
+                .accessibilityLabel(spoken)
+            Button(action, action: run)
+                .font(Typo.footnote.weight(.semibold))
+                .foregroundStyle(Palette.tint)
+                .padding(.horizontal, Space.s2)
+                .frame(minHeight: 36)
+                .contentShape(Rectangle().inset(by: -4))
+                .fixedSize()
+                .accessibilityHint(hint)
+        }
+        .padding(.leading, Space.s3)
+        .padding(.trailing, Space.s1)
+        .frame(minHeight: 36)
+        .background(.regularMaterial, in: Capsule())
+        .elevation(.floating, in: Capsule())
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("contextBar")
     }
 }
 
-/// In-app banner: bus alerts when system notifications are not allowed, and short confirmations.
-/// Disappears after a few seconds; a tap dismisses it.
+/// Toast (spec 10.19): bus alerts when system notifications are not allowed, and short confirmations. A capsule in
+/// `bgInverse` just above the sheet, up to 2 lines; a tap dismisses it; read out.
 struct ToastBanner: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let transition: AnyTransition = reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
+        let transition: AnyTransition = reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
         VStack(spacing: 0) {
             if let text = model.toast {
                 Button { model.dismissToast() } label: {
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: model.toastIcon).foregroundStyle(Palette.accent).accessibilityHidden(true)
-                        Text(text).font(.subheadline).foregroundStyle(Palette.text).multilineTextAlignment(.leading)
-                        Spacer(minLength: 0)
+                    HStack(alignment: .center, spacing: Space.s2) {
+                        Image(systemName: model.toastIcon).font(.system(size: IconSize.inline, weight: .semibold)).accessibilityHidden(true)
+                        Text(text).font(Typo.rowDetail.weight(.semibold)).multilineTextAlignment(.leading).lineLimit(2)
                     }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-                    .shadow(color: Palette.shadow.opacity(0.18), radius: 10, y: 3)
+                    .foregroundStyle(Palette.labelInverse)
+                    .padding(.horizontal, Space.s5)
+                    .padding(.vertical, Space.s3)
+                    .frame(minHeight: Space.tap)
+                    .frame(maxWidth: 360)
+                    .background(Palette.bgInverse, in: Capsule())
+                    .elevation(.overlay, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ChromePressStyle())
                 .accessibilityLabel(text)
                 .accessibilityHint("Dismisses the message")
                 .accessibilityIdentifier("busAlertBanner")
                 .transition(transition)
             }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: model.toast)
+        .animation(reduceMotion ? Motion.quick : Motion.standard, value: model.toast)
     }
 }
 
-/// Show my location; during a started trip: show you in the trip again (the follow camera back on, web
-/// onLocateFab + tripmap recenter). The symbol says the state (filled = following / located), not color alone.
+/// Locate button (spec 10.4): a 44 pt circle of system material; `location`, filled while the trip camera follows
+/// you; during a trip a tap re-centers on you. Denied location: the button stays and opens the way to iOS Settings.
 struct LocateButton: View {
     @Environment(AppModel.self) private var model
     var body: some View {
@@ -324,75 +430,57 @@ struct LocateButton: View {
             if model.locState == .denied && !model.config.demo { model.showLocationOff = true; return }
             model.locate()
         } label: {
-            Image(systemName: trip ? (following ? "location.north.line.fill" : "location.north.line") : model.user == nil ? "location" : "location.fill")
-                .font(.title3)
-                .frame(width: 44, height: 44)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-                .shadow(color: Palette.shadow.opacity(0.15), radius: 6, y: 2)
+            Image(systemName: following ? "location.fill" : "location")
+                .font(.system(size: IconSize.row, weight: .medium))
+                .foregroundStyle(Palette.tint)
+                .frame(width: Space.tap, height: Space.tap)
+                .background(.regularMaterial, in: Circle())
+                .elevation(.floating, in: Circle())
         }
+        .buttonStyle(ChromePressStyle())
         .accessibilityLabel(trip ? "Show me on my trip" : "Show my location")
         .accessibilityValue(trip ? (following ? "Following the trip" : "Not following") : "")
         .accessibilityIdentifier("locateButton")
+        .accessibilityShowsLargeContentViewer { Label("Show my location", systemImage: "location") }
     }
 }
 
-/// Bottom navigation: Current trip / Routes / My Routes. The selected tab is also the label weight and an
-/// accessibility trait, not color alone. Like the system tab bar, the labels stop growing at the largest
-/// standard text size and offer the Large Content Viewer (touch and hold) at accessibility sizes.
+/// Bottom bar (spec 10.7): Current trip / Routes / My Routes, equal width, opaque `bgSheet` with a hairline on top. The
+/// selected item is the filled glyph and `tint` for icon and label (and the selected trait), never a capsule indicator.
+/// Labels stop growing at xxxLarge; touch and hold shows the large content viewer.
 struct TabBar: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.displayScale) private var displayScale
     var body: some View {
         HStack(spacing: 0) {
             ForEach(Tab.allCases) { t in
+                let on = model.tab == t
                 Button { model.select(t) } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: t.icon).font(.system(size: 19, weight: .semibold))
-                        Text(t.title).font(.caption2.weight(model.tab == t ? .bold : .medium))
+                    VStack(spacing: 2) {
+                        Image(systemName: on ? t.iconSelected : t.icon)
+                            .font(.system(size: 21, weight: .regular))
+                            .frame(height: 26)
+                        Text(t.title).font(Typo.tabLabel).lineLimit(1)
                     }
-                    .frame(maxWidth: .infinity, minHeight: RootView.tabBarHeight)
-                    .foregroundStyle(model.tab == t ? Palette.accent : Palette.text2)
+                    .frame(maxWidth: .infinity, minHeight: Space.tabBar)
+                    .foregroundStyle(on ? Palette.tint : Palette.label2)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(t.title)
                 .accessibilityIdentifier("tab.\(t.rawValue)")
-                .accessibilityAddTraits(model.tab == t ? .isSelected : [])
+                .accessibilityAddTraits(on ? .isSelected : [])
                 .accessibilityShowsLargeContentViewer {
-                    Label(t.title, systemImage: t.icon)
+                    Label(t.title, systemImage: on ? t.iconSelected : t.icon)
                 }
             }
         }
-        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-        .background(.bar, ignoresSafeAreaEdges: .bottom)
-        .overlay(alignment: .top) { Divider() }
-    }
-}
-
-/// "Simulated buses": the Settings switch is on (never in `-demo`). Quiet like the info pill, yet never mistaken for
-/// live service (a test-tube symbol and the words); a tap opens Settings at the switch to turn it off.
-struct SimulatedPill: View {
-    @Environment(AppModel.self) private var model
-    var body: some View {
-        Button { model.openSimulatedSetting() } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "testtube.2").accessibilityHidden(true)
-                Text(AppModel.simulatedPillText).font(.footnote.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Palette.text2)
-                    .accessibilityHidden(true)
-            }
-            .foregroundStyle(Palette.text)
-            .padding(.horizontal, 12)
-            .frame(minHeight: 44)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+        .padding(.top, 1)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .background(Palette.bgSheet, ignoresSafeAreaEdges: .bottom)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Palette.separator).frame(height: 1 / max(1, displayScale)).accessibilityHidden(true)
         }
-        .buttonStyle(.plain)
-        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
-        .shadow(color: Palette.shadow.opacity(0.12), radius: 4, y: 1)
-        .accessibilityLabel("Simulated buses, not real shuttles")
-        .accessibilityHint("Opens Settings to turn simulated buses off")
-        .accessibilityIdentifier("simulatedPill")
     }
 }
 

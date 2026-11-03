@@ -18,61 +18,59 @@ struct SettingsView: View {
         NavigationStack {
             ScrollViewReader { proxy in
                 Form {
-                    Section { ThemePicker() } header: { ListHeader("Appearance") }
-                    locationSection
-                    alertsSection
-                    busAlerts
-                    Section {
-                        Toggle("Trip status on Lock Screen", isOn: Binding(get: { model.notify.liveActivity },
-                                                                           set: { v in model.updateNotify { $0.liveActivity = v } }))
-                        NavigationLink("Preview Live Activity") { LiveActivityPreviewView() }
-                    } header: {
-                        ListHeader("iPhone app")
-                    } footer: {
-                        Text("A Live Activity shows your bus on the Lock Screen and in the Dynamic Island: stops away, the arrival time and the next stops. Times are whole minutes, never seconds; from iOS 18 the minutes count down on their own. It updates while the app is open; locked-phone updates need a push server (planned), so 2 minutes after the last update it says the data is delayed.")
-                            .foregroundStyle(Palette.text2)
-                    }
-                    demoSection
-                    Section {
-                        Text("No account, no ads, no tracking. Your live location is never sent anywhere; the only location data that leaves this iPhone is the start and end of a walking leg, rounded to about 10 m, sent to Apple Maps for sidewalk directions. Station and place search run on this iPhone; only when that finds fewer than 5 matches (or you tap \u{201C}Search for \u{2026} instead\u{201D}) is the typed text sent to photon.komoot.io. Downloads: the public shuttle feed, Apple Maps and schedule updates from blobberus.github.io (public files, nothing about you).")
-                            .font(.subheadline)
-                        Link(destination: SiteLinks.privacy) {
-                            Label("Privacy policy", systemImage: "hand.raised")
+                    feedbackSection
+                    Group {
+                        Section { ThemePicker() } header: { ListHeader("Appearance") }
+                        locationSection
+                        alertsSection
+                        busAlerts
+                        Section {
+                            Toggle("Trip status on Lock Screen", isOn: Binding(get: { model.notify.liveActivity },
+                                                                               set: { v in model.updateNotify { $0.liveActivity = v } }))
+                            NavigationLink("Preview Live Activity") { LiveActivityPreviewView() }
+                        } header: {
+                            ListHeader("iPhone app")
+                        } footer: {
+                            Text("A Live Activity shows your bus on the Lock Screen and in the Dynamic Island: stops away, the arrival time and the next stops. Times are whole minutes, never seconds; from iOS 18 the minutes count down on their own. It updates while the app is open; locked-phone updates need a push server (planned), so 2 minutes after the last update it says the data is delayed.")
+                                .font(Typo.footnote).foregroundStyle(Palette.label2)
                         }
-                        .accessibilityHint("Opens the privacy policy in Safari")
-                        .accessibilityIdentifier("privacyPolicyLink")
-                    } header: {
-                        ListHeader("Privacy")
-                    }
-                    Section {
-                        NavigationLink {
-                            AboutView().navigationTitle("About")
-                        } label: {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text("About this app")
-                                Text("Unofficial. Privacy, official contact").font(.caption).foregroundStyle(Palette.text2)
+                        demoSection
+                        Section {
+                            Text("No account, no ads, no tracking. Your live location is never sent anywhere; the only location data that leaves this iPhone is the start and end of a walking leg, rounded to about 10 m, sent to Apple Maps for sidewalk directions. Station and place search run on this iPhone; only when that finds fewer than 5 matches (or you tap \u{201C}Search for \u{2026} instead\u{201D}) is the typed text sent to photon.komoot.io. Downloads: the public shuttle feed, Apple Maps and schedule updates from blobberus.github.io (public files, nothing about you).")
+                                .font(Typo.rowDetail).foregroundStyle(Palette.label)
+                                .padding(.vertical, Space.s1)
+                            Link(destination: SiteLinks.privacy) {
+                                Label("Privacy policy", systemImage: "hand.raised")
                             }
+                            .accessibilityHint("Opens the privacy policy in Safari")
+                            .accessibilityIdentifier("privacyPolicyLink")
+                        } header: {
+                            ListHeader("Privacy")
                         }
-                        Link(destination: SiteLinks.supportContact) {
-                            Label("Contact support", systemImage: "questionmark.bubble")
+                        Section {
+                            NavigationLink {
+                                AboutView().navigationTitle("About")
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("About this app")
+                                    Text("Unofficial. Privacy, official contact").font(Typo.rowDetail).foregroundStyle(Palette.label2)
+                                }
+                            }
+                            Link(destination: SiteLinks.supportContact) {
+                                Label("Contact support", systemImage: "questionmark.bubble")
+                            }
+                            .accessibilityHint("Opens the support form in Safari")
+                            .accessibilityIdentifier("supportContactLink")
+                        } header: {
+                            ListHeader("Help")
                         }
-                        .accessibilityHint("Opens the support form in Safari")
-                        .accessibilityIdentifier("supportContactLink")
+                        creditsSection
                     }
-                    Section {
-                        Link(destination: SiteLinks.feedback) {
-                            Label("Give feedback", systemImage: "text.bubble")
-                        }
-                        .accessibilityHint("Opens the feedback form in Safari")
-                        .accessibilityIdentifier("feedbackLink")
-                    } header: {
-                        ListHeader("Feedback")
-                    } footer: {
-                        Text("This is a beta. Tell us what works and what does not.").foregroundStyle(Palette.text2)
-                    }
-                    creditsSection
+                    .listRowBackground(Palette.bgCard)
                 }
-                .tint(Palette.accent)
+                .tint(Palette.tint)
+                .scrollContentBackground(.hidden)
+                .background(Palette.bgSheet)
                 .task {
                     // the "Simulated buses" pill (and `-screen settingsdemo`): open at the Demo section
                     guard model.settingsAtDemo else { return }
@@ -86,6 +84,44 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.accessibilityIdentifier("settingsDone") }
             }
+        }
+    }
+
+    // MARK: Beta feedback
+
+    /// The beta feedback card, first in Settings (owner 2026-11-02, web settings.js feedbackHTML: "the beta feedback
+    /// should also be more prominent"): the tinted card, the ask, and Give feedback as the screen's primary button. The
+    /// form opens in Safari; nothing is sent until the rider submits it there.
+    var feedbackSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: Space.s3) {
+                HStack(alignment: .center, spacing: Space.s3) {
+                    Image(systemName: "text.bubble.fill")
+                        .font(.system(size: IconSize.status, weight: .semibold))
+                        .foregroundStyle(Palette.onFill)
+                        .frame(width: 36, height: 36)
+                        .background(Palette.tintFill, in: Circle())
+                        .accessibilityHidden(true)
+                    Text("Your feedback would be very helpful.").font(Typo.rowTitle).foregroundStyle(Palette.label)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Link(destination: SiteLinks.feedback) {
+                    HStack(spacing: Space.s2) {
+                        Text("Give feedback")
+                        Image(systemName: "arrow.up.right.square").font(.system(size: IconSize.inline, weight: .semibold))
+                            .accessibilityHidden(true)
+                    }
+                }
+                .primaryButtonStyle(full: true)
+                .accessibilityHint("Opens the feedback form in Safari")
+                .accessibilityIdentifier("feedbackLink")
+            }
+            .padding(.vertical, Space.s2)
+            .listRowBackground(Palette.tintBg)
+        } header: {
+            ListHeader("Beta feedback")
+        } footer: {
+            Text("This is a beta. Tell us what works and what does not.").font(Typo.footnote).foregroundStyle(Palette.label2)
         }
     }
 
@@ -136,16 +172,16 @@ struct SettingsView: View {
             DisclosureGroup(isExpanded: $creditsOpen) {
                 ForEach(Self.credits, id: \.group) { g in
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(g.group).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text)
+                        Text(g.group).font(Typo.sectionTitle).foregroundStyle(Palette.label)
                             .accessibilityAddTraits(.isHeader)
                         ForEach(g.items, id: \.text) { item in
                             if let url = item.url {
                                 Link(destination: url) {
-                                    Text(item.text).font(.subheadline).multilineTextAlignment(.leading)
+                                    Text(item.text).font(Typo.rowDetail).multilineTextAlignment(.leading)
                                 }
                                 .accessibilityHint("Opens in Safari")
                             } else {
-                                Text(item.text).font(.subheadline).foregroundStyle(Palette.text2)
+                                Text(item.text).font(Typo.rowDetail).foregroundStyle(Palette.label2)
                             }
                         }
                     }
@@ -155,7 +191,7 @@ struct SettingsView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Credits")
-                    Text("Maps, search and bus data sources").font(.caption).foregroundStyle(Palette.text2)
+                    Text("Maps, search and bus data sources").font(Typo.footnote).foregroundStyle(Palette.label2)
                 }
                 .frame(minHeight: 44, alignment: .leading)
             }
@@ -172,7 +208,7 @@ struct SettingsView: View {
             HStack {
                 Label("Share location", systemImage: model.locState == .granted ? "location.fill" : "location")
                 Spacer()
-                Text(Self.locationStateText(model.locState)).foregroundStyle(Palette.text2)
+                Text(Self.locationStateText(model.locState)).foregroundStyle(Palette.label2)
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("shareLocationState")
@@ -182,7 +218,7 @@ struct SettingsView: View {
                     .accessibilityHint("Asks iOS for your location while the app is open")
                     .accessibilityIdentifier("shareLocationAllow")
             case .asking:
-                Text("Waiting for your answer\u{2026}").foregroundStyle(Palette.text2)
+                Text("Waiting for your answer\u{2026}").foregroundStyle(Palette.label2)
             case .granted:
                 Button("Change in iOS Settings") { AppModel.openAppSettings() }
                     .accessibilityIdentifier("shareLocationSettings")
@@ -195,7 +231,7 @@ struct SettingsView: View {
             ListHeader("Location")
         } footer: {
             Text("Straight Bussing does not collect your location. It stays on your iPhone to find nearby stops; for walking directions only a rounded start and end point goes to Apple Maps, and nothing is stored.")
-                .foregroundStyle(Palette.text2)
+                .foregroundStyle(Palette.label2)
         }
     }
 
@@ -218,7 +254,7 @@ struct SettingsView: View {
             Toggle(isOn: Binding(get: { model.simulating }, set: { model.setSimulatedBuses($0) })) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Simulated buses (demo)")
-                    Text("Made-up buses for trying every feature when no shuttle runs").font(.caption).foregroundStyle(Palette.text2)
+                    Text("Made-up buses for trying every feature when no shuttle runs").font(Typo.footnote).foregroundStyle(Palette.label2)
                 }
             }
             .id("demoToggle")
@@ -227,7 +263,7 @@ struct SettingsView: View {
             ListHeader("Demo")
         } footer: {
             Text("While this is on, the status pill on the map reads \u{201C}\(AppModel.simulatedPillText)\u{201D} (tap it to come back here), a Live Activity says \u{201C}Simulated (demo)\u{201D}, no live data is shown or mixed in, a started trip ends and bus alerts pause. It turns off when the app restarts or after 15 minutes in the background.")
-                .foregroundStyle(Palette.text2)
+                .foregroundStyle(Palette.label2)
         }
     }
 
@@ -237,7 +273,7 @@ struct SettingsView: View {
         let alerts = model.activeAlerts
         return Section {
             if !model.liveLoaded {
-                Text("Checking for service alerts\u{2026}").foregroundStyle(Palette.text2)
+                Text("Checking for service alerts\u{2026}").foregroundStyle(Palette.label2)
             } else if alerts.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("No active alerts")
@@ -247,10 +283,10 @@ struct SettingsView: View {
             ForEach(alerts) { a in
                 VStack(alignment: .leading, spacing: 3) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(a.header.isEmpty ? "Service alert" : a.header).font(.subheadline.weight(.semibold))
-                        if !a.description.isEmpty { Text(a.description).font(.caption).foregroundStyle(Palette.text2) }
+                        Text(a.header.isEmpty ? "Service alert" : a.header).font(Typo.sectionTitle)
+                        if !a.description.isEmpty { Text(a.description).font(Typo.footnote).foregroundStyle(Palette.label2) }
                         let when = LiveText.alertPeriod(a, now: model.now)
-                        if !when.isEmpty { Text(when).font(.caption).foregroundStyle(Palette.text2) }
+                        if !when.isEmpty { Text(when).font(Typo.footnote).foregroundStyle(Palette.label2) }
                     }
                     .accessibilityElement(children: .combine)
                     AlertPhoneLinks(text: a.description)   // a number in the alert is a call button (web b3ad52c)
@@ -258,7 +294,7 @@ struct SettingsView: View {
             }
             if model.liveLoaded && model.liveFailed {
                 Label("Alerts may be out of date: the shuttle feed is not responding.", systemImage: "exclamationmark.triangle")
-                    .font(.caption).foregroundStyle(Palette.warn)
+                    .font(Typo.footnote).foregroundStyle(Palette.warn)
             }
         } header: {
             HStack {
@@ -280,19 +316,19 @@ struct SettingsView: View {
         let n = model.notify
         let stop = n.stopId.flatMap { model.staticData.stops[$0] }
         return Section {
-            Text(Self.busAlertsIntro).font(.subheadline).foregroundStyle(Palette.text2)
+            Text(Self.busAlertsIntro).font(Typo.rowDetail).foregroundStyle(Palette.label2)
             Toggle(isOn: Binding(get: { model.notify.trip }, set: { model.setTripAlerts($0) })) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Trip alerts")
-                    Text(Self.tripSub).font(.caption).foregroundStyle(Palette.text2)
+                    Text(Self.tripSub).font(Typo.footnote).foregroundStyle(Palette.label2)
                 }
             }
             .accessibilityIdentifier("tripAlerts")
             if model.feedSimulated && model.activeTrip != nil && n.trip {
                 Label("Bus alerts are paused while simulated buses are on.", systemImage: "pause.circle")
-                    .font(.caption).foregroundStyle(Palette.text2)
+                    .font(Typo.footnote).foregroundStyle(Palette.label2)
             } else if let line = Notify.tripStatusLine(model.activeTrip != nil ? model.tripFollow : nil, prefs: n, live: model.live, now: model.now) {
-                Text(line).font(.caption).foregroundStyle(Palette.text2)
+                Text(line).font(Typo.footnote).foregroundStyle(Palette.label2)
                     .accessibilityAddTraits(.updatesFrequently)
                     .accessibilityIdentifier("tripAlertsNow")
             }
@@ -303,9 +339,9 @@ struct SettingsView: View {
                     Text("Station")
                     Spacer()
                     VStack(alignment: .trailing, spacing: 1) {
-                        Text(stop?.name ?? "Choose").foregroundStyle(Palette.text2).lineLimit(1)
+                        Text(stop?.name ?? "Choose").foregroundStyle(Palette.label2).lineLimit(1)
                         if let id = n.stopId, let addr = model.staticData.addresses[id]?.address {
-                            Text(addr).font(.caption).foregroundStyle(Palette.text2).lineLimit(1)
+                            Text(addr).font(Typo.footnote).foregroundStyle(Palette.label2).lineLimit(1)
                         }
                     }
                 }
@@ -316,13 +352,13 @@ struct SettingsView: View {
             Toggle(isOn: Binding(get: { model.notify.twoStops }, set: { v in model.updateNotify { $0.twoStops = v } })) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("2 stops away")
-                    Text(Self.twoSub).font(.caption).foregroundStyle(Palette.text2)
+                    Text(Self.twoSub).font(Typo.footnote).foregroundStyle(Palette.label2)
                 }
             }
             Toggle(isOn: Binding(get: { model.notify.oneStop }, set: { v in model.updateNotify { $0.oneStop = v } })) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("1 stop away")
-                    Text(Self.oneSub).font(.caption).foregroundStyle(Palette.text2)
+                    Text(Self.oneSub).font(Typo.footnote).foregroundStyle(Palette.label2)
                 }
             }
             Picker("When the bus is", selection: Binding(get: { model.notify.minutes }, set: { v in model.updateNotify { $0.minutes = v } })) {
@@ -331,7 +367,7 @@ struct SettingsView: View {
             Toggle(isOn: Binding(get: { model.notify.inApp }, set: { v in model.updateNotify { $0.inApp = v } })) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("In-app alerts while open")
-                    Text("A banner at the top of the app").font(.caption).foregroundStyle(Palette.text2)
+                    Text("A banner at the top of the app").font(Typo.footnote).foregroundStyle(Palette.label2)
                 }
             }
             if let id = n.stopId, stop != nil { status(id) }
@@ -346,7 +382,7 @@ struct SettingsView: View {
             ListHeader("Bus alerts")
         } footer: {
             Text("If live data goes down, you get one \u{201C}Live data delayed\u{201D} alert instead of silence. Alerts work only while the app is open; lock-screen alerts need a push server (planned).")
-                .foregroundStyle(Palette.text2)
+                .foregroundStyle(Palette.label2)
         }
     }
 
@@ -355,13 +391,13 @@ struct SettingsView: View {
         let serve = model.staticData.stopRoutes[stopId] ?? []
         let watched = Set(Notify.watchedRoutes(model.notify, staticData: model.staticData, hidden: model.hidden))
         let hidden = Set(model.hidden)
-        Text(model.notify.rids.isEmpty ? "Routes (any visible route)" : "Routes").font(.footnote.weight(.semibold)).foregroundStyle(Palette.text2)
+        Text(model.notify.rids.isEmpty ? "Routes (any visible route)" : "Routes").font(Typo.sectionTitle).foregroundStyle(Palette.label2)
         ForEach(serve, id: \.self) { rid in
             Toggle(isOn: Binding(get: { watched.contains(rid) }, set: { _ in model.toggleAlertRoute(rid) })) {
                 HStack(spacing: 8) {
-                    RouteChip(route: model.route(rid), rid: rid)
+                    RouteBadge(route: model.route(rid), rid: rid)
                     Text(model.longName(rid))
-                    if hidden.contains(rid) { Text("hidden").font(.caption).foregroundStyle(Palette.text2) }
+                    if hidden.contains(rid) { Text("hidden").font(Typo.footnote).foregroundStyle(Palette.label2) }
                 }
             }
         }
@@ -374,29 +410,29 @@ struct SettingsView: View {
     @ViewBuilder func status(_ stopId: String) -> some View {
         if model.simulating {
             Label("Bus alerts are paused while simulated buses are on.", systemImage: "pause.circle")
-                .font(.caption).foregroundStyle(Palette.text2)
+                .font(Typo.footnote).foregroundStyle(Palette.label2)
         } else if model.tripAlertsRunning {
             Label(Notify.tripPausedText, systemImage: "pause.circle")
-                .font(.caption).foregroundStyle(Palette.text2)
+                .font(Typo.footnote).foregroundStyle(Palette.label2)
                 .accessibilityIdentifier("stationPausedForTrip")
         } else if model.liveLoaded && (model.staleLevel == .err || model.staleLevel == .old) {
             Label("Live data is unavailable, so bus alerts are paused.", systemImage: "exclamationmark.triangle")
-                .font(.caption).foregroundStyle(Palette.warn)
+                .font(Typo.footnote).foregroundStyle(Palette.warn)
         } else if let first = Notify.stopsAway(staticData: model.staticData, live: model.live, stopId: stopId,
                                                 rids: Notify.watchedRoutes(model.notify, staticData: model.staticData, hidden: model.hidden),
                                                 now: model.now).first {
             let away = first.stopsAway == 0 ? "Your stop is next" : "\(first.stopsAway) stop\(first.stopsAway == 1 ? "" : "s") away"
             let when = Notify.minutesText(first.etaS, now: model.now)
             HStack(spacing: 8) {
-                RouteChip(route: model.route(first.rid), rid: first.rid)
+                RouteBadge(route: model.route(first.rid), rid: first.rid)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(away + (when.isEmpty ? "" : " \u{00B7} " + when)).font(.subheadline.weight(.semibold))
-                    Text("Next stop: \(first.nextStopName). From live predictions.").font(.caption).foregroundStyle(Palette.text2)
+                    Text(away + (when.isEmpty ? "" : " \u{00B7} " + when)).font(Typo.sectionTitle)
+                    Text("Next stop: \(first.nextStopName). From live predictions.").font(Typo.footnote).foregroundStyle(Palette.label2)
                 }
             }
             .accessibilityElement(children: .combine)
         } else if model.liveLoaded {
-            Text("No bus is heading there right now.").font(.caption).foregroundStyle(Palette.text2)
+            Text("No bus is heading there right now.").font(Typo.footnote).foregroundStyle(Palette.label2)
         }
     }
 
@@ -405,12 +441,12 @@ struct SettingsView: View {
         switch model.notifPermission {
         case .granted:
             Label("Alerts arrive as notifications while the app is open.", systemImage: "bell.badge")
-                .font(.caption).foregroundStyle(Palette.text2)
+                .font(Typo.footnote).foregroundStyle(Palette.label2)
         case .denied:
             VStack(alignment: .leading, spacing: 3) {
-                Label("Notifications are off", systemImage: "bell.slash").font(.subheadline.weight(.semibold))
+                Label("Notifications are off", systemImage: "bell.slash").font(Typo.sectionTitle)
                 Text("Notifications for Straight Bussing are turned off in iOS Settings, so alerts show as a banner inside the app while it is open.")
-                    .font(.caption).foregroundStyle(Palette.text2)
+                    .font(Typo.footnote).foregroundStyle(Palette.label2)
             }
             .accessibilityElement(children: .combine)
             Button("Open iOS Settings") {
@@ -459,7 +495,7 @@ struct StationPicker: View {
                 let all = S.stops.values.filter { !(S.stopRoutes[$0.id] ?? []).isEmpty }.sorted { $0.name < $1.name }
                 Section(header: ListHeader("Stations")) { ForEach(all) { s in row(s.id, s.name, sub: nil) } }
             } else if results.isEmpty {
-                Text("No stations match.").foregroundStyle(Palette.text2)
+                Text("No stations match.").foregroundStyle(Palette.label2)
             } else {
                 Section(header: ListHeader("Matching stations")) { ForEach(results, id: \.id) { m in row(m.id, m.name, sub: nil) } }
             }
@@ -478,14 +514,14 @@ struct StationPicker: View {
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(name).foregroundStyle(Palette.text)
-                    if let sub { Text(sub).font(.caption).foregroundStyle(Palette.text2) }
+                    Text(name).foregroundStyle(Palette.label)
+                    if let sub { Text(sub).font(Typo.footnote).foregroundStyle(Palette.label2) }
                     HStack(spacing: 3) {
-                        ForEach(model.staticData.stopRoutes[id] ?? [], id: \.self) { RouteChip(route: model.route($0), rid: $0, size: 10) }
+                        ForEach(model.staticData.stopRoutes[id] ?? [], id: \.self) { RouteBadge(route: model.route($0), rid: $0, size: .small) }
                     }
                 }
                 Spacer()
-                if model.notify.stopId == id { Image(systemName: "checkmark").foregroundStyle(Palette.accent).accessibilityLabel("Selected") }
+                if model.notify.stopId == id { Image(systemName: "checkmark").foregroundStyle(Palette.tint).accessibilityLabel("Selected") }
             }
             .frame(minHeight: 44)
         }

@@ -82,12 +82,23 @@ final class SmokeUITests: XCTestCase {
             return
         }
         save(app, "14-place-search-light")
+        save(app, "journey-1-search-light")
         suggestion.tap()
         let start = app.buttons["startTrip"]
         XCTAssertTrue(start.waitForExistence(timeout: 15), "an option with a bus and a Start button")
+        // the place details step costs no tap: the destination's summary heads the options (docs/DESIGN-SPEC.md J3)
+        XCTAssertTrue(app.descendants(matching: .any)["placeSummary"].exists, "the destination's place summary")
+        save(app, "journey-2-options-light")
         start.tap()
         XCTAssertTrue(app.staticTexts["tripHeadline"].waitForExistence(timeout: 15), "trip progress timeline")
         save(app, "15-trip-started-light")
+        save(app, "journey-3-trip-light")
+        // collapsed during the trip: the header carries the current step and Arriving In, the map shows the trip
+        app.descendants(matching: .any)["sheetGrabber"].tap()
+        waitSheet(app, "Collapsed", "the trip sheet collapses")
+        XCTAssertTrue(app.descendants(matching: .any)["arrivingIn"].waitForExistence(timeout: 10), "Arriving In in the collapsed header")
+        sleep(2)
+        save(app, "journey-4-trip-map-light")
 
         app.buttons["settingsButton"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))

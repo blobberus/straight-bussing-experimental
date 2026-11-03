@@ -35,6 +35,7 @@ struct TimePickView: View {
     var body: some View {
         NavigationStack {
             Form {
+              Group {
                 Section {
                     HStack(spacing: 0) {
                         Picker("Month", selection: $month) {
@@ -65,14 +66,23 @@ struct TimePickView: View {
                 } header: {
                     ListHeader("Time")
                 } footer: {
-                    Text(TimeActive.desc).font(.subheadline).foregroundStyle(Color.primary)
+                    Text(TimeActive.desc).font(Typo.rowDetail).foregroundStyle(Palette.label)
                 }
                 resultSection
                 Section {
-                    Text(TimeActive.disclaimer).font(.footnote).foregroundStyle(Palette.text2)
+                    Text(TimeActive.disclaimer).font(Typo.footnote).foregroundStyle(Palette.label2)
                 } header: { ListHeader("Timetable estimate") }
-                Section { OfficialContact() }
+                Section {
+                    OfficialContact()
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
+              }
+              .listRowBackground(Palette.bgCard)
             }
+            .tint(Palette.tint)
+            .scrollContentBackground(.hidden)
+            .background(Palette.bgSheet)
             .navigationTitle(TimeActive.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -94,27 +104,28 @@ struct TimePickView: View {
                 Text("The timetable is still loading.")
             } else if r.rids.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(TimeActive.none).fontWeight(.semibold)
-                    Text(TimeActive.label(at)).font(.subheadline).foregroundStyle(Palette.text2)
+                    Text(TimeActive.none).font(Typo.rowTitle).foregroundStyle(Palette.label)
+                    Text(TimeActive.label(at)).font(Typo.rowDetail).foregroundStyle(Palette.label2)
                 }
                 .accessibilityElement(children: .combine)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    (Text("\(r.rids.count) line\(r.rids.count == 1 ? "" : "s")").bold() + Text(" scheduled at \(TimeActive.label(at))"))
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 4, alignment: .leading)], alignment: .leading, spacing: 4) {
-                        ForEach(r.rids, id: \.self) { RouteChip(route: model.route($0), rid: $0, size: 11) }
+                    (Text("\(r.rids.count) line\(r.rids.count == 1 ? "" : "s")").fontWeight(.semibold) + Text(" scheduled at \(TimeActive.label(at))"))
+                        .font(Typo.body).foregroundStyle(Palette.label)
+                    FlowLayout(spacing: Space.s1, lineSpacing: Space.s1) {
+                        ForEach(r.rids, id: \.self) { RouteBadge(route: model.route($0), rid: $0, size: .small) }
                     }
                     .accessibilityHidden(true)
-                    if !r.note.isEmpty { Text(r.note).font(.footnote).foregroundStyle(Palette.text2) }
+                    if !r.note.isEmpty { Text(r.note).font(Typo.footnote).foregroundStyle(Palette.label2) }
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("timeResult")
             }
             if let problem, !(problem == TimeActive.none && r.known && r.rids.isEmpty) {   // never the same line twice
-                Text(problem).font(.footnote.weight(.semibold))
+                Text(problem).font(Typo.sectionTitle)
             }
             if model.routeState.journey?.kind == .plan {
-                Text("A trip is in progress. Set time ends it, so the map can show these lines.").font(.footnote)
+                Text("A trip is in progress. Set time ends it, so the map can show these lines.").font(Typo.footnote)
             }
         }
     }

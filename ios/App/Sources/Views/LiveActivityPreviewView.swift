@@ -59,7 +59,7 @@ struct LiveActivityPreviewView: View {
                             Text(model.simulating ? "Simulated (demo)" : "est. · Unofficial")
                         }
                         .font(.caption2)
-                        .foregroundStyle(Palette.text2)
+                        .foregroundStyle(Palette.label2)
                     }
                     .padding(16)
                     .environment(\.colorScheme, .dark)
@@ -72,7 +72,7 @@ struct LiveActivityPreviewView: View {
                         let _ = startTries   // the controller is not observable: a tap re-reads isRunning
                         if model.liveActivity.isRunning {
                             Label("Live Activity running on the Lock Screen", systemImage: "checkmark.circle.fill")
-                                .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.text2)
+                                .font(Typo.sectionTitle).foregroundStyle(Palette.label2)
                                 .frame(minHeight: 44)
                         } else {
                             Button("Start Live Activity") {
@@ -81,14 +81,14 @@ struct LiveActivityPreviewView: View {
                             }
                             .primaryButtonStyle()
                             if startTries > 0 {
-                                Text("iOS did not start it. Try again in a moment.").font(.caption).foregroundStyle(Palette.text2)
+                                Text("iOS did not start it. Try again in a moment.").font(Typo.footnote).foregroundStyle(Palette.label2)
                             }
                         }
                     } else {
-                        Text("Live Activities are off for Straight Bussing in iOS Settings.").font(.subheadline).foregroundStyle(Palette.text2)
+                        Text("Live Activities are off for Straight Bussing in iOS Settings.").font(Typo.rowDetail).foregroundStyle(Palette.label2)
                     }
                     Text(Self.footnote)
-                        .font(.caption).foregroundStyle(Palette.text2)
+                        .font(Typo.footnote).foregroundStyle(Palette.label2)
                 } else {
                     EmptyStateView(title: "No trip started", message: "Plan a trip in Directions and tap Start to see its Live Activity.")
                 }
@@ -97,8 +97,8 @@ struct LiveActivityPreviewView: View {
         }
         // `-screen livestatesend` (CI): the same states scrolled to the end, so the stale card is in the picture too
         .defaultScrollAnchor(model.config.screen == "livestatesend" ? .bottom : .top)
-        .background(Palette.sheet)
-        .tint(Palette.accent)
+        .background(Palette.bgSheet)
+        .tint(Palette.tint)
         .navigationTitle("Live Activity")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -121,7 +121,7 @@ struct LiveActivityPreviewView: View {
     }
 
     func label(_ s: String) -> some View {
-        Text(s).font(.footnote.weight(.semibold)).foregroundStyle(Palette.text2).textCase(.uppercase)
+        Text(s).font(Typo.sectionTitle).foregroundStyle(Palette.label2)
     }
 }
 
@@ -145,7 +145,7 @@ struct LiveActivityStatesView: View {
                         LiveMinutes(target: now + 272)
                     }
                 }
-                .font(.caption).monospacedDigit().foregroundStyle(Palette.text2)
+                .font(Typo.footnote).monospacedDigit().foregroundStyle(Palette.label2)
             }
             row("iOS 18 and later: minutes the system counts down", far, .countdown, stale: false)
             row("iOS 17: the arrival time, minutes as of the last update", far, .clockAsOf, stale: false)
@@ -173,7 +173,7 @@ struct LiveActivityStatesView: View {
 
     func row(_ label: String, _ s: LiveTripSnapshot, _ mode: LiveETAMode, stale: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.footnote.weight(.semibold)).foregroundStyle(Palette.text2)
+            Text(label).font(Typo.sectionTitle).foregroundStyle(Palette.label2)
             LiveTripLockScreenView(title: title, state: s, isStale: stale, mode: mode)
                 .padding(12)
                 .environment(\.colorScheme, .dark)

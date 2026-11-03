@@ -18,16 +18,21 @@ struct PickView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Space.s3) {
                 if let mode = model.pickMode {
                     head(mode)
-                    Toggle(isOn: Binding(get: { model.pickOnly }, set: { model.pickOnly = $0 })) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Only show the chosen station's routes")
-                            Text("Hides other routes on the map until you clear the station").font(.caption).foregroundStyle(Palette.text2)
+                    Card {
+                        Toggle(isOn: Binding(get: { model.pickOnly }, set: { model.pickOnly = $0 })) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Only show the chosen station's routes").font(Typo.body).foregroundStyle(Palette.label)
+                                Text("Hides other routes on the map until you clear the station").font(Typo.rowDetail).foregroundStyle(Palette.label2)
+                            }
                         }
+                        .tint(Palette.tint)
+                        .padding(.horizontal, Space.insetContent)
+                        .padding(.vertical, Space.s3)
+                        .frame(minHeight: Space.tap)
                     }
-                    .frame(minHeight: 44)
                     list(mode)
                     otherModes(mode)
                 } else {
@@ -35,9 +40,11 @@ struct PickView: View {
                     chooser
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            .padding(.horizontal, Space.insetContent)
+            .padding(.top, Space.s1)
+            .padding(.bottom, Space.s6)
         }
+        .reportsSheetScroll()
         .accessibilityIdentifier("pickView")
         .onAppear { highlight(fit: true) }
         .onChange(of: highlightKey) { _, _ in highlight(fit: false) }
@@ -52,29 +59,24 @@ struct PickView: View {
 
     var chooser: some View {
         Card {
-            VStack(spacing: 0) {
-                modeRow(.loc, "Use current location", "Stops within 1.5 km of you", "location")
-                Divider()
-                modeRow(.sel, "Select a station", "Search by station name", "bus")
-                Divider()
-                modeRow(.addr, "Type an address or place", "Find stops near a building or street", "mappin.and.ellipse")
-            }
+            modeRow(.loc, "Use current location", "Stops within 1.5 km of you", "location")
+            RowDivider()
+            modeRow(.sel, "Select a station", "Search by station name", "bus")
+            RowDivider()
+            modeRow(.addr, "Type an address or place", "Find stops near a building or street", "mappin")
         }
     }
 
     func modeRow(_ m: PickMode, _ title: String, _ sub: String, _ icon: String) -> some View {
         Button { setMode(m) } label: {
-            HStack(spacing: 12) {
-                Image(systemName: icon).frame(width: 24).foregroundStyle(Palette.accent).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).foregroundStyle(Palette.text)
-                    Text(sub).font(.caption).foregroundStyle(Palette.text2)
-                }
-                Spacer()
-            }
-            .frame(minHeight: 52).contentShape(Rectangle())
+            RowLayout(chevron: true) {
+                Image(systemName: icon).font(.system(size: IconSize.row)).foregroundStyle(Palette.tint).accessibilityHidden(true)
+            } content: {
+                Text(title).font(Typo.rowTitle).foregroundStyle(Palette.label)
+                Text(sub).font(Typo.rowDetail).foregroundStyle(Palette.label2)
+            } trailing: { EmptyView() }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RowButtonStyle())
         .accessibilityIdentifier("pick.\(m.rawValue)")
     }
 
@@ -96,13 +98,13 @@ struct PickView: View {
         case .addr:
             if let a = anchor {
                 Card {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Stops within 1.5 km of").font(.caption).foregroundStyle(Palette.text2)
-                            Text(a.label).font(.subheadline.weight(.semibold))
-                        }
-                        Spacer()
-                        Button("Change") { anchor = nil; query = "" }.frame(minWidth: 44, minHeight: 44)
+                    RowLayout {
+                        IconCircle(symbol: "mappin", size: 32)
+                    } content: {
+                        Text("Stops within 1.5 km of").font(Typo.rowDetail).foregroundStyle(Palette.label2)
+                        Text(a.label).font(Typo.rowTitle).foregroundStyle(Palette.label).lineLimit(2)
+                    } trailing: {
+                        Button("Change") { anchor = nil; query = "" }.textButtonStyle(font: Typo.sectionTitle)
                     }
                 }
             } else {
@@ -140,37 +142,35 @@ struct PickView: View {
             if waiting && model.locState != .denied || model.locState == .asking {
                 Hint("Finding your location\u{2026}")
             } else {
-                EmptyStateView(title: "Location unavailable", message: "You can still find a station without sharing your location.")
+                EmptyStateView(title: "Location unavailable", message: "You can still find a station without sharing your location.",
+                               icon: "location.slash")
                 modeButton(.sel, "Select a station", primary: true)
                 modeButton(.addr, "Type an address or place", primary: false)
             }
         } else if items.isEmpty {
             if mode == .sel {
-                EmptyStateView(title: "No matching stations", message: "Check the spelling, or type an address instead.")
+                EmptyStateView(title: "No matching stations", message: "Check the spelling, or type an address instead.", icon: "magnifyingglass")
                 modeButton(.addr, "Type an address or place", primary: false)
             } else {
                 EmptyStateView(title: "No stops within 1.5 km of \(mode == .addr ? anchor?.label ?? "this place" : "you")",
-                               message: "Try another place or select a station by name.")
+                               message: "Try another place or select a station by name.", icon: "mappin.slash")
                 modeButton(.sel, "Select a station", primary: true)
             }
         } else {
             Card {
                 ForEach(Array(items.enumerated()), id: \.element.id) { item in
-                    if item.offset > 0 { Divider() }
+                    if item.offset > 0 { RowDivider(inset: Space.insetContent) }
                     let s = item.element
                     Button { model.chooseStation(s.id) } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(s.name).foregroundStyle(Palette.text)
-                                Text((s.d >= 0 ? Self.walkShort(s.d) + " · " : "") + (model.staticData.stopRoutes[s.id] ?? []).map(model.shortName).joined(separator: ", "))
-                                    .font(.caption).foregroundStyle(Palette.text2)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.text3).accessibilityHidden(true)
-                        }
-                        .frame(minHeight: 48).contentShape(Rectangle())
+                        RowLayout(chevron: true) {
+                            EmptyView()
+                        } content: {
+                            Text(s.name).font(Typo.rowTitle).foregroundStyle(Palette.label).lineLimit(2)
+                            Text((s.d >= 0 ? Self.walkShort(s.d) + " \u{00B7} " : "") + (model.staticData.stopRoutes[s.id] ?? []).map(model.shortName).joined(separator: ", "))
+                                .font(Typo.rowDetail).foregroundStyle(Palette.label2).lineLimit(2)
+                        } trailing: { EmptyView() }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(RowButtonStyle())
                 }
             }
         }
@@ -184,20 +184,28 @@ struct PickView: View {
     func modeButton(_ m: PickMode, _ title: String, primary: Bool) -> some View {
         Group {
             if primary {
-                Button { setMode(m) } label: { Text(title).frame(maxWidth: .infinity, minHeight: 44) }.primaryButtonStyle()
+                Button { setMode(m) } label: { Text(title) }.primaryButtonStyle(full: true)
             } else {
-                Button { setMode(m) } label: { Text(title).frame(maxWidth: .infinity, minHeight: 44) }.secondaryButtonStyle()
+                Button { setMode(m) } label: { Text(title) }.secondaryButtonStyle(full: true)
             }
         }
     }
 
     func otherModes(_ cur: PickMode) -> some View {
         let label: [PickMode: String] = [.loc: "Use my location", .sel: "Select a station", .addr: "Type an address"]
-        return HStack(spacing: 16) {
-            ForEach([PickMode.loc, .sel, .addr].filter { $0 != cur }, id: \.self) { m in
-                Button(label[m] ?? "") { setMode(m) }.font(.subheadline).frame(minHeight: 44)
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: Space.s4) {
+                ForEach([PickMode.loc, .sel, .addr].filter { $0 != cur }, id: \.self) { m in
+                    Button(label[m] ?? "") { setMode(m) }.textButtonStyle(font: Typo.rowDetail.weight(.semibold))
+                }
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach([PickMode.loc, .sel, .addr].filter { $0 != cur }, id: \.self) { m in
+                    Button(label[m] ?? "") { setMode(m) }.textButtonStyle(font: Typo.rowDetail.weight(.semibold))
+                }
             }
         }
+        .padding(.horizontal, Space.s1)
     }
 
     // MARK: Map highlight
