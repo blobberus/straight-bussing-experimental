@@ -62,7 +62,7 @@ struct LiveMinutes: View {
 struct LiveETA: View {
     let state: LiveTripSnapshot
     var isStale = false
-    var mainFont: Font = .system(size: 30, weight: .bold, design: .rounded)
+    var mainFont: Font = .system(size: 30, weight: .bold).monospacedDigit()
     var maxWidth: CGFloat = 130
     /// nil = decided when drawn; set only by the CI states screen (LiveActivityStatesView).
     var mode: LiveETAMode? = nil

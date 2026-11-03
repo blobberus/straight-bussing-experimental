@@ -30,7 +30,7 @@ struct TripLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     // whole minutes (iOS 18: counted by the system) or the clock, never seconds
-                    LiveETA(state: s, isStale: context.isStale, mainFont: .system(size: 22, weight: .bold, design: .rounded), maxWidth: 96)
+                    LiveETA(state: s, isStale: context.isStale, mainFont: .system(size: 22, weight: .bold).monospacedDigit(), maxWidth: 96)
                         .opacity(context.isStale ? 0.6 : 1)
                         .padding(.trailing, 4)
                 }

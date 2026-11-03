@@ -50,7 +50,7 @@ struct LiveActivityPreviewView: View {
                             Spacer()
                             Text("\(s.boardName) → \(s.alightName)").font(.caption.weight(.semibold)).lineLimit(1)
                             Spacer()
-                            LiveETA(state: s, mainFont: .system(size: 22, weight: .bold, design: .rounded), maxWidth: 96)
+                            LiveETA(state: s, mainFont: .system(size: 22, weight: .bold).monospacedDigit(), maxWidth: 96)
                         }
                         TripProgressBar(state: s)
                         HStack {
