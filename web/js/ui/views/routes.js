@@ -24,13 +24,16 @@ import { OFFICIAL_HTML } from "./pick.js";
 import { operatorAlertsHTML, callsHTML, operatorPhone } from "./alerts.js";
 import { stationToggleHTML } from "./journey.js";
 import { attachOrderDrag } from "./routes-drag.js";
+import { svg } from "../icons.js";
+import { bus } from "../../core/events.js";
 
-const EYE = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/></svg>';
-const EYEOFF = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z" opacity=".45"/><circle cx="12" cy="12" r="3" opacity=".45"/><path d="M3 3l18 18"/></svg>';
-const UP = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>';
-const GRIP = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 8h14M5 12h14M5 16h14"/></svg>';
-const LAYERS = '<svg class="v-ic rt-toolic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>';
-const DOWN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+const EYE = svg("eye", 20);
+const EYEOFF = svg("eye-off", 20);
+const UP = svg("arrow-up", 20);
+const GRIP = svg("menu", 20);
+const LAYERS = svg("layers", 20, { cls: "v-ic rt-toolic" });
+const DOWN = svg("arrow-down", 20);
+const CHECK = `<span class="rt-check" aria-hidden="true">${svg("check", 15, { stroke: 2.5 })}</span>`;
 
 /** View-local UI state (not in the store). mode: 'list' | 'order'. */
 const R = { mode: "list", naming: false, draft: "" };
@@ -201,10 +204,11 @@ export function bulkHTML(state, g, now = nowS()) {
   if (state.journey) return "";
   const shown = g.running.length + g.scheduled.length + g.idle.length, scope = state.routeFilter ? " at this station" : "";
   const done = onlyRunningShown(state, now);
+  // three actions as Secondary capsules (spec 10.12); the one matching the current state shows a check, none looks disabled
   return `<div class="rt-bulk" role="group" aria-label="All routes${scope}">`
-    + `<button type="button" class="v-btn v-btn--quiet" data-action="routes:show-all"${g.hidden.length ? "" : " disabled"}>Show all<span class="v-sr"> routes${scope}</span></button>`
-    + `<button type="button" class="v-btn v-btn--quiet" data-action="routes:show-running"${done ? ' aria-disabled="true"' : ""}>Show running<span class="v-sr"> routes only${scope}${done ? ", only running routes are shown" : ""}</span></button>`
-    + `<button type="button" class="v-btn v-btn--quiet" data-action="routes:hide-all"${shown ? "" : " disabled"}>Hide all<span class="v-sr"> routes${scope}</span></button></div>`;
+    + `<button type="button" class="v-btn v-btn--quiet" data-action="routes:show-all"${g.hidden.length ? "" : " disabled"}>${CHECK}Show all<span class="v-sr"> routes${scope}</span></button>`
+    + `<button type="button" class="v-btn v-btn--quiet" data-action="routes:show-running"${done ? ' aria-disabled="true"' : ""}>${CHECK}Show running<span class="v-sr"> routes only${scope}${done ? ", only running routes are shown" : ""}</span></button>`
+    + `<button type="button" class="v-btn v-btn--quiet" data-action="routes:hide-all"${shown ? "" : " disabled"}>${CHECK}Hide all<span class="v-sr"> routes${scope}</span></button></div>`;
 }
 
 /**
@@ -215,6 +219,17 @@ export function bulkHTML(state, g, now = nowS()) {
 export function toolsHTML(state) {
   if (!state.staticLoaded || !Object.keys(state.routes || {}).length) return "";
   return `<div class="rt-tools"><button type="button" class="v-btn v-btn--quiet rt-orderbtn" data-action="routes:order-edit">${LAYERS}Edit map order</button></div>`;
+}
+
+/**
+ * The Routes header's trailing action (spec 10.6: "Routes" + "Edit map order"): a text button in the sheet header, so it
+ * also works with the sheet collapsed; '' in the order editor (its Done is in the list) and until routes load.
+ * @param {object} state
+ * @returns {string}
+ */
+export function routesMetaHTML(state) {
+  if (R.mode === "order" || !state.staticLoaded || !Object.keys(state.routes || {}).length) return "";
+  return '<button type="button" class="v-btn v-btn--quiet rt-orderbtn" data-action="routes:order-edit">Edit map order</button>';
 }
 
 /**
@@ -245,7 +260,7 @@ export function listHTML(state, now = nowS()) {
 }
 
 /** Top region: Edit map order first, then the custom-route / journey bar (empty in order mode). */
-function topRegion(state) { return R.mode === "order" ? "" : toolsHTML(state) + topBarHTML(state); }
+function topRegion(state) { return R.mode === "order" ? "" : topBarHTML(state); }   // Edit map order: the header (routesMetaHTML)
 function bodyRegion(state, now) { return R.mode === "order" && state.staticLoaded ? orderHTML(state) : listHTML(state, now); }
 
 /**
@@ -379,6 +394,7 @@ export const _ui = R;
 
 registerView("routes", {
   title: () => "Routes",
+  metaHTML: (state) => routesMetaHTML(state),
   detent: "half",
   tab: "routes",
   render: (state) => renderRoutes(state),
@@ -423,11 +439,16 @@ registerAction("routes:hide-all", (ds, ev, ctx) => {
   ctx.toast?.("All routes hidden. Show them again here.");
 });
 registerAction("routes:clear-filter", (ds, ev, ctx) => ctx.store.set({ routeFilter: null }));
+/** The header's trailing action follows the mode (Edit map order only in list mode). */
+const refreshHeader = () => { try { bus.emit("sheet:header", {}); } catch (e) { /* no header */ } };
 registerAction("routes:order-edit", (ds, ev, ctx) => {
-  ctxRef = ctx || ctxRef; R.mode = "order"; R.naming = false; pendingFocus = { sel: '[data-action="routes:order-done"]' }; patch(true);
+  ctxRef = ctx || ctxRef; R.mode = "order"; R.naming = false; pendingFocus = { sel: '[data-action="routes:order-done"]' }; patch(true); refreshHeader();
 });
 registerAction("routes:order-done", (ds, ev, ctx) => {
-  ctxRef = ctx || ctxRef; R.mode = "list"; pendingFocus = { sel: '[data-action="routes:order-edit"]' }; patch(true);
+  ctxRef = ctx || ctxRef; R.mode = "list"; patch(true); refreshHeader();
+  // back to the header's Edit map order (where the editor was opened), else the first route
+  const back = document.querySelector('#titleRight [data-action="routes:order-edit"]') || rootRef?.querySelector?.(".v-rowmain");
+  back?.focus?.({ preventScroll: true });
 });
 registerAction("routes:move", (ds, ev, ctx) => {
   ctxRef = ctx || ctxRef;
