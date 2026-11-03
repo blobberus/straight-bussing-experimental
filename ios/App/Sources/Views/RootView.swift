@@ -187,6 +187,8 @@ struct SearchMorphEffect: ViewModifier {
 struct SearchBar: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// The search part is held down: the whole capsule takes `fillPressed` over its material (spec 10.1).
+    @State private var pressed = false
     var body: some View {
         HStack(spacing: 0) {
             Button { model.dirActiveTo = true; model.openDirections() } label: {
@@ -201,7 +203,7 @@ struct SearchBar: View {
                 .frame(minHeight: Space.searchHeight)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(ChromePressStyle())
+            .buttonStyle(CapsulePressStyle(pressed: $pressed))
             .accessibilityIdentifier("searchBar")
             .accessibilityLabel("Search for a destination")
             Button { model.showTimePick = true } label: {
@@ -223,9 +225,20 @@ struct SearchBar: View {
         }
         .frame(minHeight: Space.searchHeight)
         .background(.regularMaterial, in: Capsule())
+        .overlay { Capsule().fill(pressed ? Palette.fillPressed : Color.clear).allowsHitTesting(false) }
+        .animation(Motion.press, value: pressed)
         .elevation(.floating, in: Capsule())
         // map chrome: grows with text size, but not so far that it hides the map (the sheet holds the content)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+}
+
+/// The search capsule's press: reports the pressed state so the whole capsule, not only the text, takes the tint.
+struct CapsulePressStyle: ButtonStyle {
+    @Binding var pressed: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .onChange(of: configuration.isPressed) { _, v in pressed = v }
     }
 }
 
