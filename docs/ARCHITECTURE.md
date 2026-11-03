@@ -781,7 +781,12 @@ resting states, back stack, Settings and Lines by Time overlays); what changed i
 - **Status** (`js/ui/pill.js`): `#pill[data-form]` = `chip` (simulated buses: 32 pt capsule, whole chip is the button)
   or `banner` (every feed state: full width, opaque warn / danger background, first sentence Semibold via
   `setPillText`). `--pill-h` and the expanded state below the banner work as before; the locate button moves under a
-  banner.
+  banner. The banner's action (Retry or See alert, never both) is the FIRST child, a fixed 84 x 44 `.pillslot` on the
+  leading edge (owner 2026-11-03, spec 10.3): after a Retry tap `pill.js` keeps the banner's height and content until
+  `RETRY_HOLD_MS` (2.5 s) after the last tap; if the feed answers meanwhile it says `BACK_MSG` ("Live data is back.")
+  with a check and Retry absorbs taps (`aria-disabled`), so the trip chip (whose Show all ends the trip) never slides
+  under a tapping finger. Repeated taps join the running poll (`data/live.js pollNow`). Tests: `ui-shell-pill.js`
+  (slot order, the hold) and the e2e "Retry tapped again and again during a trip".
 - **Trip chip** (`js/ui/contextbar.js`): badges (up to 3, then "+N"), "Trip to X" / "Routes to X" / the Lines by Time
   name / the custom route's name, Show all / Clear; only the label truncates; no marquee.
 - **Toast** (`css/base.css`): 12 above the collapsed sheet, 12 above the bottom bar when expanded, hidden while an
