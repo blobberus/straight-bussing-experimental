@@ -73,6 +73,7 @@ CAPTIONS = {
     "11b-about-end": "About scrolled to the end: credits and the version",
     "19b-custom-end": "Custom route detail scrolled to the end",
     "26b-nobus-end": "No bus reporting, scrolled: the operator's alert in full and whom to call",
+    "55-toast": "A confirmation toast above the bottom bar, never over the sheet title (UI test)",
     "journey-1-search": "Journey: search, place results (UI test)",
     "journey-2-options": "Journey: place summary and route options, the best one selected (UI test)",
     "journey-3-trip": "Journey: trip in progress, sheet expanded (UI test)",

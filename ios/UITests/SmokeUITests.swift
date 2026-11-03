@@ -36,6 +36,17 @@ final class SmokeUITests: XCTestCase {
 
         app.buttons["tab.routes"].tap()
         XCTAssertEqual(app.staticTexts["sheetTitle"].label, "Routes")
+        // a confirmation toast (spec 10.19): every route is shown already, so Show all only confirms it
+        let showAll = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Show all routes")).firstMatch
+        if showAll.waitForExistence(timeout: 5) {
+            showAll.tap()
+            if app.buttons["busAlertBanner"].waitForExistence(timeout: 5) {
+                let toast = app.buttons["busAlertBanner"].frame, grab = app.descendants(matching: .any)["sheetGrabber"].frame
+                XCTAssertTrue(toast.maxY <= app.buttons["tab.routes"].frame.minY, "the toast sits above the bottom bar")
+                XCTAssertTrue(toast.minY > grab.minY || toast.maxY < grab.minY, "never over the sheet's grab bar and title")
+                save(app, "55-toast-light")
+            }
+        }
 
         app.buttons["tab.myroutes"].tap()
         XCTAssertEqual(app.staticTexts["sheetTitle"].label, "My Routes")
