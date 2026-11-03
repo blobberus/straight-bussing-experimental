@@ -11,7 +11,7 @@ const CHROME = `<div id="app" class="app"><div id="map"></div>
 <div id="topbar" class="topbar"><div class="searchbar"><button id="searchBar" class="searchbar-btn" type="button">Search</button><button id="settingsBtn" class="searchbar-gear" type="button" aria-label="Settings">G</button></div></div>
 <button id="locateBtn" class="fab" type="button" aria-label="Show my location">L</button>
 <div id="pill" class="statuspill" role="status" hidden><span id="pillText" class="pilltext">No shuttles running right now</span></div>
-<div id="ctxbar" class="ctxbar" role="status" hidden><span class="ctx-text"><span class="ctx-k">My route:</span> <span class="ctx-v">My commute</span></span><button type="button" class="ctx-btn">Clear</button></div>
+<div id="ctxbar" class="ctxbar" role="status" hidden><span class="ctx-text"><span class="ctx-v">My commute</span></span><button type="button" class="ctx-btn">Clear</button></div>
 <section id="sheet" class="sheet" data-detent="half"><header id="sheetHead" class="sheet-head"><button id="grab" class="grab" type="button"></button><div class="titleline"><h1 id="title" class="sheet-title">My Routes</h1></div></header>
 <div id="content" class="sheet-content"><div style="height:1400px">rows</div></div></section>
 <nav id="tabs" class="bottomnav"><button type="button">A</button><button type="button">B</button><button type="button">C</button></nav>
