@@ -209,7 +209,7 @@ test("layout: search bar on top opens Directions; bottom navigation; Edit map or
   await waitFor(() => $('#content [data-region="routes-top"]'), "routes top region");
   // DESIGN-SPEC 10.6: Edit map order is the header's trailing action, before every list control
   const edit = await waitFor(() => $('#titleRight [data-action="routes:order-edit"]'), "Edit map order in the sheet header");
-  ok(edit.getBoundingClientRect().height >= 44, "44 pt target");
+  ok(edit.getBoundingClientRect().height >= 44 * (parseFloat(W.getComputedStyle(D.documentElement).getPropertyValue("--frame-k")) || 1) - 0.5, "44 pt target (in the scaled phone frame): " + edit.getBoundingClientRect().height);
   ok(!$('#content [data-action="pick:open"]') && !$('#content [data-action="dir:open"]'), "no Routes to station / Directions on Routes");
   tab("nearby");
   await waitFor(() => title() === "Current trip" && $("#content .pt-hint") && !$("#content .pt-notrip"), "Current trip view with the quiet no-trip hint (no card)");
