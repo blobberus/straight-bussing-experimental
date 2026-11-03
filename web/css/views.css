@@ -71,7 +71,12 @@
 @keyframes v-pop { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: none; } }   /* like an iOS alert: settles down to size */
 
 /* ---------- stop (place details for a station, 10.14) ---------- */
-.v-stophead { display: flex; flex-direction: column; gap: var(--s-2); margin: 0 0 var(--s-1); }
+.v-stophead { display: flex; flex-direction: column; gap: var(--s-2); margin: 0 0 var(--s-1); padding: 0 var(--s-1); }
+.v-stopchips { gap: var(--s-2); padding: 6px 0; }
+/* Directions, From here, Favorite in one row sized by their words (spec 10.14); a narrow phone wraps the last one, the
+   accessibility sizes stack all three with Directions first (components.css .v-actions) */
+.v-stopacts { flex-wrap: wrap; }
+.v-stopacts .v-btn { flex: 1 1 auto; padding: 0 var(--s-3); }
 .v-chipbtn { position: relative; display: inline-grid; place-items: center; min-width: var(--tap); min-height: var(--tap); margin: -10px -6px; padding: 0; border: 0; background: none; cursor: pointer; }
 .v-chipbtn:active { opacity: .6; }
 .v-addr { margin: 0; }
