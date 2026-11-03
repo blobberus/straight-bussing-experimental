@@ -1,7 +1,7 @@
 // ui/pill.js: status pill states, one icon per state (iOS RootView StatusPill parity, 2026-10-10). Pure + one DOM
 // render; no timers (this file is last on ui-shell.test.html, after the contextbar marquee test).
 import { test, eq, ok } from "./lib.js";
-import { pillState, pillIconSVG, createPill, PILL_ICONS } from "../js/ui/pill.js";
+import { pillState, pillIconSVG, createPill, PILL_ICONS, RETRY_HOLD_MS } from "../js/ui/pill.js";
 import { DEMO_PILL } from "../js/core/demo.js";
 
 const NOW = 1_800_000_000;
@@ -47,8 +47,9 @@ test("pill: render writes the icon, text, kind and Retry; the icon slot is creat
   host.innerHTML = '<div class="statuspill" hidden><span class="pilltext"></span><button class="pillbtn" hidden>Retry</button></div>';
   document.body.appendChild(host);
   const el = host.firstChild, p = createPill({ pill: el, text: el.querySelector(".pilltext"), retry: el.querySelector(".pillbtn") });
-  const ic = el.querySelector(".pillicon");
-  ok(ic && ic.getAttribute("aria-hidden") === "true" && el.firstChild === ic, "icon slot first, hidden from screen readers");
+  const ic = el.querySelector(".pillicon"), retry = el.querySelector(".pillbtn");
+  ok(ic && ic.getAttribute("aria-hidden") === "true", "icon slot created, hidden from screen readers");
+  ok(el.firstElementChild === retry && retry.nextElementSibling === ic, "Retry first, on the leading edge (owner 2026-11-03), then the icon");
   p.render({ ...fresh, failed: true, lastOk: NOW - 120 }, NOW);
   eq([el.hidden, el.className, el.dataset.icon, el.querySelector(".pillbtn").hidden], [false, "statuspill err", "feed", false]);
   ok(ic.querySelector("svg") && el.textContent.includes("Can't reach"), "icon + words");
@@ -85,5 +86,23 @@ test("pill: demo mode reads 'Simulated buses' (flask icon, tap to explain); feed
   // geometry (the whole pill is the 44 px target) is checked against the real CSS in tests/e2e-demo.js
   p.render({ ...fresh, failed: true, lastOk: NOW - 120 }, NOW);
   ok(tap.hidden && !el.querySelector(".pillbtn").hidden, "feed error: Retry, no demo tap");
+  host.remove();
+});
+
+// Owner 2026-11-03: "move the retry button to the left side of the notification so if the user spams it while on a route, it
+// doesn't shift and accidentally cancel their current trip". After a tap the banner holds still for RETRY_HOLD_MS.
+test("pill: after a Retry tap the banner holds still, then shows the feed's state", async () => {
+  const host = document.createElement("div");
+  host.innerHTML = '<div class="statuspill" hidden><button class="pillbtn" hidden>Retry</button><span class="pilltext"></span></div>';
+  document.body.appendChild(host);
+  const el = host.firstChild, retry = el.querySelector(".pillbtn"), p = createPill({ pill: el, text: el.querySelector(".pilltext"), retry });
+  p.render({ ...fresh, failed: true, lastOk: NOW - 120 }, NOW);
+  ok(!el.hidden && !retry.hidden, "error banner with Retry");
+  retry.click();
+  eq(retry.getAttribute("aria-busy"), "true", "busy while retrying");
+  p.render(fresh, NOW);   // the feed is back at once
+  ok(!el.hidden && !retry.hidden && el.className.includes("err"), "held: Retry stays under the finger, nothing slides into its place");
+  await new Promise((r) => setTimeout(r, RETRY_HOLD_MS + 80));
+  ok(el.hidden && !retry.hasAttribute("aria-busy"), "after the hold: the current state (fresh = no banner)");
   host.remove();
 });

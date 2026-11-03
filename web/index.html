@@ -139,7 +139,8 @@
   <svg class="ic ic-off" width="20" height="20" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 11 22 2l-9 19-2-8z"/></svg><svg class="ic ic-on" width="20" height="20" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 11 22 2l-9 19-2-8z" fill="currentColor"/></svg>
 </button>
 
-<div id="pill" class="statuspill" role="status" aria-live="polite" hidden><span id="pillIcon" class="pillicon" aria-hidden="true"></span><span id="pillText" class="pilltext"></span><button id="pillRetry" class="pillbtn" type="button" data-action="retry" hidden>Retry</button><button id="pillAlert" class="pillbtn" type="button" data-action="alerts:open" aria-label="Read the service alert" hidden>See alert</button></div>
+<!-- status banner / chip (ui/pill.js); Retry is the FIRST control, on the leading edge (owner 2026-11-03): a fixed spot that never moves -->
+<div id="pill" class="statuspill" role="status" aria-live="polite" hidden><button id="pillRetry" class="pillbtn pillretry" type="button" data-action="retry" hidden>Retry</button><span id="pillIcon" class="pillicon" aria-hidden="true"></span><span id="pillText" class="pilltext"></span><button id="pillAlert" class="pillbtn" type="button" data-action="alerts:open" aria-label="Read the service alert" hidden>See alert</button></div>
 <div id="ctxbar" class="ctxbar" role="status" aria-live="polite" hidden></div>
 
 <section id="sheet" class="sheet" data-detent="peek" role="dialog" aria-modal="false" aria-labelledby="title">

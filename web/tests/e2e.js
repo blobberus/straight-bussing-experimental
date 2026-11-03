@@ -420,6 +420,39 @@ test("status pill: failing feed shows the error pill with Retry; recovery hides 
   await waitFor(() => $("#pill").hidden && !state().failed, "pill hidden after recovery");
 });
 
+// Owner 2026-11-03: "When the connection/bus location is not updated and the error shows up, move the retry button to the left
+// side of the notification so if the user spams it while on a route, it doesn't shift and accidentally cancel their current trip."
+test("status banner: Retry tapped again and again during a trip, also as the feed comes back, never moves and never ends the trip", async () => {
+  const rid = T.R, r = state().routes[rid];
+  SB.store.set({ journey: { kind: "plan", rids: [rid], label: "To E2E Place", to: "E2E Place", t0: Math.floor(Date.now() / 1000), legs: [] } });
+  await waitFor(() => !$("#ctxbar").hidden, "the trip chip");
+  T.feedFail = true;
+  W.dispatchEvent(new W.Event("online"));
+  try {
+    await waitFor(() => !$("#pill").hidden && $("#pill").classList.contains("err") && !$("#pillRetry").hidden, "error banner with Retry");
+    const btn = $("#pillRetry"), pill = $("#pill"), at = () => { const b = btn.getBoundingClientRect(); return [b.left, b.top, b.width, b.height].map((v) => Math.round(v * 10) / 10).join(","); };
+    const first = at(), txtR = $("#pillText").getBoundingClientRect(), b0 = btn.getBoundingClientRect();
+    ok(b0.right <= txtR.left + 1 && b0.left - pill.getBoundingClientRect().left < 16, "Retry on the leading edge, before the text");
+    const endTrip = [...D.querySelectorAll('[data-action="journey:end"]')].filter((e) => e.getClientRects().length);
+    for (const e of endTrip) { const er = e.getBoundingClientRect(); ok(er.left >= b0.right || er.top >= b0.bottom + 8, "no trip-ending control under the Retry spot: " + e.textContent); }
+    for (let i = 0; i < 8; i++) {
+      if (i === 4) T.feedFail = false;   // the feed comes back in the middle of the taps
+      const b = btn.getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2;
+      const hit = D.elementFromPoint(x, y);
+      ok(hit && hit.closest("#pillRetry"), `tap ${i + 1} lands on Retry (${hit && (hit.id || hit.className)})`);
+      hit.click();
+      await sleep(i === 4 ? 400 : 60);
+      eq(at(), first, `Retry did not move after tap ${i + 1}`);
+      eq(state().journey && state().journey.kind, "plan", `the trip is still running after tap ${i + 1}`);
+    }
+  } finally {
+    T.feedFail = false;
+    await waitFor(() => $("#pill").hidden && !state().failed, "banner gone once the hold is over and the feed is back", 8000);
+    SB.store.set({ journey: null });
+  }
+  ok(r, "route " + rid);
+});
+
 // Rider safety (2026-10-10): a fresh feed with no vehicles while a route is scheduled is not "no shuttles running".
 test("status pill: an empty feed while a route is scheduled says no bus reports a location, never 'no shuttles running'", async () => {
   const svc = state().service, feed = T.feed, rid = T.R;
