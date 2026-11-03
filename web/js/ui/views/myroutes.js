@@ -27,18 +27,18 @@ import { routeChip, etaBlock, icon, emptyState, skeleton } from "../components.j
 import { confirmDialog } from "../confirm.js";
 import { attachSwipe } from "./myroutes-swipe.js";
 import { createPatcher } from "./myroutes-patch.js";
+import { svg } from "../icons.js";
 
 export { createPatcher };
 
-const SVG = (body, s = 18) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
-const CHECK = SVG('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 16);
-const STAR = SVG('<path d="M12 3.2l2.7 5.5 6 .9-4.35 4.25 1.03 6-5.38-2.83-5.38 2.83 1.03-6L3.3 9.6l6-.9z"/>', 28);
-const UP = SVG('<path d="M6 15l6-6 6 6"/>'), DOWN = SVG('<path d="M6 9l6 6 6-6"/>');
-const PLUS = SVG('<path d="M12 5v14M5 12h14"/>');
-const PENCIL = SVG('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>');
-const TRASH = SVG('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>');
-const INFO = SVG('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>');
-const MORE = SVG('<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>', 20);
+const CHECK = svg("check", 16, { stroke: 3 });
+const STAR = svg("star", 28);
+const UP = svg("arrow-up", 20), DOWN = svg("arrow-down", 20);
+const PLUS = svg("plus", 17);
+const PENCIL = svg("pencil", 18);
+const TRASH = svg("trash-2", 18);
+const INFO = svg("info", 18);
+const MORE = svg("ellipsis", 20);
 
 /** View-local UI state (not in the store). swiped: id of the custom route whose action tray is open. */
 const ui = { favEdit: false, swiped: null, err: "" };
