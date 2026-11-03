@@ -5,7 +5,7 @@
 // next bus fully visible at the half detent in a 393 x 852 phone) is in tests/e2e-current.js.
 import { test, eq, ok } from "./lib.js";
 import { NOW, fixture } from "./views-fixtures.js";
-import { renderNearby, nextHTML, altHTML, N, NO_TRIP_HINT } from "../js/ui/views/nearby.js";
+import { renderNearby, nextHTML, altHTML, N, NO_TRIP_HINT, triedText } from "../js/ui/views/nearby.js";
 import { alertBanner } from "../js/ui/views/alerts.js";
 
 const USER = { lat: 41.7899, lon: -87.6001 };   // ~10 m from Main & 1st (S1: R1 in 2 min, R3 in 6 min, R1 in 25 min)
@@ -78,4 +78,15 @@ test("current trip: the alert row is one line, labeled, and never color alone", 
   ok(/<b>Service alert:<\/b> <span class="v-alertfirst">Bus Route Assistance<\/span>/.test(one), one);
   ok(/aria-label="Service alert: Bus Route Assistance. Open alerts"/.test(one), "spoken label keeps the full title");
   ok(one.includes("<svg"), "warning icon with the words");
+});
+
+test("blocked location (DESIGN-SPEC 13.3): one card first, the last try said inside it, then the search", () => {
+  N.q = ""; N.mode = "station"; N.anchor = null;
+  const at = NOW * 1000;
+  eq(triedText(null), "");
+  ok(/^Tried at .+ \(try 2\): still blocked, so no popup\. Tap "How to allow location" for the steps\.$/.test(triedText({ code: 1, at, n: 2 })), triedText({ code: 1, at, n: 2 }));
+  ok(/^Tried at .+: finding your position took too long/.test(triedText({ code: 3, at, n: 1 })), "other failures keep the Settings wording");
+  const h = renderNearby(fixture({ user: null, locState: "denied", locErr: { code: 1, at, n: 1 } }), NOW);
+  const card = h.indexOf("v-locoff--card"), tried = h.indexOf("v-loctried"), help = h.indexOf("How to allow location"), search = h.indexOf('data-input="nearby-q"');
+  ok(card >= 0 && tried > card && help > tried && search > help, "card, the try inside it, the help, then the search");
 });

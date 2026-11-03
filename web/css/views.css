@@ -41,6 +41,8 @@
   border-radius: var(--r-card); background: var(--bg-card); font: var(--t-row-detail); color: var(--label-2);
 }
 .v-locoff b { color: var(--label); }
+.v-locoff--card { align-items: flex-start; }
+.v-loctried { display: block; margin-top: var(--s-2); color: var(--label); }
 .v-locoff .v-ic { width: auto; color: var(--label-2); }
 .v-note .v-btn--quiet { flex: none; }
 .v-anchor .v-prim { font: var(--t-row-title); }

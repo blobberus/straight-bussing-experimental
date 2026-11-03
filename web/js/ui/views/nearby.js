@@ -17,7 +17,8 @@
 import { registerView } from "../router.js";
 import { registerAction } from "../actions.js";
 import { esc } from "../../core/esc.js";
-import { nowS, minsUntil } from "../../core/time.js";
+import { nowS, minsUntil, clock } from "../../core/time.js";
+import { locResultText } from "../../core/lochelp.js";
 import { arrivalsFor, liveUnknown } from "../../core/arrivals.js";
 import { routeChip, etaBlock, arrivalRow, emptyState, skeleton, OFFICIAL_PHONE } from "../components.js";
 import { silentService, scheduledRoutes, silentText } from "../../core/operating.js";
@@ -98,13 +99,29 @@ function soonList(state, now) {
   }).join("") + "</div>";
 }
 
+/**
+ * What the last location try did, for the blocked-location card (spec 13.3): "Tried at 4:06 PM (try 2): still blocked, so
+ * no popup. Tap "How to allow location" for the steps." ('' before any try).
+ * @param {{code:number, at:number, n:number}|null} err store.locErr
+ * @returns {string}
+ */
+export function triedText(err) {
+  if (!err || !err.at) return "";
+  if (err.code !== 1) return locResultText(err, (t) => clock(t));
+  return `Tried at ${clock(Math.round(err.at / 1000))}${err.n > 1 ? ` (try ${err.n})` : ""}: still blocked, so no popup. Tap "How to allow location" for the steps.`;
+}
+
 /** "Use my location" is the screen's one primary action (no location yet, not asking, not denied). */
 const locPrimary = (state) => !state.user && state.locState !== "asking" && state.locState !== "denied";
 
 function locBlock(state) {
   if (state.locState === "asking") return '<p class="v-hint" role="status">Finding your location&hellip;</p>';
   if (state.locState === "denied") {
-    return '<div class="v-locoff" role="status"><span class="v-ic" aria-hidden="true">' + ICONS.loc + '</span><span class="v-grow"><b>Location is blocked for this site.</b> Your browser will not ask again by itself; it has to be allowed in your settings. You can still search below.</span></div>'
+    // spec 13.3: one card first, the help and the retry inside it, and what the last try did in view (not a toast over
+    // the title, audit defect 3); then "Search stations" so the app stays usable
+    const tried = triedText(state.locErr);
+    return '<div class="v-locoff v-locoff--card" role="status"><span class="v-ic" aria-hidden="true">' + ICONS.loc + '</span><span class="v-grow"><b>Location is blocked for this site.</b> Your browser will not ask again by itself; it has to be allowed in your settings. You can still search below.'
+      + (tried ? `<span class="v-loctried">${esc(tried)}</span>` : "") + "</span></div>"
       + '<button type="button" class="v-btn v-btn--secondary v-btn--block" data-action="settings:open" data-section="loc">How to allow location</button>'
       + '<button type="button" class="v-btn v-btn--quiet v-btn--block" data-action="nearby:locate">Try location again</button>';
   }
@@ -372,7 +389,7 @@ registerAction("nearby:locate", async (ds, ev, ctx) => {
   try { ok = await ctx.locate(); } catch (e) { ok = false; }
   const u = ctx.store.get().user;
   if (ok && u) { N.anchor = null; try { ctx.map?.flyTo?.(u, 16); } catch (e) { /* map optional */ } }
-  else if (ctx.store.get().locErr?.code === 1) ctx.toast?.("Still blocked, so no popup. Tap \"How to allow location\" for the steps.");
+  else if (ctx.store.get().locErr?.code === 1) { /* the blocked-location card says it (triedText), in view */ }
   else ctx.toast?.("Couldn't get your location. You can still search stations or places.");
 });
 registerAction("nearby:mode", (ds, ev, ctx) => {
