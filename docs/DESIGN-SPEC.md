@@ -377,6 +377,8 @@ Same words, icons and actions as today (`ui/pill.js`, iOS `StatusPill`); two for
   last tap ("Live data is back.", a check mark, taps absorbed), so the trip chip (whose Show all ends the trip) and the
   sheet never slide up under the finger; a stray tap on the leading side lands on the chip's label, never on its
   trailing action. iOS: Kit `RetryHold` (unit-tested) and the UI test `testRepeatedRetryDuringATripKeepsTheTrip`.
+  Web: `ui/pill.js` (`RETRY_HOLD_MS` 2500, `BACK_MSG`; repeated taps join the running poll, `data/live.js pollNow`), the
+  unit test in `tests/ui-shell-pill.js` and the e2e test "Retry tapped again and again during a trip" in `tests/e2e.js`.
 - One banner at a time (priority: unreachable > out of date > delayed > no live locations > no shuttles), plus the demo
   chip if both apply (chip first). Never iOS system yellow fills (audit: one state, one look).
 - Announce changes politely: web `role="status"` with `aria-live="polite"` (kept); iOS posts one accessibility
