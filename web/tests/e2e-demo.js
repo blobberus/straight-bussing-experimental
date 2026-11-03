@@ -75,7 +75,8 @@ test("demo: simulated buses everywhere, the live feed is never fetched", async (
   await waitFor(() => $("#map .sb-busicon"), "bus markers on the map");
   const tok = (el, k) => W.getComputedStyle(el).getPropertyValue(k).trim().toLowerCase();
   const dark = $("#map").classList.contains("sb-dark");
-  eq(tok($("#map"), "--sb-accent"), tok(D.documentElement, dark ? "--accent" : "--accent-fill"), "map blue = the UI accent token (" + (dark ? "dark" : "light") + ")");
+  eq(tok($("#map"), "--sb-accent"), tok(D.documentElement, "--tint-fill"), "map blue = tintFill, both themes (DESIGN-SPEC 11.4; " + (dark ? "dark" : "light") + ")");
+  eq(tok($("#map"), "--sb-tint"), tok(D.documentElement, "--tint"), "map rings = the accent tint");
   ok(!txt($("#content")).includes("Demo mode"), "no demo banner or demo service alert on Current trip");
 });
 
