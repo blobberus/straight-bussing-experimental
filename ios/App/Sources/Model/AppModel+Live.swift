@@ -394,6 +394,20 @@ extension AppModel {
 
     /// A card tapped in Directions: select and frame it; during a trip the timeline follows that option (web
     /// syncJourney(picked) replaces the stops and bus to follow, even on the same route).
+    /// The sheet came to rest (RootView). Collapsed in Directions with an option selected and no trip started: frame
+    /// the option again in the now larger visible map (spec J3, "collapsing the sheet shows the selected option drawn
+    /// on the map with the destination pin"); it was framed for the small strip above the expanded sheet.
+    func sheetSettled(_ d: Detent) {
+        guard d == .peek, page == .directions, activeTrip == nil, let r = dir.result,
+              r.options.indices.contains(dir.selected) else { return }
+        let o = r.options[dir.selected]
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 60_000_000)   // the map's new bottom padding applies first
+            guard let self, self.detent == .peek, self.page == .directions else { return }
+            self.fit(self.planPoints(o))
+        }
+    }
+
     func selectOption(_ i: Int) {
         guard let r = dir.result, r.options.indices.contains(i) else { return }
         dir.selected = i

@@ -84,8 +84,11 @@ struct RootView: View {
                 // pinned to the screen's width: a too-wide child (very large text) can never widen its siblings
                 .frame(width: geo.size.width)
                 VStack(spacing: 0) {
-                    BottomSheet(detent: $model.detent, available: available, onSettled: { _, h in
-                        if abs(h - settledSheetH) > 0.5 { settledSheetH = h }
+                    BottomSheet(detent: $model.detent, available: available, onSettled: { d, h in
+                        if abs(h - settledSheetH) > 0.5 {
+                            settledSheetH = h
+                            model.sheetSettled(d)
+                        }
                     }) {
                         SheetHeader()
                     } content: {
