@@ -87,6 +87,17 @@ test("sheet: controller starts collapsed, toggles on taps, keeps its state for a
   done();
 });
 
+test("sheet: the collapsed height is the header's own height, measured in the first frame (not at creation: no forced layout at boot)", async () => {
+  const { sheetEl, head, done } = makeSheet();
+  try {
+    const host = sheetEl.parentElement;
+    eq(host.style.getPropertyValue("--v-peek"), "", "nothing measured synchronously");
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    eq(host.style.getPropertyValue("--v-peek"), Math.round(head.offsetHeight) + "px", "the header's height, before the first paint");
+    eq(sheetEl.style.transition, "", "the first value is set without a slide, and the transition is back afterwards");
+  } finally { done(); }
+});
+
 test("sheet: grabber is an adjustable control: Resize panel, Collapsed / Expanded (iOS parity)", () => {
   const { sh, grab: g, done } = makeSheet("full");
   const at = (k) => g.getAttribute(k);

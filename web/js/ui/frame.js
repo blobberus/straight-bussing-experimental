@@ -47,6 +47,9 @@ export function textClass(px) {
 /**
  * Keep html[data-text] in step with the root font size: on resize, on return to the page (iOS Dynamic Type changes
  * while Safari is in the background) and whenever a 1rem probe changes size (browser text size, zoom). Safe to call once.
+ * The first reading comes from the probe's ResizeObserver in the first frame (before the first paint, so no layout jump),
+ * never synchronously at boot: reading a computed style there would force a style pass of the whole page before the app
+ * has built it (about 12 ms of main-thread time at load with a 4x slower CPU, measured in headless Edge).
  * @param {HTMLElement} [root] default <html>
  * @returns {() => void} stop
  */
@@ -55,7 +58,6 @@ export function initTextSize(root = document.documentElement) {
     const c = textClass(parseFloat(getComputedStyle(root).fontSize));
     if (root.dataset.text !== c) root.dataset.text = c;
   };
-  apply();
   addEventListener("resize", apply);
   const vis = () => { if (!document.hidden) apply(); };
   document.addEventListener("visibilitychange", vis);
@@ -66,8 +68,8 @@ export function initTextSize(root = document.documentElement) {
     probe.style.cssText = "position:fixed;left:-99px;top:0;width:1rem;height:1px;visibility:hidden;pointer-events:none";
     document.body.appendChild(probe);
     ro = new ResizeObserver(apply);
-    ro.observe(probe);
-  }
+    ro.observe(probe);   // its first call comes in the first frame, after the style the browser computes anyway, before the paint
+  } else apply();        // no observer: read it now (forces a style pass, once)
   return () => { removeEventListener("resize", apply); document.removeEventListener("visibilitychange", vis); ro?.disconnect(); probe?.remove(); };
 }
 

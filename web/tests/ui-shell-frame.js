@@ -1,6 +1,6 @@
 // Tests for ui/frame.js (desktop phone frame scale) and ui/sheet.js drag math under a scaled frame (SHELL).
 import { test, eq, ok, near } from "./lib.js";
-import { frameScale, FRAME_W, FRAME_H, FRAME_MEDIA, FRAME_MARGIN } from "../js/ui/frame.js";
+import { frameScale, FRAME_W, FRAME_H, FRAME_MEDIA, FRAME_MARGIN, textClass, initTextSize } from "../js/ui/frame.js";
 import { createSheet, PANEL_MEDIA } from "../js/ui/sheet.js";
 
 const NEVER = "(min-width: 100000px)";
@@ -9,6 +9,26 @@ test("frame: iPhone logical size and media queries", () => {
   eq([FRAME_W, FRAME_H], [393, 852]);
   ok(FRAME_MEDIA.includes("min-width: 521px"), FRAME_MEDIA);
   ok(PANEL_MEDIA.includes("min-width: 768px") && PANEL_MEDIA.includes("max-height"), "panel only on wide + short screens");
+});
+
+test("text size: classes by root size (spec 2.2: default under 20 px, large 20 to 27, ax from 28)", () => {
+  eq([textClass(17), textClass(19.9), textClass(20), textClass(27.9), textClass(28), textClass(53)], ["default", "default", "large", "large", "ax", "ax"]);
+  eq([textClass(NaN), textClass(undefined), textClass("x")], ["default", "default", "default"], "unreadable size: the default layout");
+});
+
+test("text size: nothing is read synchronously at boot (no forced style pass; the probe's first observation reads it), a resize reads it", () => {
+  const root = document.createElement("div");
+  root.style.fontSize = "30px";
+  document.body.appendChild(root);
+  const stop = initTextSize(root);
+  try {
+    eq(root.dataset.text, undefined, "nothing read at boot");
+    dispatchEvent(new Event("resize"));
+    eq(root.dataset.text, "ax", "30 px root: ax");
+    root.style.fontSize = "21px";
+    dispatchEvent(new Event("resize"));
+    eq(root.dataset.text, "large", "21 px root: large");
+  } finally { stop(); root.remove(); }
 });
 
 test("frame: scale fits the window, never above 1, keeps a margin", () => {

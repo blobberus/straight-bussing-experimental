@@ -95,6 +95,8 @@ test("boot: Nearby fills from the live feed, no status pill", async () => {
   eq(title(), "Current trip");
   ok($("#pill").hidden, "status pill should be hidden with fresh data: " + txt($("#pill")));
   ok(txt(content()).includes("Use my location"), "location prompt shown without permission");
+  eq(W.document.documentElement.dataset.text, "default", "text-size class set in the first frames (ui/frame.js), default browser text");
+  ok(parseFloat(W.document.getElementById("app").style.getPropertyValue("--v-peek")) > 40, "collapsed height measured from the header after boot");
 });
 
 test("tabs: Nearby / Routes / My Routes switch title and aria-current; no Alerts tab", async () => {

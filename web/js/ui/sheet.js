@@ -450,13 +450,16 @@ export function createSheet({ sheetEl, contentEl, headEl, grabEl, initial, panel
     } else host.style.setProperty("--v-peek", h + "px");
     if (detent === "peek") emitInset();
   };
+  // The first measurement comes from the observer's first call in the first frame (after the layout the browser does
+  // anyway, before the paint), never synchronously here: reading offsetHeight now would lay out the page before the app
+  // has built it, then again after (about 30 ms of main-thread time at load with a 4x slower CPU, headless Edge).
   if (typeof ResizeObserver === "function") {
-    const ro = new ResizeObserver(() => fitPeek(false));
+    let first = true;
+    const ro = new ResizeObserver(() => { fitPeek(first); first = false; });
     ro.observe(headEl);
     offs.push(() => ro.disconnect());
-  }
+  } else fitPeek(true);
   offs.push(() => host.style.removeProperty("--v-peek"));
-  fitPeek(true);
   /* ---- a hairline under the header once the content scrolls (spec 10.6) ---- */
   let scrolled = false;
   on(contentEl, "scroll", () => {
