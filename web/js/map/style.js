@@ -22,7 +22,7 @@
  *               busy buildings from 14.5: college/school/library/hospital/museum/... names
  *               only, no icons; every other POI stays hidden; a name the landmarks below already show is skipped),
  *               sb_name_path (z>=16), sb_name_minor (z>=14), sb_name_major (z>=12.5): street names,
- *               no uppercase, 2 px halo in the land color, majors bold. Added symbol layers sit in that
+ *               no uppercase, 1.5 px halo in the land color, majors bold (DESIGN-SPEC 11.2). Added symbol layers sit in that
  *               order where the first original street-name layer was, so street names (on top) win label
  *               collisions over campus names, which win over house numbers. The curated building and place
  *               names (web/data/landmarks.json) are NOT basemap text: map/landmarks.js draws them above the route
@@ -45,16 +45,21 @@ export const ATTRIBUTION = link('https://openfreemap.org', 'OpenFreeMap') + DOT 
 export const RASTER_ATTRIBUTION = link('https://www.openstreetmap.org/copyright', 'OpenStreetMap');
 const COPY = /(&copy;|\u00a9)\s*/g;
 
-/** Basemap palettes. Street text vs road fill: light 12.9:1, dark 9.6:1. */
+/**
+ * Basemap palettes (docs/DESIGN-SPEC.md 11.2): quiet, low-contrast land; streets readable; nothing colored but water and
+ * parks, both desaturated; roads in dark stay neutral gray (color is for the data layers on top). Street text vs its
+ * land-colored halo: light 7.7:1 (minor) / 13:1 (major), dark 10.7:1 / 13:1; minor text on a road fill >= 7.6:1.
+ * The keys the spec does not list (residential, paths, motorways, house numbers, place names, campus POIs) follow it.
+ */
 export const PALETTE = {
-  light: { bg: '#eeefeb', park: '#d8e7d0', wood: '#dfe9d8', resid: '#eaeae5', water: '#aecde3', waterText: '#3f6a8c',
-    bldg: '#e1e0da', bldgLine: '#c6c4bc', path: '#d3cfc2', minor: '#ffffff', minorCase: '#cdd0ca', major: '#ffffff',
-    majorCase: '#adb1aa', motorway: '#fbe3a6', motorwayCase: '#d8b878', text: '#26272c', textMinor: '#3e3f46',
-    halo: '#ffffff', hn: '#62656d', poi: '#2c4a66', place: '#696b72' },
-  dark: { bg: '#18181b', park: '#1b2620', wood: '#1a221d', resid: '#1a1a1d', water: '#0f2232', waterText: '#86a9c6',
-    bldg: '#25252a', bldgLine: '#37373f', path: '#404048', minor: '#37373e', minorCase: '#0b0b0d', major: '#4b4b54',
-    majorCase: '#0b0b0d', motorway: '#5d5547', motorwayCase: '#0b0b0d', text: '#efeff4', textMinor: '#d6d6de',
-    halo: '#18181b', hn: '#adadb8', poi: '#bcd0e2', place: '#a0a0aa' },
+  light: { bg: '#f1f2ee', park: '#dce9d5', wood: '#e2eadc', resid: '#edeeea', water: '#b7d3e6', waterText: '#4a6e8c',
+    bldg: '#e4e3de', bldgLine: '#cfcdc6', path: '#d6d3c8', minor: '#ffffff', minorCase: '#d3d5cf', major: '#ffffff',
+    majorCase: '#b3b7b0', motorway: '#f7e7bd', motorwayCase: '#d8c189', text: '#2e3036', textMinor: '#4a4c53',
+    halo: '#f1f2ee', hn: '#686b72', poi: '#565c66', place: '#6a6d74' },
+  dark: { bg: '#18191c', park: '#1c2621', wood: '#1a221d', resid: '#1b1c1f', water: '#10202d', waterText: '#86a9c6',
+    bldg: '#232327', bldgLine: '#303036', path: '#3a3b41', minor: '#33343a', minorCase: '#0b0b0d', major: '#45464e',
+    majorCase: '#0b0b0d', motorway: '#4f4a40', motorwayCase: '#0b0b0d', text: '#e2e3ea', textMinor: '#c9cad2',
+    halo: '#18191c', hn: '#a7a8b1', poi: '#b4b9c2', place: '#a2a3ab' },
 };
 
 const NAME = ['coalesce', ['get', 'name_en'], ['get', 'name']];
@@ -81,7 +86,7 @@ function nameLayer(id, P, { filter, minzoom, sizes, bold, color }) {
     layout: { 'symbol-placement': 'line', 'text-field': NAME, 'text-font': [bold ? 'Noto Sans Bold' : 'Noto Sans Regular'],
       'text-size': zoomed(sizes), 'text-letter-spacing': 0.02, 'symbol-spacing': 280, 'text-padding': 3,
       'text-max-angle': 30, 'text-rotation-alignment': 'map', 'text-pitch-alignment': 'viewport' },
-    paint: { 'text-color': color, 'text-halo-color': P.halo, 'text-halo-width': 2, 'text-halo-blur': 0.25 },
+    paint: { 'text-color': color, 'text-halo-color': P.halo, 'text-halo-width': 1.5, 'text-halo-blur': 0.25 },   // spec 11.2: 1.5 px halo
   };
 }
 
@@ -96,7 +101,7 @@ function addedSymbols(P, landmarks) {
       filter: campusFilter(landmarks),
       layout: { 'text-field': NAME, 'text-font': ['Noto Sans Bold'], 'text-size': zoomed([15, 11, 17, 12.5, 19, 14]),
         'text-max-width': 7, 'text-padding': 4, 'text-optional': true, 'symbol-sort-key': ['coalesce', ['get', 'rank'], 99] },
-      paint: { 'text-color': P.poi, 'text-halo-color': P.halo, 'text-halo-width': 1.8, 'text-halo-blur': 0.25 } },
+      paint: { 'text-color': P.poi, 'text-halo-color': P.halo, 'text-halo-width': 1.5, 'text-halo-blur': 0.25 } },
     nameLayer('sb_name_path', P, { minzoom: 16, filter: ['==', ['get', 'class'], 'path'], sizes: [16, 10.5, 18, 12.5, 20, 14], color: P.textMinor }),
     nameLayer('sb_name_minor', P, { minzoom: 14, filter: ['all', LINES, ['match', ['get', 'class'], ['minor', 'service', 'track'], true, false]],
       sizes: [14, 10.5, 16, 12.5, 18, 14.5, 20, 16], color: P.textMinor }),
