@@ -23,8 +23,9 @@ import { tripYou, legStatus, busName } from "../../core/tripyou.js";
 import { routeChip, etaBlock, officialLinks } from "../components.js";
 import { isPlanJourney, tripBarHTML } from "./journey.js";
 import { WALK_IC, tag, walkMins, catchNote } from "./tripinfo.js";
+import { svg } from "../icons.js";
 
-const CHEV = '<svg class="tp-chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7"/></svg>';
+const CHEV = svg("chevron-right", 13, { cls: "tp-chev", stroke: 2.5 });
 const PIN = '<span class="tp-pin" aria-hidden="true"></span>';
 const SLIDE_S = 3;
 
@@ -103,13 +104,67 @@ export function tripMetaText(state, now = nowS()) {
   return live ? `Arriving In: ${etaText(t, now, !!p.stale)}` : `Arriving In: ${estText(t, now)} est.`;
 }
 
-/** The planned bus left without you: never promise a next bus that is not there (iOS TripText.missedNote). */
-const missedNote = (leg) => (leg.vehicle ? "Your planned bus has left. Showing the next one." : "Your planned bus has left.");
+/**
+ * The sheet header while a trip is on (docs/DESIGN-SPEC.md 10.6, open decision O3 default): the current step is the title
+ * ("Walk to Ellis Ave & 57th St"), the trip under it ("Trip to Trader Joe's"). Same evaluation as the card (tripNow).
+ * @param {object} state
+ * @param {number} [now]
+ * @returns {{title:string, sub:string}|null} null with no trip
+ */
+export function tripHeader(state, now = nowS()) {
+  if (!isPlanJourney(state)) return null;
+  const p = tripNow(state, now);
+  if (!p) {
+    const w = walkTrip(state.journey, state, now);
+    return w ? { title: `Walk to ${w.to}`, sub: `Trip to ${w.to}` } : null;
+  }
+  const leg = p.legs[p.active], sub = `Trip to ${p.to}`;
+  if (p.phase === "arrived") return { title: leg && leg.type === "walk" ? `Walk to ${p.to}` : `Arrived at ${p.to}`, sub };
+  if (p.phase === "walk-to-stop") return { title: `Walk to ${leg.board.name}`, sub };
+  const short = (state.routes && state.routes[leg.rid] && (state.routes[leg.rid].short || state.routes[leg.rid].long)) || "the bus";
+  if (p.phase === "waiting") return { title: `Board ${short} at ${leg.board.name}`, sub };
+  return { title: `Ride to ${leg.alight.name}`, sub };
+}
+
+/**
+ * The header's trailing slot while a trip is on (spec 10.6, owner wording "Arriving In"): a caption over the ETA numeral,
+ * from tripMetaText (the same words: "Arriving In: 4 min", "Walk 6 min", "Arrived"). Trusted HTML, every text escaped;
+ * one spoken sentence.
+ * @param {object} state
+ * @param {number} [now]
+ * @returns {string} '' with no trip
+ */
+export function tripMetaHTML(state, now = nowS()) {
+  const t = tripMetaText(state, now);
+  if (!t) return "";
+  const m = /^(Arriving In|Walk):?\s+(.+)$/.exec(t);
+  if (!m) return `<span class="hm hm--text">${esc(t)}</span>`;
+  const num = /^(~?\d+|~?Now|Now)(\s+min)?(.*)$/.exec(m[2]);
+  const big = num ? `<span class="num">${esc(num[1])}</span>${num[2] ? '<span class="unit">min</span>' : ""}${num[3] ? `<span class="v-est">${esc(num[3].trim())}</span>` : ""}`
+    : `<span class="num">${esc(m[2])}</span>`;
+  return `<span class="hm hm--stack" role="text" aria-label="${esc(t.replace(":", ""))}"><span class="hm-cap" aria-hidden="true">${esc(m[1])}</span>`
+    + `<span class="eta" aria-hidden="true">${big}</span></span>`;
+}
+
+/**
+ * The planned bus left without you (spec 13.8, O8 wording): "You missed the 3:11 PM bus. Following the next one, 3:21 PM,
+ * est." when a next bus is followed, else "You missed the 3:11 PM bus." (never promise a next bus that is not there; iOS
+ * TripText.missedNote). Without the planned time: "Your planned bus has left."
+ * @param {object} leg active bus leg (tripNow)
+ * @param {object} state
+ * @returns {string}
+ */
+export function missedNote(leg, state) {
+  const plan = ((state && state.journey && state.journey.legs) || []).find((l) => l && l.type === "bus" && l.rid === leg.rid && l.board && leg.board && String(l.board.id) === String(leg.board.id));
+  const planned = plan && plan.boardT ? `You missed the ${clock(plan.boardT)} bus.` : "Your planned bus has left.";
+  if (!leg.vehicle) return planned;
+  return leg.boardEta ? `${planned} Following the next one, ${clock(leg.boardEta)}, est.` : `${planned} Showing the next one.`;
+}
 
 /** One-glance status card for the current phase. */
 function nowCard(p, state, now, you) {
   const leg = p.legs[p.active], late = !!p.stale;
-  let ic = "", prim = "", sec = [], right = "";
+  let ic = "", prim = "", sec = [], right = "", missed = "";
   if (p.phase === "arrived") {
     const fin = leg && leg.type === "walk" ? leg : null;
     ic = PIN;
@@ -123,11 +178,9 @@ function nowCard(p, state, now, you) {
       prim = `Walk ${walkMins(leg.walkMin)} min to ${leg.board.name}`;
       if (leg.boardEta) sec.push(catchNote(leg.boardEta, leg.walkMin || 0, now).text);
       sec.push(w.status || (leg.boardEta ? `${route.short || "Bus"} ${leg.boardLive ? "arrives" : "planned"} ${inMin(leg.boardEta, now)}${leg.boardLive ? "" : ", est."}` : "No live bus time yet"));
-      if (leg.missed) sec.push(missedNote(leg));   // near the stop: say why another bus is shown
     } else if (p.phase === "waiting") {
       prim = w.status || (leg.boardEta ? (leg.boardLive ? "Next bus" : `Bus planned for ${clock(leg.boardEta)}`) : "Waiting for the bus");
       sec.push(`Board at ${leg.board.name}${leg.boardEta ? " " + inMin(leg.boardEta, now) : ""}${leg.boardLive ? "" : leg.boardEta ? ", est." : ""}`);
-      if (leg.missed) sec.push(missedNote(leg));
     } else {
       prim = w.status || `Riding to ${leg.alight.name}`;
       const when = leg.alightEta ? ` about ${clock(leg.alightEta)}${leg.alightLive ? "" : ", est."}` : "";
@@ -138,9 +191,11 @@ function nowCard(p, state, now, you) {
     if (!leg.live) sec.push(leg.byTime ? "No live bus data: following the plan's times (estimate)." : "No live bus position right now.");
     const t = p.phase === "on-bus" ? leg.alightEta : leg.boardEta;
     const live = p.phase === "on-bus" ? leg.alightLive : leg.boardLive;
-    if (t) right = etaBlock(t, { stale: late || !live, now });
+    if (t) right = etaBlock(t, { stale: late || !live, now, hero: true });   // the one etaHero of the screen (spec 10.10)
+    // missed bus / re-plan (spec 13.8): a warning banner at the top of the card, no modal
+    if (leg.missed && p.phase !== "on-bus") missed = `<div class="tp-missed" role="status">${svg("triangle-alert-fill", 17)}<span>${esc(missedNote(leg, state))}</span></div>`;
   }
-  return `<div class="tp-now tp-now--${esc(p.phase)}">${ic}<span class="v-grow"><span class="v-prim tp-nowprim">${esc(prim)}</span>`
+  return `<div class="tp-now tp-now--${esc(p.phase)}">${missed}${ic}<span class="v-grow"><span class="v-prim tp-nowprim">${esc(prim)}</span>`
     + sec.map((s) => `<span class="v-sec">${esc(s)}</span>`).join("") + `</span>${right}</div>`;
 }
 
@@ -247,13 +302,13 @@ export function tripProgressHTML(state, now = nowS(), opts = {}) {
       + `<span class="v-sec">No bus needed: it is close enough to walk.</span></span></div><div class="tp-acts">${steps}</div></section>`;
   }
   const left = p.arriveT ? Math.max(0, Math.round((p.arriveT - now) / 60)) : null;
-  const arrive = p.arriveT ? `Arrive about ${esc(clock(p.arriveT))}${left != null && p.phase !== "arrived" ? ` · ${left < 1 ? "under a minute" : left + " min"}` : ""} ${tag("est.")}` : "Arrival time unknown";
+  const arrive = p.arriveT ? `Arrive about ${esc(clock(p.arriveT))}${left != null && p.phase !== "arrived" ? `, ${left < 1 ? "under a minute" : left + " min"}` : ""} ${tag("est.")}` : "Arrival time unknown";
   let h = `<section class="tp" aria-label="Trip in progress">`
     + `<div class="tp-head"><span class="v-grow"><span class="tp-title" tabindex="-1">${esc("Trip to " + p.to)}</span><span class="v-sec tp-arrive">${arrive}</span></span>`
     + `<button type="button" class="v-btn v-btn--secondary tp-end" data-action="journey:end">End trip</button></div>`;
   if (p.stale === "old" || p.stale === "err") h += '<p class="v-stale" role="status">Live data delayed. Bus position and times may be off.</p>';
   h += nowCard(p, state, now, tripYou(p, state));
-  h += '<ol class="tp-steps" aria-label="Trip timeline">';
+  h += '<h3 class="v-h tp-steps-h">Steps</h3><ol class="tp-steps" aria-label="Trip timeline">';
   p.legs.forEach((l, i) => { h += l.type === "walk" ? walkHTML(l, p.legs, i, now) : busHTML(l, i, p, state, now); });
   h += `<li class="tp-step tp-dest${p.phase === "arrived" ? " is-active" : ""}">${PIN}<span class="v-grow"><span class="tp-wt">${esc(p.to)}</span>`
     + `<span class="v-sec">${p.arriveT ? `Arrive about ${esc(clock(p.arriveT))} ${tag("est.")}` : "Destination"}</span></span></li></ol>`;
