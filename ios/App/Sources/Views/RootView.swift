@@ -81,6 +81,8 @@ struct RootView: View {
                 }
                 .padding(.horizontal, Space.insetChrome)
                 .padding(.top, Space.s2)
+                // pinned to the screen's width: a too-wide child (very large text) can never widen its siblings
+                .frame(width: geo.size.width)
                 VStack(spacing: 0) {
                     BottomSheet(detent: $model.detent, available: available, onSettled: { _, h in
                         if abs(h - settledSheetH) > 0.5 { settledSheetH = h }
@@ -96,6 +98,7 @@ struct RootView: View {
                             }
                     }
                 }
+                .frame(width: geo.size.width)
             }
             // just above the collapsed sheet, or above the bottom bar when the sheet is expanded; never over the search
             // bar, the sheet title or Settings (spec 10.19)
