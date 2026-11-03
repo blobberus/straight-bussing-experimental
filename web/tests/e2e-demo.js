@@ -26,13 +26,17 @@ const txt = (el) => (el ? el.textContent.replace(/\s+/g, " ").trim() : "");
 const store = () => W.__demoStore;
 const title = () => txt($("#title"));
 const tab = (id) => $(`#tabs button[data-tab="${id}"]`).click();
-/** The demo pill is visible with its words, and it (not the map) takes a tap at its middle. */
+/** The demo chip (DESIGN-SPEC 10.3: a 32 pt capsule sized to its words) is visible with its words, and it (not the map)
+ * takes a tap at its middle and in a 44 pt band around it. */
 function pillOn(where) {
   const p = $("#pill"), r = p.getBoundingClientRect();
-  ok(!p.hidden && r.height >= 44 && r.width > 200 && W.getComputedStyle(p).visibility === "visible", where + ": pill visible");
+  ok(!p.hidden && r.height >= 32 && r.width > 120 && W.getComputedStyle(p).visibility === "visible", where + ": pill visible");
+  eq(p.dataset.form, "chip", where + ": the small chip form, not a banner");
   eq(txt($("#pillText")), "Simulated buses", where + ": pill words");
   const hit = D.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
   ok(hit && hit.closest('[data-action="demo:info"]'), where + ": the whole pill is the button (" + (hit && hit.className) + ")");
+  const edge = D.elementFromPoint(r.left + r.width / 2, r.top - 4);
+  ok(edge && edge.closest('[data-action="demo:info"]'), where + ": 44 pt hit area above the 32 pt chip");
 }
 const passioRequests = () => W.performance.getEntriesByType("resource").map((e) => e.name).filter((u) => /passio3\.com/.test(u));
 const dialog = () => D.querySelector("dialog.v-confirm[open]");

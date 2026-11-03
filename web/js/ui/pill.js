@@ -1,6 +1,6 @@
 /**
  * @module ui/pill
- * The floating status pill under the search bar (moved out of main.js 2026-10-10): stale / failed feed and
+ * The floating status chip / banner under the search bar (DESIGN-SPEC 10.3; moved out of main.js 2026-10-10): stale / failed feed and
  * empty-feed states, each with its own icon so the state never rests on color alone (iOS RootView
  * StatusPill): feed error = wifi off, delayed / out of date = clock with an alert mark, no live locations
  * while routes are scheduled = antenna off, no shuttles running = bus. Same words as before (and as the
@@ -16,21 +16,17 @@ import { staleLevel, activeAlerts } from "../core/arrivals.js";
 import { silentService } from "../core/operating.js";
 import { DEMO_PILL } from "../core/demo.js";
 import { OFFICIAL_PHONE } from "./components.js";
+import { PATHS, svg } from "./icons.js";
 
 /** Seconds after boot before "never polled" counts as a feed error. */
 export const FIRST_POLL_GRACE_S = 20;
 
-const P = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
-/** Lucide-style outline icons (one family with the rest of the app), keyed by pillState().icon. */
+/** Status icons (ui/icons.js, Lucide + drawn), keyed by pillState().icon: one glyph per state (spec 5). */
 export const PILL_ICONS = Object.freeze({
-  feed: '<path d="M12 20h.01"/><path d="M8.5 16.43a5 5 0 0 1 7 0"/><path d="M5 12.86a10 10 0 0 1 5.17-2.69"/><path d="M19 12.86a10 10 0 0 0-2-1.52"/><path d="M2 8.82a15 15 0 0 1 4.18-2.64"/><path d="M22 8.82a15 15 0 0 0-11.29-3.76"/><path d="M2 2l20 20"/>',
-  delay: '<path d="M12 6v6l4 2"/><path d="M16 21.16a10 10 0 1 1 5-13.52"/><path d="M20 11.5v6"/><path d="M20 21.5h.01"/>',
-  silent: '<path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/><path d="M2 2l20 20"/>',
-  idle: '<rect x="4" y="3" width="16" height="15" rx="3"/><path d="M4 11h16M8 21v-3M16 21v-3M8 14.5h.01M16 14.5h.01"/>',
-  demo: '<path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/>',
+  feed: PATHS["wifi-off"], delay: PATHS["clock-alert"], silent: PATHS["antenna-off"], idle: PATHS["bus-front"], demo: PATHS["flask-conical"],
 });
-/** The demo pill's tap mark (Lucide info): it says the pill can be tapped for more. */
-const INFO_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" ${P} aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>`;
+/** The demo chip's tap mark (info): it says the chip can be tapped for more. */
+const INFO_SVG = svg("info", 15);
 
 /**
  * What the pill shows (pure).
@@ -65,9 +61,22 @@ export function pillState(s, now, { bootS = now, graceS = FIRST_POLL_GRACE_S, de
  * @param {string} name PILL_ICONS key
  * @returns {string}
  */
-export function pillIconSVG(name) {
-  const body = PILL_ICONS[name];
-  return body ? `<svg width="18" height="18" viewBox="0 0 24 24" ${P} aria-hidden="true" focusable="false">${body}</svg>` : "";
+export function pillIconSVG(name, size = 17) {
+  const key = { feed: "wifi-off", delay: "clock-alert", silent: "antenna-off", idle: "bus-front", demo: "flask-conical" }[name];
+  return key ? svg(key, size) : "";
+}
+
+/**
+ * The banner's words with the first sentence in Semibold (spec 10.3), as DOM nodes (the text is never parsed as HTML).
+ * @param {HTMLElement} el
+ * @param {string} msg
+ */
+export function setPillText(el, msg) {
+  const m = /^(.+?[.!?])\s+(.+)$/.exec(String(msg || ""));
+  const b = document.createElement("b");
+  b.textContent = m ? m[1] : String(msg || "");
+  if (m) el.replaceChildren(b, document.createTextNode(" " + m[2]));
+  else el.replaceChildren(b);
 }
 
 /**
@@ -117,8 +126,10 @@ export function createPill(els, o = {}) {
       els.pill.hidden = !p.msg;
       els.pill.className = "statuspill" + (p.kind ? " " + p.kind : "");
       els.pill.dataset.icon = p.icon;
-      ic.innerHTML = pillIconSVG(p.icon);
-      els.text.textContent = p.msg;
+      els.pill.dataset.form = p.demo ? "chip" : "banner";   // spec 10.3: simulated buses = a small chip, every other state = a banner
+      ic.innerHTML = pillIconSVG(p.icon, p.demo ? 15 : 17);
+      if (p.demo) els.text.textContent = p.msg;
+      else setPillText(els.text, p.msg);
       els.retry.hidden = !p.retry;
       see.hidden = !p.alert;
       tap.hidden = !p.demo;
