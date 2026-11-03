@@ -25,7 +25,7 @@ import { initTheme, isDark, onChange as onThemeChange } from "./ui/theme.js";
 import { emptyState } from "./ui/components.js";
 import { createPill } from "./ui/pill.js";
 import { registerContextActions, mountContextBar } from "./ui/contextbar.js";
-import { initFrame } from "./ui/frame.js";
+import { initFrame, initTextSize } from "./ui/frame.js";
 import { isSettingsOpen, closeSettingsOverlay } from "./ui/settings-overlay.js";
 import { startTripMap } from "./ui/tripmap.js";
 import { createCompass, mayAskCompass } from "./ui/compass.js";
@@ -43,7 +43,7 @@ const BUS_KEYS = ["buses", "feedTs", "routes", "busId", ...VIS_KEYS];
 
 const $ = (id) => document.getElementById(id);
 const el = {
-  sheet: $("sheet"), head: $("sheetHead"), grab: $("grab"), content: $("content"), title: $("title"),
+  sheet: $("sheet"), head: $("sheetHead"), grab: $("grab"), content: $("content"), title: $("title"), sub: $("subtitle"),
   right: $("titleRight"), back: $("back"), tabs: $("tabs"), ctxbar: $("ctxbar"), gear: $("settingsBtn"), topbar: $("topbar"), app: $("app"),
   pill: $("pill"), pillText: $("pillText"), pillRetry: $("pillRetry"), dlg: $("dlg"), toast: $("toast"), locate: $("locateBtn"),
 };
@@ -203,15 +203,28 @@ async function onLocateFab() {
 function safe(fn, fallback) {
   try { return fn() ?? fallback; } catch (e) { console.error(e); return fallback; }
 }
+let rightHTML = null;
 function renderHeader(s, id, def) {
   const title = def ? String(safe(() => def.title(s), "")) : "Current trip";
   if (el.title.textContent !== title) el.title.textContent = title;
+  // a second line under the title (a trip in progress: the current step is the title, the trip under it; spec 10.6, O3)
+  const sub = def && def.subtitle ? String(safe(() => def.subtitle(s), "")) : "";
+  if (el.sub && el.sub.textContent !== sub) el.sub.textContent = sub;
+  el.title.classList.toggle("is-step", !!sub);
   if (el.app && el.app.dataset.view !== id) el.app.dataset.view = id || "";   // css: hide the search bar in Directions
   el.title.classList.toggle("sm", !TABS.includes(id));
   if (el.back.hidden !== !canGoBack()) el.back.hidden = !canGoBack();   // render() runs on every store change: write only changes
-  const metaFn = def && (def.meta || def.peek);
-  const right = metaFn ? String(safe(() => metaFn(s), "")) : "";
-  if (el.right.textContent !== right) el.right.textContent = right;
+  // trailing slot: one summary or one action (spec 10.6). metaHTML = trusted markup built with esc() (badge + ETA + live
+  // dot, Arriving In, an action button); else the plain-text meta
+  if (def && def.metaHTML) {
+    const h = String(safe(() => def.metaHTML(s), ""));
+    if (h !== rightHTML) { rightHTML = h; el.right.innerHTML = h; }
+  } else {
+    rightHTML = null;
+    const metaFn = def && (def.meta || def.peek);
+    const right = metaFn ? String(safe(() => metaFn(s), "")) : "";
+    if (el.right.textContent !== right || el.right.children.length) el.right.textContent = right;
+  }
   const tab = activeTab(s);
   for (const b of el.tabs.querySelectorAll("button[data-tab]")) {
     const on = b.dataset.tab === tab;
@@ -260,6 +273,19 @@ function scheduleRender() {
   renderQueued = true;
   queueMicrotask(() => { renderQueued = false; render(); });
 }
+/** Re-render only the sheet header (a view's own state changed, e.g. Directions picked another option). */
+function refreshHeader() {
+  const s = store.get();
+  let id = s.view, def = getView(id);
+  if (!def && getView("nearby")) def = getView((id = "nearby"));
+  renderHeader(s, id, def);
+}
+/** The locate button shows the filled glyph while it means "following you" (spec 10.4): during a trip while the camera
+ * follows you, otherwise once your location is known (iOS LocateButton). */
+function renderLocate(s) {
+  const on = tripMap?.active?.() ? !!tripMap.following?.() : !!s.user;
+  if (el.locate && el.locate.classList.contains("is-on") !== on) el.locate.classList.toggle("is-on", on);
+}
 /** Render header, pill and content for the current state. Cheap; safe to call often. */
 function render() {
   const s = store.get();
@@ -268,6 +294,7 @@ function render() {
   if (!def && getView("nearby")) def = getView((id = "nearby"));
   renderHeader(s, id, def);
   pill.render(s, now);
+  renderLocate(s);
   if (!def) return;
   const key = id + "|" + (s.stopId || "") + "|" + (s.routeId || "");
   if (def !== cur.def || (def.mount && key !== cur.key)) return switchView(id, def, key, s);
@@ -305,7 +332,7 @@ function wireUI() {
   el.back.addEventListener("click", () => back());
   el.tabs.addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) navigate(b.dataset.tab); });
   el.locate.addEventListener("click", onLocateFab);
-  for (const root of [el.content, el.pill, el.dlg, el.ctxbar, el.topbar || el.gear]) bindActions(root, () => ctx);
+  for (const root of [el.content, el.pill, el.dlg, el.ctxbar, el.topbar || el.gear, el.right]) bindActions(root, () => ctx);
   el.dlg.addEventListener("click", (e) => { if (e.target === el.dlg) closeDlg(); });
   el.content.addEventListener("focusout", () => setTimeout(() => { if (dirty && !inputFocused()) render(); }, 0));
   document.addEventListener("keydown", (e) => {
@@ -350,6 +377,7 @@ function openRoute(rid, fit = true) {
 async function boot() {
   initTheme(store);
   initFrame();
+  initTextSize();
   try {
     if (!window.L) throw new Error("Leaflet not loaded");
     map = createMap("map");
@@ -363,6 +391,7 @@ async function boot() {
   // the map is visible above the sheet AND the bottom navigation bar under it (phone layouts only)
   bus.on("sheet:inset", (p) => mapCall("setBottomInset", ((p && p.px) || 0) + (p && p.px && !sheet?.isPanel?.() ? el.tabs.offsetHeight || 0 : 0)));
   bus.on("toast", (p) => toast(p && p.text));
+  bus.on("sheet:header", () => refreshHeader());
   bus.on("settings:toggle", () => syncHistory());   // Settings overlay opened / closed (ui/settings-overlay.js)
   sheet = createSheet({ sheetEl: el.sheet, contentEl: el.content, headEl: el.head, grabEl: el.grab });
   // collapsing the sheet puts the keyboard away (owner 2026-10-12): blur a focused field in the app
