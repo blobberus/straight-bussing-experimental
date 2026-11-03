@@ -84,7 +84,7 @@ function buttonsFrame() {
       + `<span class="tp-tag tp-tag--board">Board</span><span class="tp-tag tp-tag--alight">Get off</span><span class="v-fchip"><span class="v-fchip-t">Routes to X</span></span>`
       + `<div class="mr-acts" style="visibility:visible;position:static;width:auto"><button class="mr-act mr-act--info">Details</button><button class="mr-act mr-act--edit">Edit</button><button class="mr-act mr-act--del">Delete</button></div>`
       + `<span class="t-ph" style="color:var(--text-2);background:var(--surface)">Station name (placeholder color on a field)</span></div>`
-      + `<div class="v-card"><button class="v-btn v-btn--secondary">In a card</button><span class="j-crit">Least walking</span></div>`
+      + `<div class="v-card"><button class="v-btn v-btn--secondary">In a card</button><button class="v-btn v-btn--destructive">End trip</button><span class="j-crit">Least walking</span></div>`
       + `</body></html>`;
     f.onload = () => setTimeout(() => resolve(f), 50);
     document.body.appendChild(f);

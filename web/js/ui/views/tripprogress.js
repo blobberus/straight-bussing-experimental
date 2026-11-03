@@ -299,7 +299,7 @@ export function tripProgressHTML(state, now = nowS(), opts = {}) {
     if (!w) return tripBarHTML(state) + `<div class="tp-acts">${steps}</div>`;
     return `<section class="tp" aria-label="Trip in progress"><div class="tp-head"><span class="v-grow"><span class="tp-title" tabindex="-1">${esc("Trip to " + w.to)}</span>`
       + `<span class="v-sec tp-arrive">Arrive about ${esc(clock(w.arriveT))} ${tag("est.")}</span></span>`
-      + `<button type="button" class="v-btn v-btn--secondary tp-end" data-action="journey:end">End trip</button></div>`
+      + `<button type="button" class="v-btn v-btn--destructive tp-end" data-action="journey:end">End trip</button></div>`
       + `<div class="tp-now tp-now--walk"><span class="tp-wic" aria-hidden="true">${WALK_IC}</span><span class="v-grow"><span class="v-prim tp-nowprim">${esc(`Walk ${walkMins(w.minNow)} min to ${w.to}`)}</span>`
       + `<span class="v-sec">No bus needed: it is close enough to walk.</span></span></div><div class="tp-acts">${steps}</div></section>`;
   }
@@ -307,7 +307,7 @@ export function tripProgressHTML(state, now = nowS(), opts = {}) {
   const arrive = p.arriveT ? `Arrive about ${esc(clock(p.arriveT))}${left != null && p.phase !== "arrived" ? `, ${left < 1 ? "under a minute" : left + " min"}` : ""} ${tag("est.")}` : "Arrival time unknown";
   let h = `<section class="tp" aria-label="Trip in progress">`
     + `<div class="tp-head"><span class="v-grow"><span class="tp-title" tabindex="-1">${esc("Trip to " + p.to)}</span><span class="v-sec tp-arrive">${arrive}</span></span>`
-    + `<button type="button" class="v-btn v-btn--secondary tp-end" data-action="journey:end">End trip</button></div>`;
+    + `<button type="button" class="v-btn v-btn--destructive tp-end" data-action="journey:end">End trip</button></div>`;
   if (p.stale === "old" || p.stale === "err") h += '<p class="v-stale" role="status">Live data delayed. Bus position and times may be off.</p>';
   h += nowCard(p, state, now, tripYou(p, state));
   h += '<h3 class="v-h tp-steps-h">Steps</h3><ol class="tp-steps" aria-label="Trip timeline">';
