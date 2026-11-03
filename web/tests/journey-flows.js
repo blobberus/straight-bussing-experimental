@@ -253,7 +253,7 @@ test("directions: live updates re-plan in the background at most every 8 s, keep
 
 test("directions: walk-only results offer no Start", async () => {
   const { el } = await dirWith([]);
-  ok(el.textContent.includes("Walk the whole way"));
+  ok(el.textContent.includes("min walk"));
   ok(!el.querySelector('[data-action="dir:start"]'));
   unmountDirections(); el.remove();
 });

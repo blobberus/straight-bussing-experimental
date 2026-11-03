@@ -162,8 +162,8 @@ function walkOptionHTML(o, i, now, state) {
     + `<span class="v-sec j-oline">${esc(walkDetail(o.walkM, l.source))}</span></button>${on ? stepsHTML(o, now, state) + start : ""}</div>`;
 }
 
-/** "Walk the whole way, 605 m, sidewalk route" (or ", estimate" for a straight-line guess). */
-const walkDetail = (m, source) => `Walk the whole way, ${Math.round(m || 0)} m, ${source === "router" ? "sidewalk route" : "estimate"}`;
+/** "605 m on sidewalks" (a routed walk) or "605 m, walking estimate" (straight line); the iPhone app's WalkOptionCard. */
+const walkDetail = (m, source) => `${Math.round(m || 0)} m${source === "router" ? " on sidewalks" : ", walking estimate"}`;
 
 /**
  * The destination's place details (spec 10.14, "Destination"): a compact card above the options, so the place details
@@ -212,7 +212,7 @@ export function resHTML(state, now = nowS()) {
   }
   h += r.options.slice(0, PLANNER.MAX_OPTS).map((o, i) => (o.walkOnly ? walkOptionHTML(o, i, now, state) : optionHTML(o, i, now, state))).join("");
   if (D.optsChanged) h += `<p class="v-foot" role="status">${esc(OPTS_CHANGED)}</p>`;   // the selected option went away in a live re-plan (spec 13.8)
-  if (!r.options[0]?.walkOnly) h += `<p class="v-foot">Walking the whole way: ${mins(w.min)} min, ${Math.round(w.m || 0)} m, ${w.source === "router" ? "sidewalk route" : "estimate"}</p>`;
+  if (!r.options[0]?.walkOnly) h += `<p class="v-foot">Walking the whole way: ${mins(w.min)} min (${Math.round(w.m || 0)} m), ${w.source === "router" ? "sidewalk route" : "estimate"}</p>`;
   if (D.refining) h += '<p class="v-foot" role="status">Checking sidewalk routes&hellip;</p>';
   return h + `<p class="v-foot v-estnote">${esc(NOTE)}</p>`;
 }
