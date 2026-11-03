@@ -64,7 +64,7 @@ export function createMap(elId) {
   const network = createNetworkLayer(map, { onStopTap: (id) => stopTap.emit(id) });
   const buses = createBusLayer(map, { onBusTap: (info) => busTap.emit(info) });
   const favs = createFavoritesLayer(map, { onStopTap: (id) => stopTap.emit(id) });
-  const landmarks = createLandmarkLayer(map, { pane: 'sbLabels', textAt: (box) => !!basemap.textAt?.(box) });
+  const landmarks = createLandmarkLayer(map, { pane: 'sbLabels', textAt: (box) => !!basemap.textAt?.(box), avoid: () => { try { return me ? me.getLatLng() : null; } catch (e) { return null; } } });
   basemap.onIdle?.(() => landmarks.refresh());   // the basemap placed its own names: keep building names off them
   const selG = L.layerGroup().addTo(map), hlG = L.layerGroup().addTo(map), planG = L.layerGroup().addTo(map);
   const labG = L.layerGroup().addTo(map);
@@ -265,6 +265,7 @@ export function createMap(elId) {
         me = L.marker(ll, { icon: L.divIcon({ className: 'sb-meicon', html: '<div class="sb-mecone"></div><div class="sb-me"></div>',
           iconSize: [18, 18], iconAnchor: [9, 9] }), interactive: false, keyboard: false, zIndexOffset: 400 }).addTo(map);
         renderHeading();
+        landmarks.refresh();   // keep the names off the new dot
       } else if (!me.getLatLng().equals(ll)) me.setLatLng(ll);
       const acc = +pos.accuracy;
       if (Number.isFinite(acc) && acc > 15 && acc < 2000) {
