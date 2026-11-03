@@ -399,8 +399,10 @@ function renderPlan(L, g, o, ctx) {
     const ll = normLatLngs(coords);
     if (ll.length < 2) return;
     pts.push(...ll);
-    L.polyline(ll, { pane: 'sbPlanCasing', className: 'sb-walk-casing', weight: 8, dashArray: '0.1 11', lineCap: 'round', interactive: false }).addTo(g);
-    L.polyline(ll, { pane: 'sbPlan', className: 'sb-walk', weight: 5, dashArray: '0.1 11', lineCap: 'round', interactive: false }).addTo(g);
+    // the walking path as round 4 pt dots 7 pt apart in tintFill (spec 11.4, Apple Maps style), each on a slightly larger
+    // light dot so it reads over a route line
+    L.polyline(ll, { pane: 'sbPlanCasing', className: 'sb-walk-casing', weight: 6.5, dashArray: '0.1 7', lineCap: 'round', interactive: false }).addTo(g);
+    L.polyline(ll, { pane: 'sbPlan', className: 'sb-walk', weight: 4, dashArray: '0.1 7', lineCap: 'round', interactive: false }).addTo(g);
   };
   const legs = Array.isArray(o.legs) ? o.legs : [];
   if (!legs.length && o.from && o.to) walk(o.coords?.length > 1 ? o.coords : [o.from, o.to]);

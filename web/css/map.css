@@ -119,24 +119,27 @@
 .sb-map.sb-you-onbus .sb-meicon,.sb-map.sb-you-onbus .sb-acc{display:none}
 .sb-you-ring{position:absolute;inset:-7px;border-radius:14px;border:3px solid var(--sb-accent);box-shadow:0 0 0 2px #fff,var(--sb-shadow);
   pointer-events:none}
-.sb-you-pill{position:absolute;left:50%;bottom:calc(100% + 13px);transform:translateX(-50%);padding:1px 7px;border-radius:8px;
-  background:var(--sb-accent-solid,var(--sb-accent));color:#fff;font:800 11px/16px -apple-system,BlinkMacSystemFont,system-ui,"Segoe UI",Roboto,sans-serif;
+.sb-you-pill{position:absolute;left:50%;bottom:calc(100% + 13px);transform:translateX(-50%);padding:1px 8px;border-radius:9px;
+  background:var(--sb-accent);color:#fff;font:var(--t-map-badge,700 11px/16px sans-serif);line-height:16px;
   white-space:nowrap;box-shadow:0 0 0 1.5px #fff,var(--sb-shadow);pointer-events:none}
 .sb-you{position:relative;width:20px;height:20px}
 .sb-you-dot{position:absolute;inset:0;box-sizing:border-box;border-radius:50%;background:var(--sb-accent);border:3px solid #fff;
   box-shadow:0 0 0 1px var(--sb-ring),var(--sb-shadow)}
 .sb-you--stop .sb-you-dot{background:var(--sb-chrome-solid);border:3px dashed var(--sb-accent)}
 .sb-you .sb-you-pill{bottom:calc(100% + 4px)}
-.sb-tlabel{position:absolute;left:0;top:11px;transform:translateX(-50%);padding:2px 8px;border-radius:8px;white-space:nowrap;
-  background:var(--sb-chrome-solid);color:var(--sb-text);font:700 12px/16px -apple-system,BlinkMacSystemFont,system-ui,"Segoe UI",Roboto,sans-serif;
-  box-shadow:0 0 0 1px var(--sb-ring),var(--sb-shadow);pointer-events:none}
-.sb-tlabel--off{box-shadow:0 0 0 2px var(--sb-accent),var(--sb-shadow)}
+/* trip callouts (spec 11.4): "Board here" / the get-off count as a 24 pt capsule in tintFill with mapCallout text, a 6 pt
+   pointer toward the stop above it */
+.sb-tlabel{position:absolute;left:0;top:14px;transform:translateX(-50%);display:flex;align-items:center;height:24px;padding:0 10px;
+  border-radius:12px;white-space:nowrap;background:var(--sb-accent);color:#fff;font:var(--t-map-callout,600 13px/16px sans-serif);
+  box-shadow:0 1px 3px rgba(30,32,45,.3);pointer-events:none}
+.sb-tlabel::before{content:"";position:absolute;left:50%;top:-6px;margin-left:-6px;border:6px solid transparent;border-top:0;border-bottom-color:var(--sb-accent)}
 
 /* trip plan */
 .sb-walk{stroke:var(--sb-accent)}
 .sb-walk-casing{stroke:var(--sb-casing)}
 .sb-plan-stop{fill:var(--sb-stop-fill)}
-.sb-pin-start{fill:var(--sb-live);stroke:#fff}
+/* the start: a hollow ring in tintFill (green means live data only; the Directions Start mark is the same ring) */
+.sb-pin-start{fill:var(--sb-stop-fill);stroke:var(--sb-accent)}
 .sb-pin-end{position:relative;width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);margin-top:2px;
   background:var(--sb-danger);border:3px solid #fff;box-sizing:border-box;box-shadow:0 0 0 1px var(--sb-ring),var(--sb-shadow)}
 .sb-pin-end::after{content:"";position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:#fff}
