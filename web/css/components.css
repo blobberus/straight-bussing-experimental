@@ -4,11 +4,11 @@
    the per-view files. Values come from tokens.css only. */
 
 /* ---------- section titles (10.8): sectionTitle, sentence case, aligned with card content; 24 above, 8 below ---------- */
-.sheet-content h2, .h2, .v-h {
+:where(.sheet-content h2), .h2, .v-h {   /* :where keeps it weaker than a view's own heading class (.mr-h, .r-h) */
   margin: var(--s-6) 0 var(--s-2); padding: 0 var(--inset-content);
   font: var(--t-section); color: var(--label-2);
 }
-.sheet-content p { margin: var(--s-2) 0; }
+:where(.sheet-content p) { margin: var(--s-2) 0; }
 
 /* ---------- grouped card (10.8): bgCard, rCard, no shadow, no border; rows separated at the separator inset ---------- */
 .card, .v-card {
