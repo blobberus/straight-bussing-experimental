@@ -4,7 +4,7 @@
 /* section title rows: sectionTitle with an optional trailing text action ("Edit", "Done") */
 .mr-hrow { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); min-height: var(--tap); margin: var(--s-4) 0 var(--s-1); padding: 0 0 0 var(--inset-content); }
 .mr-hrow:first-child { margin-top: 0; }
-.mr-h { margin: 0; font: var(--t-section); color: var(--label-2); }
+.mr-h { margin: 0; padding: 0; font: var(--t-section); color: var(--label-2); }
 .mr-hrow .v-btn--quiet { min-height: var(--tap); min-width: var(--tap); font: var(--t-section); }
 .mr-hrow .v-btn .ic { width: 17px; height: 17px; }
 .mr-label { display: block; margin: var(--s-4) 0 var(--s-2); padding: 0 var(--inset-content); font: var(--t-section); color: var(--label-2); }
