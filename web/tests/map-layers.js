@@ -1,6 +1,6 @@
 /** Tests for map/layers.js signatures + in-place updates, and the MapApi in map/map.js (needs Leaflet). */
 import { test, eq, ok, near } from './lib.js';
-import { idOf, sig, focusSet, networkSig, busSig, lineWeight, routeLabel, createNetworkLayer, createBusLayer } from '../js/map/layers.js';
+import { idOf, sig, focusSet, networkSig, busSig, lineWeight, routeLabel, createNetworkLayer, createBusLayer, casingClass } from '../js/map/layers.js';
 import { createMap } from '../js/map/map.js';
 import { P, squareLoop, stop } from './map-fixtures.js';
 
@@ -54,7 +54,12 @@ test('busSig / lineWeight / routeLabel', () => {
   eq(busSig('r1', 41.1, -87.1, 90.2, false, 'CEN', '#FF9900'), a, 'sub-degree bearing jitter ignored');
   ok(busSig('r1', 41.1001, -87.1, 90, false, 'CEN', '#FF9900') !== a, 'moved');
   ok(busSig('r1', 41.1, -87.1, 90, true, 'CEN', '#FF9900') !== a, 'stale');
-  eq(lineWeight(13), 4); eq(lineWeight(15), 5); eq(lineWeight(17), 6); eq(lineWeight(5), 3.5);
+  // DESIGN-SPEC 11.3: z13 3, z14 3.5, z15 4.5, z16 5.5, z17 6.5, z18 8, linear between, clamped
+  eq([13, 14, 15, 16, 17, 18].map(lineWeight), [3, 3.5, 4.5, 5.5, 6.5, 8]);
+  eq(lineWeight(14.5), 4); eq(lineWeight(5), 3); eq(lineWeight(20), 8);
+  // the casing contrast switch, from the color (53RD yellow flips on the light map, RE navy on the dark map, red neither)
+  eq(casingClass('#F7EB07'), ' sb-cl'); eq(casingClass('#393B79'), ' sb-cd'); eq(casingClass('#D62728'), '');
+  eq(casingClass('#FF9900'), ' sb-cl', 'CEN'); eq(casingClass('#0E5700'), ' sb-cd', 'DCC');
   eq(routeLabel('r1', routes), 'CEN'); eq(routeLabel('r2', routes), 'N'); eq(routeLabel('zz', routes), '?');
   eq(routeLabel('x', { x: { short: '', long: 'Friend Center/Metra' } }), 'FCM');
 });
@@ -71,8 +76,9 @@ test('network layer: polling does not repaint; changes do', () => {
   ok(layer.draw(net({ hidden: ['r2'] })), 'hidden change redraws');
   ok(paths(el).length < first.length, 'hidden route gone');
   layer.draw(net({ focus: ['r1'] }));
-  const dim = paths(el).filter((p) => p.classList.contains('sb-route') && p.getAttribute('stroke-opacity') === '0.25');
-  eq(dim.length, 2, 'two non-focus routes dimmed');
+  const dim = paths(el).filter((p) => p.classList.contains('sb-route') && p.getAttribute('stroke-opacity') === '0.2');
+  eq(dim.length, 2, 'two non-focus routes dimmed to 0.2 (spec 11.3)');
+  eq(m.getPane('sbLines').querySelectorAll('path.sb-casing').length, 0, 'dimmed routes have no casing');
   const front = m.getPane('sbFocusLines').querySelectorAll('path.sb-route');
   eq(front.length, 1, 'focused route drawn in the top pane');
   const halo = el.querySelector('path.sb-halo');
@@ -157,8 +163,8 @@ test('MapApi: theme, network diff, plan, highlights, flyTo offset by inset', asy
   eq(api.drawPlan({ ...option }, { routes, shapes, routeStops }), pts, 'same plan -> cached, no redraw');
   ok(el.querySelector('.sb-pin-end') && el.querySelector('path.sb-pin-start'), 'start/end pins');
   eq(el.querySelectorAll('path.sb-walk').length, 2, 'two walk legs');
-  const dimmed = paths(m.getPane('sbLines')).filter((p) => p.getAttribute('stroke-opacity') === '0.25');
-  eq(dimmed.length, 3, 'network dims while a plan is shown');
+  const dimmed = paths(m.getPane('sbLines')).filter((p) => p.getAttribute('stroke-opacity') === '0.2');
+  eq(dimmed.length, 3, 'network dims to 0.2 while a plan is shown (spec 11.3)');
   api.drawPlan(null);
   eq(el.querySelectorAll('path.sb-walk').length, 0, 'plan cleared');
 

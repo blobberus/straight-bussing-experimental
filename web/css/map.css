@@ -3,13 +3,13 @@
    color below comes from these variables so a theme switch never needs a redraw. --sb-accent is the UI accent
    token (tokens.css: --accent-fill on light, --accent on dark; a separate system blue until the 2026-10-10 design audit). */
 .sb-map{
-  --sb-land:var(--map-land,#f1f2ee);--sb-casing:rgba(255,255,255,.92);--sb-stop-fill:#fff;--sb-stop-multi:#5c5c63;
+  --sb-land:var(--map-land,#f1f2ee);--sb-casing:rgba(255,255,255,.95);--sb-casing-flip:rgba(17,17,20,.55);--sb-stop-fill:#fcfcfd;--sb-stop-multi:#5c5c63;
   --sb-accent:var(--accent-fill,#0071e3);--sb-live:#1e9e4a;--sb-danger:#d63a2e;--sb-text:#111114;--sb-text2:#5c5c63;
   --sb-chrome:rgba(255,255,255,.82);--sb-chrome-solid:#fff;--sb-ring:rgba(0,0,0,.22);--sb-shadow:0 1px 4px rgba(0,0,0,.28);
   background:var(--sb-land);
 }
 .sb-map.sb-dark{
-  --sb-land:var(--map-land,#18191c);--sb-casing:rgba(58,58,64,.95);--sb-stop-fill:#f5f5f7;--sb-stop-multi:#a1a1a8;
+  --sb-land:var(--map-land,#18191c);--sb-casing:rgba(24,25,28,.9);--sb-casing-flip:rgba(245,245,247,.55);--sb-stop-fill:#2c2c2e;--sb-stop-multi:#aeaeb2;
   --sb-accent:var(--accent,#409cff);--sb-live:#32d74b;--sb-danger:#ff6961;--sb-text:#f5f5f7;--sb-text2:#a1a1a8;
   --sb-chrome:rgba(28,28,30,.78);--sb-chrome-solid:#1c1c1e;--sb-ring:rgba(0,0,0,.6);--sb-shadow:0 1px 4px rgba(0,0,0,.6);
 }
@@ -37,6 +37,10 @@
 
 /* route network (CSS beats Leaflet's stroke/fill attributes) */
 .sb-casing,.sb-plan-casing{stroke:var(--sb-casing)}
+/* casing contrast switch (spec 11.3; map/layers.js casingClass): a route color under 3:1 against the default casing gets
+   the opposite edge, so every line keeps a visible border (53RD yellow on the light map, RE navy on the dark map) */
+.sb-map:not(.sb-dark) .sb-casing.sb-cl,.sb-map:not(.sb-dark) .sb-plan-casing.sb-cl,
+.sb-map.sb-dark .sb-casing.sb-cd,.sb-map.sb-dark .sb-plan-casing.sb-cd{stroke:var(--sb-casing-flip)}
 .sb-stop{fill:var(--sb-stop-fill)}
 .sb-stop-multi{stroke:var(--sb-stop-multi)}
 .sb-halo{fill:transparent;cursor:pointer}

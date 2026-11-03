@@ -8,7 +8,7 @@
  * keyed on the `.sb-dark` class this module toggles on the map element.
  */
 import { createBasemap } from './style.js';
-import { createNetworkLayer, createBusLayer, sig } from './layers.js';
+import { createNetworkLayer, createBusLayer, sig, casingClass } from './layers.js';
 import { createFavoritesLayer } from './favorites.js';
 import { createCredits } from './credits.js';
 import { createLandmarkLayer } from './landmarks.js';
@@ -412,7 +412,7 @@ function renderPlan(L, g, o, ctx) {
     if (ll.length < 2) continue;
     pts.push(...ll);
     const color = safeColor(ctx.routes?.[l.rid]?.color);
-    L.polyline(ll, { pane: 'sbPlanCasing', className: 'sb-plan-casing', weight: 11, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(g);
+    L.polyline(ll, { pane: 'sbPlanCasing', className: 'sb-plan-casing' + casingClass(color), weight: 11, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(g);
     L.polyline(ll, { pane: 'sbPlan', color, weight: 7, opacity: 1, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(g);
     for (const p of [l.board, l.alight]) {
       const q = toLatLng(p);
