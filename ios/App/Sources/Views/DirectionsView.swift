@@ -301,16 +301,18 @@ struct DirectionsView: View {
 /// carries the coverage note inside (owner wording 2026-10-15, `Coverage`).
 struct PlaceSummary: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var typeSize
     let endpoint: Endpoint
     var body: some View {
+        let ax = typeSize.isAccessibilitySize
         Card(padded: true) {
             VStack(alignment: .leading, spacing: Space.s3) {
                 HStack(alignment: .top, spacing: Space.s3) {
                     IconCircle(symbol: endpoint.stopId != nil ? "bus" : endpoint.isMe ? "location.fill" : "mappin")
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(endpoint.label).font(Typo.heroTitle).foregroundStyle(Palette.label).lineLimit(2)
+                        Text(endpoint.label).font(Typo.heroTitle).foregroundStyle(Palette.label).lineLimit(ax ? nil : 2)
                         Text(model.placeSubtitle(endpoint).commaSeparated).font(Typo.rowDetail).foregroundStyle(Palette.label2)
-                            .lineLimit(3)
+                            .lineLimit(ax ? nil : 3)
                     }
                     Spacer(minLength: 0)
                 }
