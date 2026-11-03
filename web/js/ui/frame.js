@@ -34,6 +34,44 @@ export function frameActive() {
 }
 
 /**
+ * Text-size class for a root font size (docs/DESIGN-SPEC.md 2.2): "default" under 20 px, "large" from 20 to 27 px (iOS
+ * xLarge to xxxLarge), "ax" from 28 px (iOS accessibility sizes). Layout switches read html[data-text].
+ * @param {number} px computed root font size
+ * @returns {'default'|'large'|'ax'}
+ */
+export function textClass(px) {
+  const n = Number(px) || 17;
+  return n >= 28 ? "ax" : n >= 20 ? "large" : "default";
+}
+
+/**
+ * Keep html[data-text] in step with the root font size: on resize, on return to the page (iOS Dynamic Type changes
+ * while Safari is in the background) and whenever a 1rem probe changes size (browser text size, zoom). Safe to call once.
+ * @param {HTMLElement} [root] default <html>
+ * @returns {() => void} stop
+ */
+export function initTextSize(root = document.documentElement) {
+  const apply = () => {
+    const c = textClass(parseFloat(getComputedStyle(root).fontSize));
+    if (root.dataset.text !== c) root.dataset.text = c;
+  };
+  apply();
+  addEventListener("resize", apply);
+  const vis = () => { if (!document.hidden) apply(); };
+  document.addEventListener("visibilitychange", vis);
+  let ro = null, probe = null;
+  if (typeof ResizeObserver === "function" && document.body) {
+    probe = document.createElement("span");
+    probe.setAttribute("aria-hidden", "true");
+    probe.style.cssText = "position:fixed;left:-99px;top:0;width:1rem;height:1px;visibility:hidden;pointer-events:none";
+    document.body.appendChild(probe);
+    ro = new ResizeObserver(apply);
+    ro.observe(probe);
+  }
+  return () => { removeEventListener("resize", apply); document.removeEventListener("visibilitychange", vis); ro?.disconnect(); probe?.remove(); };
+}
+
+/**
  * Keep --frame-k current on resize. Safe to call once at boot.
  * @param {HTMLElement} [root] element that gets the variable (default <html>)
  * @returns {() => void} stop
