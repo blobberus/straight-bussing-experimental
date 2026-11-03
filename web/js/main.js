@@ -19,7 +19,7 @@ import { createMap } from "./map/map.js";
 import { loadStatic } from "./data/static.js";
 import { startLive } from "./data/live.js";
 import { createSheet } from "./ui/sheet.js";
-import { initRouter, navigate, back, getView, activeTab, canGoBack, TABS } from "./ui/router.js";
+import { initRouter, navigate, back, getView, activeTab, canGoBack, TABS, depth } from "./ui/router.js";
 import { registerAction, bindActions, setHTMLKeepFocus } from "./ui/actions.js";
 import { initTheme, isDark, onChange as onThemeChange } from "./ui/theme.js";
 import { emptyState } from "./ui/components.js";
@@ -249,8 +249,26 @@ function renderView(def, s) {
     return emptyState("Couldn't show this screen", "Try going back. Live times may still be available on other tabs.", { official: true, kind: "error" });
   }
 }
+/**
+ * The content's transition on a view switch (DESIGN-SPEC 9, mStandard): a push slides the new view in 16 pt from the
+ * trailing edge with a fade, Back reverses it, a section switch crossfades; reduced motion = a 150 ms crossfade. Transform
+ * and opacity only, on the content scroller, never during a drag.
+ */
+let lastDepth = 0;
+function animateSwitch(prevDef) {
+  const d = depth(), dir = !prevDef ? "" : d > lastDepth ? "push" : d < lastDepth ? "pop" : "swap";
+  lastDepth = d;
+  if (!dir || typeof el.content.animate !== "function" || el.sheet.classList.contains("dragging")) return;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const x = reduce || dir === "swap" ? 0 : dir === "push" ? 16 : -16;
+  try {
+    el.content.animate([{ opacity: 0, transform: `translateX(${x}px)` }, { opacity: 1, transform: "none" }],
+      { duration: reduce || dir === "swap" ? 150 : 250, easing: "cubic-bezier(.2, 0, 0, 1)" });
+  } catch (e) { /* animation optional */ }
+}
 function switchView(id, def, key, s) {
   const prev = cur.def;
+  animateSwitch(prev);
   const focusWasInside = el.content.contains(document.activeElement) || document.activeElement === document.body;
   if (prev && typeof prev.unmount === "function") safe(() => prev.unmount(), null);
   cur = { def, id, key, html: null };
