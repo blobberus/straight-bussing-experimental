@@ -330,6 +330,8 @@ struct CustomRouteLine: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(ChromePressStyle())
+            .accessibilityLabel("\(model.longName(rid)), \(run + off + next)")
+            .accessibilityHint("Opens the route")
             Button { model.apply(Custom.toggleHighlight(model.routeState, customId, rid)) } label: {
                 VStack(spacing: 2) {
                     Image(systemName: highlighted ? "checkmark.circle.fill" : "circle").font(.system(size: IconSize.row))
