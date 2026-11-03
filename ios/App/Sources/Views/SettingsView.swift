@@ -469,6 +469,9 @@ struct ThemePicker: View {
             Text("Dark").tag("dark")
         }
         .pickerStyle(.segmented)
+        .accessibilityLabel("Appearance")
+        // a selection tick on a segmented change (spec 9 haptics); none for live updates
+        .sensoryFeedback(.selection, trigger: model.theme)
     }
 }
 
