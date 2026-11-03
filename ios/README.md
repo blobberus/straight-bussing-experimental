@@ -266,16 +266,18 @@ wording), the map context bar ("Only showing routes for: …" / "My route: …")
   "Share location" row (On / Off / Not allowed with Open Settings) and the line "Straight Bussing does not collect
   your location. It stays on your iPhone to find nearby stops; for walking directions only a rounded start and end
   point goes to Apple Maps, and nothing is stored."
-- Current trip (order set by the owner 2026-10-11, ship checklist item 3: the next bus in one glance, no taps): first
-  under the title the next bus: the trip timeline (its next step first) during a trip; else the nearest stop with its
-  next 3 arrivals and "Leave in N min, est." guidance, fully visible at the half detent on a 393 x 852 pt iPhone (the
-  half detent is 48 % of the room; when none of the 3 can be caught on foot the last row becomes the first bus you can
-  still catch); else the favorites' next buses; else "Use my location", the one primary action, with the station
-  search right under it. Then the service alert row on one line ("Service alert: <title>"; it wraps at accessibility
-  sizes), why no bus reports when none does (operator's alert in full + calls), "Also nearby", the walking footnote,
-  favorites; then the secondary actions (station / place search, "Routes to station…", "Arriving soon" without a
-  location) and a quiet line "No trip in progress. To start one, search for a destination and tap Start." (no card).
-  A typed search shows its results right under the field. Header meta "53RD · 4 min".
+- Current trip (order set by the owner 2026-10-11, ship checklist item 3: the next bus in one glance, no taps; the
+  redesign takes the web's order, docs/DESIGN-SPEC.md J1): the one-line service alert row ("Service alert: <title>";
+  it wraps at accessibility sizes); the trip in progress (spec 10.17: "Trip to X" with End trip, the next-step card
+  with the hero ETA, the steps as a timeline, Trip steps / Routes to station, the footnote) when one is started; then
+  the next bus: the nearest stop with its next 3 arrivals and "Leave in N min, est." guidance (when none of the 3 can be
+  caught on foot the last row becomes the first bus you can still catch), why no bus reports when none does (the
+  operator's alert in full + calls); else the favorites' next buses; else "Use my location", the one primary action, or
+  the location-off card with "Change in iOS Settings". Then the station search with "Type an address or place" and
+  "Routes to station…" as text buttons in one row, "Also nearby", the walking footnote, favorites, "Arriving soon"
+  without a location, and a quiet line "No trip in progress. To start one, search for a destination and tap Start."
+  (no card). A typed search shows its results right under the field. Collapsed header: a badge, the ETA and the live
+  dot of the next bus at the nearest stop; during a trip the current step, "Trip to X" and Arriving In.
 - Directions: suggestions (stations, on-device places, Photon when needed, spelling-fix note), swap, up to 4 option
   cards ("Least walking · Earliest arrival", walk + leave lines), steps with sources, trip bar, Start. A destination farther
   than 800 m from a served stop (`Coverage`, owner 2026-10-15) gets a note above the options: "Sorry, Straight
