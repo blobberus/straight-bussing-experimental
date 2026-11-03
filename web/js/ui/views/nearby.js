@@ -28,7 +28,7 @@ import { alertBanner, noBusHelpHTML } from "./alerts.js";
 import { stopWalkMin } from "./tripinfo.js";
 import { FAV_MAX, isStale, nameOf, guidedRow, pickArrivals, favoritesHTML, soonest } from "./nearby-cards.js";
 import { isPlanJourney } from "./journey.js";
-import { tripProgressHTML, tripMetaText } from "./tripprogress.js";
+import { tripProgressHTML, tripMetaText, tripMetaHTML, tripHeader } from "./tripprogress.js";
 
 export { FAV_MAX, guidedRow, pickArrivals, favoritesHTML };   // their home is ./nearby-cards.js (tests import them from here)
 
@@ -247,6 +247,28 @@ export function peekNearby(state, now = nowS()) {
   return `${s.name} · ${nameOf(state, a.rid)} ${m < 1 ? "now" : (isStale(state, now) ? "~" : "") + m + " min"}`;
 }
 
+/**
+ * The collapsed header's trailing slot at Current trip (docs/DESIGN-SPEC.md 10.6): the next bus at the nearest stop as a
+ * route badge, the ETA numeral and the live dot ("~" and no dot while live data is late); during a trip, "Arriving In"
+ * over the ETA (tripMetaHTML). Trusted HTML, every text escaped, one spoken sentence.
+ * @param {object} state
+ * @param {number} [now]
+ * @returns {string}
+ */
+export function metaNearbyHTML(state, now = nowS()) {
+  if (isPlanJourney(state)) return tripMetaHTML(state, now);
+  const point = state.user || N.anchor;
+  if (!point || !state.staticLoaded || !state.liveLoaded) return "";
+  const hidden = effectiveHidden(state);
+  const s = stopsNear(state, point, { maxM: NEARBY_MAX_M, max: 1, hidden })[0];
+  const a = s && arrivalsFor(state, s.id, { hidden, nowS: now })[0];
+  if (!a) return "";
+  const stale = isStale(state, now), m = minsUntil(a.t, now);
+  const say = `Next bus: ${state.routes?.[a.rid]?.long || nameOf(state, a.rid)} at ${s.name}, ${m < 1 ? "now" : (stale ? "about " : "in ") + m + " minute" + (m === 1 ? "" : "s")}${stale ? ", live data delayed" : ", live"}`;
+  return `<span class="hm" role="text" aria-label="${esc(say)}"><span class="hm-row" aria-hidden="true">${routeChip(a.rid, state.routes, { small: true })}${etaBlock(a.t, { stale, now })}`
+    + `${stale ? "" : '<span class="dot-live"></span>'}</span></span>`;
+}
+
 function curState() { return ctxRef?.store?.get?.() || {}; }
 
 /** Last HTML per patched region (data-region="nearby-<key>"), so a live update touches only what changed. */
@@ -329,11 +351,14 @@ export function unmountNearby() {
 export const _places = places;
 
 registerView("nearby", {
-  title: () => "Current trip",
+  // a trip in progress (spec 10.6, O3): the current step is the title, the trip under it; else "Current trip"
+  title: (state) => tripHeader(state)?.title || "Current trip",
+  subtitle: (state) => tripHeader(state)?.sub || "",
   detent: "half",
   tab: "nearby",
   render: (state) => renderNearby(state),
   meta: (state) => metaNearby(state),
+  metaHTML: (state) => metaNearbyHTML(state),
   peek: (state) => peekNearby(state),
   mount: (root, ctx) => mountNearby(root, ctx),
   unmount: () => unmountNearby(),
