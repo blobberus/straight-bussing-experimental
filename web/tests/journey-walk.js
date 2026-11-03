@@ -44,8 +44,8 @@ test("tripinfo: walking total, leg clocks from t0, leave guidance only for a liv
   eq(walkMins(0.3), "<1"); eq(walkMins(2.6), "3");
   // DESIGN-SPEC 10.15 line 4: when to leave and the first bus on one line (the walks are in the leg strip)
   const l = optionLines(o, NOW);
-  ok(l.text.includes("Leave in 7 min est., bus " + clock(NOW + 600) + " at Main & 1st"), l.text);
-  ok(l.html.includes('class="v-livedot"'), "the live dot: the first bus time is live");
+  ok(l.text.includes("Leave in 7 min, bus " + clock(NOW + 600) + " at Main & 1st"), l.text);
+  ok(l.html.includes('class="v-livedot'), "the live dot: the first bus time is live");
 });
 
 test("directions: card and steps show the walk to the first stop and to the destination; totals include it", async () => {
@@ -57,10 +57,10 @@ test("directions: card and steps show the walk to the first stop and to the dest
   ok(card.getAttribute("aria-label").includes("including 5 minutes walking"), card.getAttribute("aria-label"));
   eq(card.querySelectorAll(".v-wk").length, 2, "both walks in the chip summary");
   const steps = [...res.querySelectorAll(".v-steps li")].map((li) => li.textContent);
-  ok(steps[0].includes("Walk 3 min to Main & 1st") && steps[0].includes("240 m"), steps[0]);
+  ok(steps[0].includes("Walk 3 min (240 m) to Main & 1st") && /Sidewalk route|Walking estimate/.test(steps[0]), "the walk and its source in words: " + steps[0]);
   ok(steps[0].includes("Leave by " + clock(NOW + 420) + " to catch the " + clock(NOW + 600) + " bus, est."), steps[0]);
-  ok(steps[1].includes("Ride R1") && steps[1].includes("Bus arrives at Main & 1st"), steps[1]);
-  ok(steps[2].includes("Walk 2 min to Hospital entrance") && steps[2].includes("160 m"), "last walk goes to the destination: " + steps[2]);
+  ok(steps[1].includes("Bus arrives at Main & 1st") && steps[1].includes("Live"), steps[1]);
+  ok(steps[2].includes("Walk 2 min (160 m) to Hospital entrance"), "last walk goes to the destination: " + steps[2]);
   ok(steps[3].includes("Arrive at Hospital entrance about " + clock(NOW + 1200)) && steps[3].includes("including 5 min walking"), steps[3]);
   unmountDirections(); el.remove(); resetDir();
 });
@@ -69,12 +69,12 @@ test("directions: short walks are still mentioned (<1 min), no-walk ends are sai
   const short = option([wk(START, B, 30, 0.4), bus(), wk(A, DEST, 26, 0.3)], NOW + 1100);
   let { el, res } = await dirWith([short]);
   let txt = res.textContent;
-  ok(txt.includes("Walk <1 min to Main & 1st") && txt.includes("30 m") && txt.includes("Walk <1 min to Hospital entrance") && txt.includes("26 m"), txt);
+  ok(txt.includes("Walk <1 min (30 m) to Main & 1st") && txt.includes("Walk <1 min (26 m) to Hospital entrance"), txt);
   ok(res.querySelectorAll(".v-opt.is-on .v-osum .v-wk").length === 2, "the card's leg strip shows both short walks");
   unmountDirections(); el.remove();
   ({ el, res } = await dirWith([option([bus({ waitLive: false })], NOW + 1080)]));
   txt = res.textContent;
-  ok(txt.includes("Bus " ) && txt.includes("at Main & 1st, from schedule") && txt.includes("no walking"), "card: " + txt);
+  ok(txt.includes("Bus about ") && txt.includes("at Main & 1st, est.") && txt.includes("no walking"), "card (scheduled first bus): " + txt);
   eq(res.querySelectorAll(".v-opt.is-on .v-osum .v-wk").length, 0, "no walk in the leg strip");
   ok(txt.includes("Start at Main & 1st, no walk needed") && txt.includes("Get off at Hospital, no walk needed") && txt.includes("Hospital entrance is right there"), txt);
   ok(![...res.querySelectorAll(".v-stepsub")].some((e) => (e.textContent.match(/·/g) || []).length > 1), "at most one middle dot per step line");

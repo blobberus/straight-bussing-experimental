@@ -190,9 +190,10 @@ html[data-text="ax"] .v-oarr { margin-left: 0; flex-basis: 100%; }
 .v-steps li.j-bus .v-si { width: 24px; overflow: visible; }
 .v-steps li.j-bus .v-si .chip { min-width: 28px; height: 20px; padding: 0 5px; font: var(--t-badge-sm); }
 .v-steps li.j-dest .v-si .v-pin { width: 14px; height: 14px; box-shadow: 0 0 0 2px var(--bg-card); }
-.v-stept { flex: 1 1 auto; min-width: 0; display: block; font: var(--t-row-title); color: var(--label); padding-top: 1px; }
+.v-stept { flex: 1 1 auto; min-width: 0; display: block; font: var(--t-body); color: var(--label); padding-top: 1px; }   /* body, the place and time Semibold (iOS StepRow) */
 .v-stept b { font-weight: var(--w-semibold); }
 .v-stepsub { display: block; margin-top: 2px; font: var(--t-row-detail); color: var(--label-2); }
+.v-steplive { display: flex; align-items: center; }
 .v-clock { font-variant-numeric: tabular-nums; }
 .v-estnote { margin: var(--s-3) var(--inset-content); }
 

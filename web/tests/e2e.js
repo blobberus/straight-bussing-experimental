@@ -362,7 +362,7 @@ test("directions: place + station, stubbed sidewalk walking, option drawn on the
   await waitFor(() => $("#content .v-opt.is-on .v-steps"), "steps of the selected option");
   const steps = txt($("#content .v-opt.is-on .v-steps"));
   ok(/Bus arrives at .+ \d{1,2}:\d{2}/.test(steps), "bus step with clock: " + steps);
-  ok(/sidewalk route/.test(steps), "walking leg says sidewalk route: " + steps);
+  ok(/sidewalk route/i.test(steps), "walking leg says Sidewalk route: " + steps);
   ok(txt(content()).includes("Bus times are estimates from schedules and live predictions."), "estimate note");
   await waitFor(() => $$("#map path.sb-walk").length > 0 && $$("#map .sb-plan-casing").length > 0, "plan drawn on the map (walk + bus legs)");
   // the bus leg follows the route's road shape (map/geometry.js alongShape), never straight stop-to-stop links
