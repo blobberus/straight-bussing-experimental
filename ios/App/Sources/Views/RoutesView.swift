@@ -151,7 +151,7 @@ struct RoutesView: View {
                     let scope = s.routeFilter != nil ? " at this station" : ""
                     let anyVisible = !(g.running.isEmpty && g.scheduled.isEmpty && g.idle.isEmpty)
                     ViewThatFits(in: .horizontal) {
-                        EqualWidthHStack { filterButtons(scope: scope, allShown: g.hidden.isEmpty, noneShown: !anyVisible) }
+                        HStack(spacing: Space.s2) { filterButtons(scope: scope, allShown: g.hidden.isEmpty, noneShown: !anyVisible) }
                         VStack(spacing: 0) { filterButtons(scope: scope, allShown: g.hidden.isEmpty, noneShown: !anyVisible) }
                     }
                     .listRowInsets(EdgeInsets())

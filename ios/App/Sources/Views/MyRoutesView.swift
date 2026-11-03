@@ -241,7 +241,7 @@ struct CustomRouteDetailView: View {
                         if on && !Custom.matchesCurrent(s, c) {
                             Text("You changed the visible routes since applying it.").font(Typo.footnote).foregroundStyle(Palette.label2)
                         }
-                        EqualWidthHStack {
+                        HStack(spacing: Space.s2) {
                             Button { model.push(.editCustom(id)) } label: { Label("Edit", systemImage: "pencil").frame(maxWidth: .infinity) }
                                 .secondaryButtonStyle()
                             Button { model.requestDelete(c, from: "detail") } label: {
@@ -381,7 +381,7 @@ struct CustomRouteEditor: View {
             group("Scheduled, no live location", sched)
             group(model.liveOutage ? "Live status unknown" : "Not running", idle)
             Section {
-                EqualWidthHStack {
+                HStack(spacing: Space.s2) {
                     Button { model.back() } label: { Text("Cancel").frame(maxWidth: .infinity) }.secondaryButtonStyle()
                     Button { save() } label: { Text("Save").frame(maxWidth: .infinity) }.primaryButtonStyle()
                         .accessibilityIdentifier("customSave")
