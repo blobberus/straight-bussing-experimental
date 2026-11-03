@@ -21,11 +21,15 @@ import { PATHS, svg } from "./icons.js";
 /** Seconds after boot before "never polled" counts as a feed error. */
 export const FIRST_POLL_GRACE_S = 20;
 /**
- * After a Retry tap the banner holds still this long (ms), even if the feed comes back at once (owner 2026-11-03: "if the
- * user spams it while on a route, it doesn't shift and accidentally cancel their current trip"): Retry stays under the
- * finger (aria-busy) and nothing else slides into its place; then the banner shows the current state.
+ * After the last Retry tap the banner keeps its height and place this long (ms) (owner 2026-11-03: "if the user spams it
+ * while on a route, it doesn't shift and accidentally cancel their current trip"; DESIGN-SPEC 10.3, the same rule as the
+ * iPhone app's Kit RetryHold): Retry stays in its slot; if the feed comes back meanwhile the banner says "Live data is
+ * back." with a check mark and absorbs taps, so the trip chip (whose Show all ends the trip) and the sheet never slide up
+ * under the finger; then it shows the current state.
  */
-export const RETRY_HOLD_MS = 2000;
+export const RETRY_HOLD_MS = 2500;
+/** What the held banner says once the feed answers again (spec 10.3). */
+export const BACK_MSG = "Live data is back.";
 
 /** Status icons (ui/icons.js, Lucide + drawn), keyed by pillState().icon: one glyph per state (spec 5). */
 export const PILL_ICONS = Object.freeze({
@@ -87,9 +91,9 @@ export function setPillText(el, msg) {
 
 /**
  * Pill controller over the #pill element (creates the icon slot, the "See alert" button and the demo tap button when
- * the markup has none). Retry is the first control, on the leading edge, at a fixed spot and width (owner 2026-11-03):
- * the text, the icon and See alert follow it, so a state or text change never moves it, and after a tap the banner holds
- * still for RETRY_HOLD_MS so repeated taps keep landing on Retry (never on a control that slid up from below).
+ * the markup has none). The banner's action (Retry or See alert, never both) sits in one fixed slot on the leading edge
+ * (owner 2026-11-03, spec 10.3): the icon and the words follow it, so a state or text change never moves it; after a
+ * Retry tap the banner holds still for RETRY_HOLD_MS after the last tap (see there).
  * @param {{pill:HTMLElement, text:HTMLElement, retry:HTMLElement, app?:HTMLElement|null}} els
  * @param {{bootS?:number, graceS?:number, demo?:boolean}} [o]
  * @returns {{render(s:object, now:number):void}}
@@ -102,8 +106,6 @@ export function createPill(els, o = {}) {
     ic.setAttribute("aria-hidden", "true");
     els.pill.prepend(ic);
   }
-  if (els.retry && els.retry.parentNode === els.pill && els.pill.firstElementChild !== els.retry) els.pill.prepend(els.retry);   // leading edge
-  els.retry?.classList?.add("pillretry");
   let see = els.pill.querySelector('[data-action="alerts:open"]');
   if (!see) {
     see = document.createElement("button");
@@ -112,6 +114,11 @@ export function createPill(els, o = {}) {
     see.setAttribute("aria-label", "Read the service alert");
     els.pill.appendChild(see);
   }
+  // the leading slot: Retry, then See alert (only one shows), before the icon and the words
+  els.pill.prepend(see);
+  if (els.retry && els.retry.parentNode === els.pill) els.pill.prepend(els.retry);
+  els.retry?.classList?.add("pillslot");
+  see.classList.add("pillslot");
   let tap = els.pill.querySelector('[data-action="demo:info"]');
   if (!tap) {
     tap = document.createElement("button");
@@ -120,20 +127,36 @@ export function createPill(els, o = {}) {
     tap.setAttribute("aria-label", "Simulated buses: what this means, and how to see live buses");
     els.pill.appendChild(tap);
   }
-  let sig = "", holdUntil = 0, holdTimer = 0, latest = null;
+  let sig = "", holdUntil = 0, holdTimer = 0, latest = null, back = false;
   const api = {};
-  // a Retry tap: hold the banner still (see RETRY_HOLD_MS), then show whatever the feed says by then
+  const release = () => {
+    holdUntil = 0; back = false; sig = "";
+    els.retry.removeAttribute("aria-busy");
+    els.retry.removeAttribute("aria-disabled");
+    els.pill.style.removeProperty("min-height");
+    els.pill.classList.remove("is-back");
+    if (latest) api.render(latest, nowS());
+  };
+  // a Retry tap: keep the banner's height and place until RETRY_HOLD_MS after the last tap (spec 10.3), then the real state
   els.retry?.addEventListener?.("click", () => {
     if (els.retry.hidden) return;
+    if (!holdUntil) els.pill.style.minHeight = els.pill.offsetHeight + "px";   // its height now: nothing below it moves
     holdUntil = Date.now() + RETRY_HOLD_MS;
-    els.retry.setAttribute("aria-busy", "true");
+    if (!back) els.retry.setAttribute("aria-busy", "true");   // the poll runs (repeated taps join it: data/live.js pollNow)
     clearTimeout(holdTimer);
-    holdTimer = setTimeout(() => {
-      holdUntil = 0;
-      els.retry.removeAttribute("aria-busy");
-      if (latest) api.render(latest, nowS());
-    }, RETRY_HOLD_MS);
+    holdTimer = setTimeout(release, RETRY_HOLD_MS);
   });
+  /** The feed answered during the hold: "Live data is back." with a check, Retry kept in its slot but absorbing taps. */
+  const showBack = () => {
+    if (back) return;
+    back = true;
+    els.pill.classList.add("is-back");
+    els.pill.dataset.icon = "back";
+    ic.innerHTML = svg("check", 17, { stroke: 2.5 });
+    setPillText(els.text, BACK_MSG);
+    els.retry.removeAttribute("aria-busy");
+    els.retry.setAttribute("aria-disabled", "true");
+  };
   if (els.app && typeof ResizeObserver === "function") {
     // --pill-h on #app = the pill's real height (text can wrap); the full detent and the chip sit below it (sheet.css, base.css)
     new ResizeObserver(() => {
@@ -143,8 +166,12 @@ export function createPill(els, o = {}) {
   }
   api.render = (s, now) => {
     latest = s;
-    if (Date.now() < holdUntil && !els.retry.hidden) return;   // Retry was just tapped: nothing moves under the finger
-    const p = pillState(s, now, o), next = [p.kind, p.icon, p.msg, p.retry, p.alert, p.demo].join("|");
+    const p = pillState(s, now, o);
+    if (Date.now() < holdUntil && !els.retry.hidden) {   // Retry was just tapped: nothing moves under the finger
+      if (!p.retry) showBack();
+      return;
+    }
+    const next = [p.kind, p.icon, p.msg, p.retry, p.alert, p.demo].join("|");
     if (next === sig) return;
     sig = next;
     els.pill.hidden = !p.msg;

@@ -1,7 +1,7 @@
 // ui/pill.js: status pill states, one icon per state (iOS RootView StatusPill parity, 2026-10-10). Pure + one DOM
 // render; no timers (this file is last on ui-shell.test.html, after the contextbar marquee test).
 import { test, eq, ok } from "./lib.js";
-import { pillState, pillIconSVG, createPill, PILL_ICONS, RETRY_HOLD_MS } from "../js/ui/pill.js";
+import { pillState, pillIconSVG, createPill, PILL_ICONS, RETRY_HOLD_MS, BACK_MSG } from "../js/ui/pill.js";
 import { DEMO_PILL } from "../js/core/demo.js";
 
 const NOW = 1_800_000_000;
@@ -49,7 +49,8 @@ test("pill: render writes the icon, text, kind and Retry; the icon slot is creat
   const el = host.firstChild, p = createPill({ pill: el, text: el.querySelector(".pilltext"), retry: el.querySelector(".pillbtn") });
   const ic = el.querySelector(".pillicon"), retry = el.querySelector(".pillbtn");
   ok(ic && ic.getAttribute("aria-hidden") === "true", "icon slot created, hidden from screen readers");
-  ok(el.firstElementChild === retry && retry.nextElementSibling === ic, "Retry first, on the leading edge (owner 2026-11-03), then the icon");
+  ok(el.firstElementChild === retry && retry.nextElementSibling.matches('[data-action="alerts:open"]') && retry.nextElementSibling.nextElementSibling === ic,
+    "the action slot first, on the leading edge (Retry, See alert; owner 2026-11-03), then the icon");
   p.render({ ...fresh, failed: true, lastOk: NOW - 120 }, NOW);
   eq([el.hidden, el.className, el.dataset.icon, el.querySelector(".pillbtn").hidden], [false, "statuspill err", "feed", false]);
   ok(ic.querySelector("svg") && el.textContent.includes("Can't reach"), "icon + words");
@@ -100,8 +101,12 @@ test("pill: after a Retry tap the banner holds still, then shows the feed's stat
   ok(!el.hidden && !retry.hidden, "error banner with Retry");
   retry.click();
   eq(retry.getAttribute("aria-busy"), "true", "busy while retrying");
+  const h0 = el.offsetHeight;
   p.render(fresh, NOW);   // the feed is back at once
-  ok(!el.hidden && !retry.hidden && el.className.includes("err"), "held: Retry stays under the finger, nothing slides into its place");
+  ok(!el.hidden && !retry.hidden && el.textContent.includes(BACK_MSG), "held: \"Live data is back.\" with Retry still in its slot");
+  eq(retry.getAttribute("aria-disabled"), "true", "taps absorbed (no poll, no action)");
+  eq(el.offsetHeight, h0, "the banner keeps its height");
+  retry.click();   // another tap restarts the hold (RETRY_HOLD_MS after the LAST tap)
   await new Promise((r) => setTimeout(r, RETRY_HOLD_MS + 80));
   ok(el.hidden && !retry.hasAttribute("aria-busy"), "after the hold: the current state (fresh = no banner)");
   host.remove();

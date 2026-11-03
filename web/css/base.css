@@ -176,17 +176,21 @@ html[data-text="ax"] .searchbar-text .sb-short { display: inline; }
   transition: opacity var(--m-press) var(--ease-out);
 }
 .statuspill .pillbtn:active { opacity: .6; }
-/* Retry (owner 2026-11-03): the first control, on the leading edge, a fixed 76 x 32 capsule pinned to the banner's top
-   edge (44 pt hit area), so a text change, a second line or a repeated tap never moves it; the banner's own top never
-   moves either. Every trip-ending control (End trip, the trip chip's Show all) sits on the trailing side, away from it. */
-.statuspill .pillretry {
-  align-self: flex-start; width: 76px; min-width: 76px; min-height: 32px; margin: 0 var(--s-1) 0 0; padding: 0;
+/* the banner's action slot (owner 2026-11-03, spec 10.3): Retry or See alert on the LEADING edge in a fixed 84 x 44 bgCard
+   capsule at the banner's top-leading corner, so a text change, another line or a repeated tap never moves it (the banner's
+   own top is fixed under the search bar). Trip-ending controls (End trip, the trip chip's Show all) sit on the trailing
+   side, away from it; after a Retry tap the banner keeps its height (ui/pill.js RETRY_HOLD_MS). */
+.statuspill .pillslot {
+  align-self: flex-start; width: 84px; min-width: 84px; height: var(--tap); min-height: var(--tap); margin: 0; padding: 0;
   border-radius: var(--r-capsule); background: var(--bg-card); box-shadow: inset 0 0 0 .5px var(--separator);
 }
-.statuspill .pillretry::after { content: ""; position: absolute; inset: -6px -4px; }
-.statuspill .pillretry[aria-busy="true"] { opacity: .7; }
-.statuspill:has(.pillretry:not([hidden])) { padding-left: var(--s-2); align-items: flex-start; }
-.statuspill:has(.pillretry:not([hidden])) .pillicon { margin-top: 1px; }
+.statuspill .pillslot[aria-busy="true"], .statuspill .pillslot[aria-disabled="true"] { opacity: .6; }
+.statuspill:has(.pillslot:not([hidden])) { padding: 6px var(--s-3) 6px 6px; align-items: flex-start; }
+.statuspill:has(.pillslot:not([hidden])) .pillicon { margin: 13px 0 0 var(--s-1); }
+.statuspill:has(.pillslot:not([hidden])) .pilltext { padding-top: 11px; padding-bottom: 6px; }
+/* the feed answered during the hold: "Live data is back." with a check mark (live data, so the live mark color) */
+.statuspill.is-back { background: var(--bg-card); }
+.statuspill.is-back .pillicon { color: var(--live-mark); }
 /* chip (simulated buses): capsule 32, sized to its content, leading-aligned; the whole chip is the button (44 hit area) */
 .statuspill[data-form="chip"] {
   right: auto; max-width: calc(var(--app-w) - 2 * var(--inset-chrome) - var(--tap) - var(--gap-chrome));

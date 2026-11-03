@@ -445,6 +445,7 @@ test("status banner: Retry tapped again and again during a trip, also as the fee
       eq(at(), first, `Retry did not move after tap ${i + 1}`);
       eq(state().journey && state().journey.kind, "plan", `the trip is still running after tap ${i + 1}`);
     }
+    ok(/Live data is back/.test(txt($("#pillText"))) && $("#pillRetry").getAttribute("aria-disabled") === "true", "held after recovery: \"Live data is back.\", taps absorbed (DESIGN-SPEC 10.3)");
   } finally {
     T.feedFail = false;
     await waitFor(() => $("#pill").hidden && !state().failed, "banner gone once the hold is over and the feed is back", 8000);
