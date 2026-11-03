@@ -77,13 +77,14 @@ struct CapsuleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: Space.s1) {
             if current {
-                Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).accessibilityHidden(true)
+                Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).accessibilityHidden(true)
             }
             configuration.label.lineLimit(1)
         }
-        .font(Typo.sectionTitle)
+        // footnote Semibold: the three actions fit one row at 393 pt (a stacked column of capsules read as a menu)
+        .font(Typo.footnote.weight(.semibold))
         .foregroundStyle(current ? Palette.label : Palette.tint)
-        .padding(.horizontal, Space.s3)
+        .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, minHeight: 36)
         .background(configuration.isPressed ? Palette.fillPressed : Palette.fill, in: Capsule())
         .padding(.vertical, 4)
