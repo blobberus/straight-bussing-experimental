@@ -131,7 +131,7 @@ struct CurrentTripView: View {
     var placeButton: some View {
         Button("Type an address or place") { placeMode = true }
             .textButtonStyle(font: Typo.rowDetail.weight(.semibold))
-            .fixedSize()
+            .multilineTextAlignment(.leading)
     }
 
     // MARK: Location
@@ -322,7 +322,7 @@ struct PickButton: View {
         if text {
             Button("Routes to station\u{2026}") { open() }
                 .textButtonStyle(font: Typo.rowDetail.weight(.semibold))
-                .fixedSize()
+                .multilineTextAlignment(.leading)
                 .accessibilityIdentifier("pickOpen")
         } else {
             Button { open() } label: { Text("Routes to station\u{2026}") }

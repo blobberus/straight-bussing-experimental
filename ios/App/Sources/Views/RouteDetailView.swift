@@ -215,8 +215,8 @@ struct RouteDetailView: View {
                                     Text("\(b.element.name) heading here\(b.element.stale ? ", seen \(TimeFmt.ago(b.element.seen, from: model.now))" : "")")
                                         .font(Typo.badgeSmall).foregroundStyle(Color.badgeText(hex: route.color))
                                         .padding(.horizontal, 6).frame(minHeight: 20)
-                                        .background(color.opacity(b.element.stale ? 0.55 : 1), in: Capsule())
-                                        .fixedSize()
+                                        .background(color.opacity(b.element.stale ? 0.55 : 1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
                             Spacer(minLength: 0)

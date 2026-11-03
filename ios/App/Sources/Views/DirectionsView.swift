@@ -473,12 +473,12 @@ struct OptionCard: View {
         (Text("\(option.totalMin) min").font(Typo.heroTitle).foregroundStyle(Palette.label)
             + Text(" est.").font(Typo.footnote).foregroundStyle(Palette.label2))
             .monospacedDigit()
-            .fixedSize()
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     var arrive: some View {
         Text("Arrive \(TimeFmt.clock(option.arrive))").font(Typo.rowTitle).foregroundStyle(Palette.label).monospacedDigit()
-            .fixedSize()
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

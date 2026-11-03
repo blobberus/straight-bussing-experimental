@@ -367,8 +367,8 @@ struct TripStopRow: View {
                             if let pill {
                                 Text(pill).font(Typo.badgeSmall).foregroundStyle(textOn)
                                     .padding(.horizontal, 6).frame(minHeight: 20)
-                                    .background(color, in: Capsule())
-                                    .fixedSize()
+                                    .background(color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }
