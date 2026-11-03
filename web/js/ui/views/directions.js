@@ -178,8 +178,9 @@ export function placeCardHTML(state) {
   const cov = state.staticLoaded && !covered(state, D.to);
   const o = D.result?.options?.[D.sel];
   const legs = (o && !o.walkOnly && o.legs) || [], last = legs[legs.length - 1], lastBus = [...legs].reverse().find((l) => l.type === "bus");
-  const walk = last && last.type === "walk" && lastBus ? `${walkMins(last.min)} min walk to ${lastBus.alight?.name || "the stop"}` : "";
   const sub = D.to.sub || (D.to.stop ? "Shuttle stop" : D.to.me ? "Your location" : "");
+  // the walk from the stop where the selected option gets off, unless the place's own line already names a walk
+  const walk = last && last.type === "walk" && lastBus && !/min walk/.test(sub) ? `${walkMins(last.min)} min walk to ${lastBus.alight?.name || "the stop"}` : "";
   return `<section class="j-place" aria-label="${esc("Destination: " + D.to.label)}"><span class="j-placeic" aria-hidden="true">${svg(D.to.stop ? "bus-front" : "map-pin", 17)}</span>`
     + `<span class="v-grow"><span class="j-placename">${esc(D.to.label)}</span>${sub ? `<span class="v-sec">${esc(sub)}</span>` : ""}${walk ? `<span class="v-sec">${esc(walk)}</span>` : ""}`
     + (cov ? coverNoteHTML() : "") + "</span></section>";
