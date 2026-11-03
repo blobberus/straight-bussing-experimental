@@ -15,6 +15,7 @@ import StraightBussingKit
 ///   -noloc                with -demo: no location and no favorites (the "Use my location" first state)
 ///   -nobus                with -demo: no bus reporting, with the operator's real help alert (the no-bus state)
 ///   -feed fail|late|old   with -demo: the feed unreachable, 200 s old (delayed) or 420 s old (out of date)
+///   -feed flaky           with -demo: the screen is set up with live data, then the feed fails until Retry is tapped
 ///   -alert                with -demo: the operator's service alert is up (the alert row)
 ///   -locdenied            with -demo -noloc: location denied (the help card)
 ///   -hold                 with -demo: never polls (the loading state)

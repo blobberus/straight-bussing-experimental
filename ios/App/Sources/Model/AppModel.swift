@@ -269,6 +269,16 @@ final class AppModel {
     var toastIcon = "bell.fill"
     /// The status pill under the search bar (web main.js renderPill), written only when it changes.
     var statusPill: LiveText.Pill?
+    /// The status banner's Retry: what it shows when the feed comes back right after a tap (Kit `RetryHold`, owner
+    /// 2026-11-03: spamming Retry on a route never shifts the screen). Written only when it changes.
+    var retryHold = RetryHold()
+    /// A Retry poll is in flight: the Retry slot shows progress and further taps only extend the hold.
+    var retrying = false
+    /// Bumped when the hold ends, so the banner gives its place back.
+    var retryHoldTick = 0
+    @ObservationIgnored var retryHoldTask: Task<Void, Never>?
+    /// `-feed flaky` (CI): the feed fails once a trip is started, until Retry is tapped.
+    @ObservationIgnored var flakyFailing = false
     // User
     var user: LatLon?
     var locState: LocationProvider.State = .unknown

@@ -129,7 +129,7 @@ extension AppModel {
         var poll: FeedPoll
         let gen = feedGeneration
         if config.hold { return }   // -hold (CI): the loading state, nothing ever arrives
-        if config.feed == "fail" {   // -feed fail (CI): the feed cannot be reached
+        if config.feed == "fail" || (config.feed == "flaky" && flakyFailing) {   // -feed fail / flaky (CI): unreachable
             let e = URLError(.notConnectedToInternet)
             poll = FeedPoll(vehicles: .failure(e), trips: .failure(e), alerts: .failure(e))
         } else if config.noBus {
@@ -221,6 +221,9 @@ extension AppModel {
         let pill = LiveText.pill(level: level, polled: liveLoaded, lastOk: lastOk, feedTs: feedTs, loaded: liveLoaded,
                                  busCount: buses.count, silent: silentService, alerts: activeAlerts.count)
         if statusPill != pill { statusPill = pill }
+        var hold = retryHold
+        hold.saw(pill)
+        if hold != retryHold { retryHold = hold }
         // buses ride their route line (Kit BusTrack, BusMotion; web map/track.js): a changed report starts a move from
         // where the badge is now; `-demo` (CI), Reduce Motion and a sheet over the map move at once
         let reports = liveState.buses.enumerated().map { i, b in
@@ -230,6 +233,28 @@ extension AppModel {
         busMotion.update(reports, shapes: staticData.shapes, version: staticVersion, now: now,
                          reduce: UIAccessibility.isReduceMotionEnabled || config.demo || mapCovered)
         publishBuses()
+    }
+
+    /// Retry in the status banner, or a tap on the banner it left behind (owner 2026-11-03): every tap extends the
+    /// banner's hold (Kit `RetryHold`), so the screen never shifts under a finger that keeps tapping; only one Retry
+    /// poll runs at a time, and a tap on the held (recovered) banner polls nothing.
+    func retryFeed() {
+        var hold = retryHold
+        hold.tapped(now: Date().timeIntervalSince1970)
+        retryHold = hold
+        retryHoldTask?.cancel()
+        retryHoldTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64((RetryHold.holdS + 0.05) * 1_000_000_000))
+            guard let self, !Task.isCancelled else { return }
+            self.retryHoldTick += 1
+        }
+        guard !retrying, statusPill?.retry == true else { return }
+        if config.feed == "flaky" { flakyFailing = false }   // -feed flaky (CI): the retry brings the feed back
+        retrying = true
+        Task { @MainActor [weak self] in
+            await self?.pollOnce()
+            self?.retrying = false
+        }
     }
 
     /// A sheet opened over the map or closed: stop the glides (each bus is drawn where it is going) or let them run again.
@@ -771,6 +796,8 @@ extension AppModel {
             }
             // screenshots and UI tests open a screen expanded; -detent peek collapses it (the old "half" = expanded)
             if let d = config.detent { detent = d == "peek" ? .peek : .full } else if config.screen != nil { detent = .full }
+            // -feed flaky (CI): the screen is set up with live data; from now on the feed fails until Retry is tapped
+            if config.feed == "flaky" { flakyFailing = true }
             if config.tour { await runTour() }
         }
     }
