@@ -41,14 +41,20 @@ import { covered, COVER_TEXT, COVER_ADVICE } from "../../core/coverage.js";
 import { planJourney, sameRids, isPlanJourney, tripBarHTML } from "./journey.js";
 import { notificationSupport, requestPermission } from "../notifier.js";
 import { DEMO } from "../../core/demo.js";
+import { bus } from "../../core/events.js";
 import { WALK_IC, tag, mins, walkMins, walkTotal, optionLines, stepsHTML as stepsFor } from "./tripinfo.js";
+import { svg } from "../icons.js";
 
 /** The required estimate note under the options. */
 export const NOTE = "Bus times are estimates from schedules and live predictions. They will get more accurate as we collect more ride data.";
-const SWAP_IC = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>';
+/** Under the options when a live re-plan dropped the selected one (spec 13.8, O8). */
+export const OPTS_CHANGED = "Options updated with live times.";
+const SWAP_IC = svg("arrow-up-down", 20);
+const CLEAR_IC = svg("circle-x-fill", 17);
+const CHEV_IC = svg("chevron-right", 11, { stroke: 2.5 });
 
 /** View-local state. Endpoints are {lat, lon, label, stop?, me?}. */
-export const D = { from: null, to: null, fromText: "", toText: "", active: null, sugs: [], result: null, sel: 0, selKey: null, refining: false, meDenied: false, token: 0, missed: false, focusTo: false };
+export const D = { from: null, to: null, fromText: "", toText: "", active: null, sugs: [], result: null, sel: 0, selKey: null, refining: false, meDenied: false, token: 0, missed: false, focusTo: false, optsChanged: false };
 /** Minimum seconds between background re-plans on live updates (iOS AppModel.dirRefreshS). */
 export const DIR_REFRESH_S = 8;
 /** Injectable dependencies (tests replace them; wallMs / later = the re-plan throttle's clock and timer). */
@@ -124,9 +130,14 @@ export function stepsHTML(o, now, state) {
   return stepsFor(o, now, state, { fromLabel: D.from?.label, toLabel: D.to?.label });
 }
 
+/** The leg strip (spec 10.15 line 3): walk icon + minutes, a chevron, the route badge (20), ... */
+function legStrip(o, state) {
+  return o.legs.map((l) => (l.type === "walk" ? `<span class="v-wk">${WALK_IC}${esc(walkMins(l.min))}</span>` : routeChip(l.rid, state.routes, { small: true })))
+    .join(`<span class="v-arr" aria-hidden="true">${CHEV_IC}</span>`);
+}
+
 function optionHTML(o, i, now, state) {
   const on = i === D.sel;
-  const sum = o.legs.map((l) => (l.type === "walk" ? `<span class="v-wk">${WALK_IC}${esc(walkMins(l.min))}</span>` : routeChip(l.rid, state.routes))).join('<span class="v-arr" aria-hidden="true">&rsaquo;</span>');
   const lines = optionLines(o, now), wt = walkTotal(o);
   // what this option minimizes (core/rank.js), only when there is something to compare against
   const crit = (D.result?.options?.length || 0) > 1 ? criteriaText(o.meets) : "";
@@ -134,21 +145,44 @@ function optionHTML(o, i, now, state) {
   const routesTxt = o.legs.filter((l) => l.type === "bus").map((l) => state.routes?.[l.rid]?.short || l.rid).join(" then ");
   const aria = `Option ${i + 1}${crit ? " (" + crit + ")" : ""}: about ${o.totalMin} minutes including ${wt > 0 ? walkMins(wt) + " minutes walking" : "no walking"}, arrive ${clock(o.arrive)}${routesTxt ? ", take " + routesTxt : ""}. ${lines.text} Estimate.`.replace(/<1 min/g, "under 1 min");
   const start = on && !isPlanJourney(state) && planJourney(o) ? '<button type="button" class="v-btn v-btn--primary v-btn--block j-start" data-action="dir:start">Start</button><p class="v-fine j-starthint">Shows only this trip&rsquo;s routes on the map. Follow the bus stop by stop in Current trip.</p>' : "";
-  return `<div class="v-opt${on ? " is-on" : ""}"><button type="button" class="v-optmain" data-action="dir:opt" data-i="${i}" aria-pressed="${on}" aria-label="${esc(aria)}">${critHTML}<span class="v-otop"><span class="v-otot">~${o.totalMin}<small> min</small></span>${tag("est.")}<span class="v-oarr">Arrive ${esc(clock(o.arrive))}</span></span><span class="v-osum">${sum}</span>${lines.html}</button>${on ? stepsHTML(o, now, state) + start : ""}</div>`;
+  // the total and its "est." stay together (no "~" in front of an est. number: spec O4); the arrival clock on the right
+  return `<div class="v-opt${on ? " is-on" : ""}"><button type="button" class="v-optmain" data-action="dir:opt" data-i="${i}" aria-pressed="${on}" aria-label="${esc(aria)}">${critHTML}<span class="v-otop"><span class="v-otot">${o.totalMin}<small> min</small>${tag("est.")}</span><span class="v-oarr">Arrive ${esc(clock(o.arrive))}</span></span><span class="v-osum">${legStrip(o, state)}</span>${lines.html}</button>${on ? stepsHTML(o, now, state) + start : ""}</div>`;
 }
 
 /**
- * The walk option (core/rank.js walkFirst, owner 2026-10-30: very close = walk first): walking time, arrival, the
- * distance, and when selected the step and Start (a trip with no bus).
+ * The walk option (core/rank.js walkFirst, owner 2026-10-30: very close = walk first; spec 10.15): the walk icon in a
+ * tinted circle, the walking time, the arrival, the distance, and when selected the step and Start (a trip with no bus).
  */
 function walkOptionHTML(o, i, now, state) {
   const on = i === D.sel, l = o.legs[0] || {};
-  const wtag = tag(l.source === "router" ? "sidewalk route" : "estimate");
   const aria = `Option ${i + 1}: walk the whole way, ${walkMins(o.walkMin)} minutes, ${Math.round(o.walkM || 0)} meters, arrive ${clock(o.arrive)}. Close enough to walk.`.replace(/<1 minutes/g, "under 1 minute");
   const start = on && !isPlanJourney(state) && planJourney(o) ? '<button type="button" class="v-btn v-btn--primary v-btn--block j-start" data-action="dir:start">Start</button><p class="v-fine j-starthint">Follow your walk in Current trip.</p>' : "";
   return `<div class="v-opt v-opt--walk${on ? " is-on" : ""}"><button type="button" class="v-optmain" data-action="dir:opt" data-i="${i}" aria-pressed="${on}" aria-label="${esc(aria)}">`
-    + `<span class="j-crit">Close enough to walk</span><span class="v-otop"><span class="v-otot">${esc(walkMins(o.walkMin))}<small> min</small></span>${wtag}<span class="v-oarr">Arrive ${esc(clock(o.arrive))}</span></span>`
-    + `<span class="v-osum"><span class="v-wk">${WALK_IC}Walk the whole way</span><span class="v-sec">${Math.round(o.walkM || 0)} m</span></span></button>${on ? stepsHTML(o, now, state) + start : ""}</div>`;
+    + `<span class="j-crit">Close enough to walk</span><span class="v-otop"><span class="j-walkic" aria-hidden="true">${svg("walk", 20)}</span><span class="v-otot">${esc(walkMins(o.walkMin))}<small> min walk</small></span><span class="v-oarr">Arrive ${esc(clock(o.arrive))}</span></span>`
+    + `<span class="v-sec j-oline">${esc(walkDetail(o.walkM, l.source))}</span></button>${on ? stepsHTML(o, now, state) + start : ""}</div>`;
+}
+
+/** "Walk the whole way, 605 m, sidewalk route" (or ", estimate" for a straight-line guess). */
+const walkDetail = (m, source) => `Walk the whole way, ${Math.round(m || 0)} m, ${source === "router" ? "sidewalk route" : "estimate"}`;
+
+/**
+ * The destination's place details (spec 10.14, "Destination"): a compact card above the options, so the place details
+ * step costs no extra tap: the pin in a tinted circle, the name (2 lines at most), what it is and its address, the walk
+ * from the stop where the selected option gets off. A destination outside the shuttle area carries the coverage note
+ * (owner's wording) inside it.
+ * @param {object} state
+ * @returns {string}
+ */
+export function placeCardHTML(state) {
+  if (!D.to) return "";
+  const cov = state.staticLoaded && !covered(state, D.to);
+  const o = D.result?.options?.[D.sel];
+  const legs = (o && !o.walkOnly && o.legs) || [], last = legs[legs.length - 1], lastBus = [...legs].reverse().find((l) => l.type === "bus");
+  const walk = last && last.type === "walk" && lastBus ? `${walkMins(last.min)} min walk to ${lastBus.alight?.name || "the stop"}` : "";
+  const sub = D.to.sub || (D.to.stop ? "Shuttle stop" : D.to.me ? "Your location" : "");
+  return `<section class="j-place" aria-label="${esc("Destination: " + D.to.label)}"><span class="j-placeic" aria-hidden="true">${svg(D.to.stop ? "bus-front" : "map-pin", 17)}</span>`
+    + `<span class="v-grow"><span class="j-placename">${esc(D.to.label)}</span>${sub ? `<span class="v-sec">${esc(sub)}</span>` : ""}${walk ? `<span class="v-sec">${esc(walk)}</span>` : ""}`
+    + (cov ? coverNoteHTML() : "") + "</span></section>";
 }
 
 /**
@@ -159,7 +193,7 @@ function walkOptionHTML(o, i, now, state) {
  * @returns {string}
  */
 export function resHTML(state, now = nowS()) {
-  const cov = D.to && state.staticLoaded && !covered(state, D.to) ? coverNoteHTML() : "";   // set any way: search, Swap, My location
+  const cov = placeCardHTML(state);   // the destination's place details, with the coverage note when it is far (set any way: search, Swap, My location)
   if (!D.from || !D.to) {   // one "use my location" action per screen (DESIGN-AUDIT 7.1): the button hides while the start's list offers it
     let h = cov + '<p class="v-hint">Choose a start and a destination. Type a station name, a place, or an address.</p>';
     if (!D.from && !state.user && !(D.active === "from" && D.sugs.some((s) => s.kind === "me"))) h +='<button type="button" class="v-btn v-btn--secondary v-btn--block" data-action="dir:me" data-key="from">Start from my location</button>';
@@ -168,28 +202,29 @@ export function resHTML(state, now = nowS()) {
   if (!state.staticLoaded || !D.result) return cov + skeleton(2);
   const r = D.result, w = r.walkOnly || { m: 0, min: 0 }, level = staleLevel(state, now);
   let h = tripBarHTML(state) + (level ? '<p class="v-stale" role="status">Live data delayed. Bus times may be off.</p>' : "") + cov;
-  const walkTag = tag(w.source === "router" ? "sidewalk route" : "estimate");
   if (!r.options.length) {
     const running = (state.buses || []).length > 0;
     h += liveUnknown(state, now) ? emptyState("Can't plan shuttle trips right now", "The live shuttle feed can't be reached, so we can't tell which buses are running.")   // feed outage != no service
       : emptyState("No practical shuttle route right now", D.missed ? "The next buses leave before you could reach the stop." : running ? "Nothing runs close enough to both places."
         : silentService(state, now) ? silentText(state, scheduledRoutes(state, now, { hidden: effectiveHidden(state) }), now, OFFICIAL_PHONE) : "No shuttles are running right now.");   // empty feed, routes scheduled
-    h += `<div class="v-opt is-on"><div class="v-optmain"><span class="v-otop"><span class="v-otot">${mins(w.min)}<small> min</small></span>${walkTag}<span class="v-oarr">Arrive ${esc(clock(now + (w.min || 0) * 60))}</span></span><span class="v-osum"><span class="v-wk">${WALK_IC}Walk the whole way</span><span class="v-sec">${Math.round(w.m || 0)} m</span></span></div></div>`;
+    h += `<div class="v-opt v-opt--walk is-on"><div class="v-optmain"><span class="v-otop"><span class="j-walkic" aria-hidden="true">${svg("walk", 20)}</span><span class="v-otot">${mins(w.min)}<small> min walk</small></span><span class="v-oarr">Arrive ${esc(clock(now + (w.min || 0) * 60))}</span></span><span class="v-sec j-oline">${esc(walkDetail(w.m, w.source))}</span></div></div>`;
     return h + (running ? "" : noBusHelpHTML(state, now));
   }
   h += r.options.slice(0, PLANNER.MAX_OPTS).map((o, i) => (o.walkOnly ? walkOptionHTML(o, i, now, state) : optionHTML(o, i, now, state))).join("");
-  if (!r.options[0]?.walkOnly) h += `<p class="v-foot">Walking the whole way: ${mins(w.min)} min (${Math.round(w.m || 0)} m) ${walkTag}</p>`;
+  if (D.optsChanged) h += `<p class="v-foot" role="status">${esc(OPTS_CHANGED)}</p>`;   // the selected option went away in a live re-plan (spec 13.8)
+  if (!r.options[0]?.walkOnly) h += `<p class="v-foot">Walking the whole way: ${mins(w.min)} min, ${Math.round(w.m || 0)} m, ${w.source === "router" ? "sidewalk route" : "estimate"}</p>`;
   if (D.refining) h += '<p class="v-foot" role="status">Checking sidewalk routes&hellip;</p>';
   return h + `<p class="v-foot v-estnote">${esc(NOTE)}</p>`;
 }
 
 /** The destination is outside the shuttle area (core/coverage.js, owner's wording): the note, then the options. */
-const coverNoteHTML = () => `<div class="v-note v-cover" role="status"><span class="v-grow"><b>${esc(COVER_TEXT)}</b><span>${esc(COVER_ADVICE)}</span></span></div>`;
+const coverNoteHTML = () => `<div class="v-cover" role="status">${svg("triangle-alert-fill", 17)}<span class="v-grow"><b>${esc(COVER_TEXT)}</b><span>${esc(COVER_ADVICE)}</span></span></div>`;
 
 function field(key) {
   const ep = D[key], val = ep ? ep.label : key === "from" ? D.fromText : D.toText;
   const lab = key === "from" ? "Start" : "Destination";
-  return `<div class="v-dfield"><span class="v-pin v-pin--${key === "from" ? "a" : "b"}" aria-hidden="true"></span><input type="text" data-input="dir-${key}" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${lab}" aria-label="${lab}: station or place" value="${esc(val)}"></div>`;
+  return `<div class="v-dfield"><span class="v-pin v-pin--${key === "from" ? "a" : "b"}" aria-hidden="true"></span><input type="text" data-input="dir-${key}" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${lab}" aria-label="${lab}: station or place" value="${esc(val)}">`
+    + `<button type="button" class="v-dclear" data-action="dir:clear" data-key="${key}" aria-label="Clear ${lab.toLowerCase()}">${CLEAR_IC}</button></div>`;
 }
 
 /**
@@ -209,7 +244,7 @@ function dirboxHTML() {
 const lastHtml = {};
 function patch(region, html) { const el = rootRef?.querySelector?.(`[data-region="${region}"]`); if (el && lastHtml[region] !== html) { setHTMLKeepFocus(el, html); lastHtml[region] = html; } }
 function patchSug() { if (D.active) { D.sugs = computeSugs(cur(), D.active === "from" ? D.fromText : D.toText); if (D.active === "to" && !D.from && !cur().user) D.sugs = D.sugs.filter((s) => s.kind !== "me"); } patch("dir-sug", sugHTML()); }   // no start yet: the results' "Start from my location" is the one location action
-function patchRes() { patch("dir-res", resHTML(cur(), nowFn())); }
+function patchRes() { patch("dir-res", resHTML(cur(), nowFn())); try { bus.emit("sheet:header", {}); } catch (e) { /* header optional */ } }
 function setInput(key) { const el = fq(`[data-input="dir-${key}"]`); if (el) el.value = D[key]?.label || (key === "from" ? D.fromText : D.toText); }
 
 /** Draw the selected option (or the walk-only line) on the map; optionally fit to it. */
@@ -232,6 +267,7 @@ export function drawSel(fit) {
 function pickSel(fresh) {
   const opts = D.result?.options || [];
   let k = fresh && !isPlanJourney(cur()) ? 0 : opts.findIndex((x) => x.key === D.selKey);
+  D.optsChanged = !fresh && k < 0 && D.selKey != null && opts.length > 0;   // a live re-plan dropped the selected option
   if (k < 0) k = 0;
   D.sel = opts.length ? k : -1; D.selKey = opts[k]?.key ?? null;
 }
@@ -342,7 +378,7 @@ export function applySug(i) {
   const s = D.sugs[i], key = D.active || (D.from ? "to" : "from");
   if (!s) return false;
   if (s.kind === "me") { useMyLocation(key); return true; }
-  setEndpoint(key, { lat: s.lat, lon: s.lon, label: s.label, stop: s.kind === "stop" ? s.id : null });
+  setEndpoint(key, { lat: s.lat, lon: s.lon, label: s.label, stop: s.kind === "stop" ? s.id : null, sub: s.kind === "stop" ? "Shuttle stop" : s.sub || "" });
   return true;
 }
 
@@ -501,8 +537,21 @@ export function unmountDirections() {
 
 /** Test hook: the place-search state. */
 export const _photon = photon;
+/**
+ * The collapsed header's trailing slot in Directions (spec 10.6): the selected option's total and "est.", so the answer
+ * reads with the map visible ("29 min est."). Trusted HTML.
+ * @returns {string}
+ */
+export function metaDirectionsHTML() {
+  const o = D.from && D.to ? D.result?.options?.[D.sel] : null;
+  if (!o) return "";
+  const m = o.walkOnly ? walkMins(o.walkMin) : String(o.totalMin);
+  return `<span class="hm" role="text" aria-label="${esc(`${o.walkOnly ? "Walk" : "Trip"} about ${m} minutes, estimate`)}"><span class="eta" aria-hidden="true"><span class="num">${esc(m)}</span> <span class="unit">min</span>${tag("est.")}</span></span>`;
+}
+
 registerView("directions", {
   title: () => "Directions",
+  metaHTML: () => metaDirectionsHTML(),
   parent: "nearby",
   tab: "nearby",
   detent: "full",
@@ -534,6 +583,15 @@ registerAction("dir:swap", (ds, ev, ctx) => { ctxRef = ctx || ctxRef; swap(); })
 registerAction("dir:me", (ds, ev, ctx) => { ctxRef = ctx || ctxRef; useMyLocation(ds.key === "to" ? "to" : "from"); });
 registerAction("dir:opt", (ds, ev, ctx) => {
   ctxRef = ctx || ctxRef; const o = D.result?.options?.[+ds.i]; if (!o) return;
-  D.sel = +ds.i; D.selKey = o.key; syncJourney(true); patchRes(); drawSel(true);
+  D.sel = +ds.i; D.selKey = o.key; D.optsChanged = false; syncJourney(true); patchRes(); drawSel(true);
+});
+/** The clear button in a focused field (spec 10.2): empties it like deleting the text, and keeps it focused. */
+registerAction("dir:clear", (ds, ev, ctx) => {
+  ctxRef = ctx || ctxRef;
+  const el = fq(`[data-input="dir-${ds.key === "from" ? "from" : "to"}"]`);
+  if (!el) return;
+  el.value = "";
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.focus({ preventScroll: true });
 });
 registerAction("dir:start", (ds, ev, ctx) => { ctxRef = ctx || ctxRef; startTrip(); });
