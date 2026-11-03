@@ -37,6 +37,7 @@
   --map-casing-contrast: rgba(17, 17, 20, .55);
   --badge-ring: rgba(17, 17, 20, .22);
   --map-ring: #ffffff;            /* bus marker ring (spec 11.4) */
+  --warn-mark: #a35400;           /* the favorite star's disc on the map: white on it 5.3:1, both themes */
   --neutral-fill: #636366;        /* neutral fills under white text (the Details swipe action): 6:1 */
   --rail-dim-base: #fcfcfd;       /* passed parts of a timeline rail: the route color mixed toward this */
   --rail-dim-pct: 45%;
@@ -57,6 +58,7 @@
   --size-footnote: calc(1rem * 13 / 17);
   --size-caption: calc(1rem * 12 / 17);
   --size-tab: calc(1rem * 11 / 17);
+  --size-badge-xs: 10px;          /* route badge text over five characters in a 20 pt badge (spec 10.9) */
   --size-eta-hero: 2rem;
   --size-eta-row: calc(1rem * 22 / 17);
   --t-sheet-title: 700 var(--size-sheet-title) / calc(1rem * 28 / 17) var(--font);

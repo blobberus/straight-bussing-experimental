@@ -84,8 +84,8 @@ html[data-text="ax"] :is(.row, .v-row) + :is(.row, .v-row)::before { left: var(-
   font: var(--t-badge); white-space: nowrap;
 }
 .chip.sm { min-width: 28px; height: 20px; padding: 0 5px; font: var(--t-badge-sm); }
-.chip.long { font-size: min(var(--size-tab), 10px); }
-.chip.sm.long { font-size: 10px; }
+.chip.long { font-size: min(var(--size-tab), var(--size-badge-xs)); }
+.chip.sm.long { font-size: var(--size-badge-xs); }
 .chip.lt { box-shadow: inset 0 0 0 1px var(--badge-ring); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .chip.lt { box-shadow: none; }

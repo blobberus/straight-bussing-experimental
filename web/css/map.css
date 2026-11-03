@@ -5,14 +5,14 @@
    (selection, the picked bus). */
 .sb-map{
   --sb-land:var(--map-land,#f1f2ee);--sb-casing:rgba(255,255,255,.95);--sb-casing-flip:rgba(17,17,20,.55);--sb-stop-fill:#fcfcfd;--sb-stop-multi:#5c5c63;
-  --sb-accent:var(--tint-fill,#0071e3);--sb-tint:var(--tint,#0060cc);--sb-live:var(--live-mark,#1e9e4a);--sb-danger:var(--danger-fill,#c4291c);--sb-text:#111114;--sb-text2:#5c5c63;
-  --sb-chrome:rgba(255,255,255,.82);--sb-chrome-solid:#fff;--sb-ring:rgba(0,0,0,.22);--sb-bus-ring:#fff;--sb-shadow:0 1px 4px rgba(0,0,0,.28);
+  --sb-accent:var(--tint-fill,#0071e3);--sb-tint:var(--tint,#0060cc);--sb-live:var(--live-mark,#1e9e4a);--sb-danger:var(--danger-fill,#c4291c);--sb-text:var(--label,#111114);--sb-text2:#5c5c63;
+  --sb-chrome:rgba(255,255,255,.82);--sb-chrome-solid:var(--bg-chrome-solid,#fcfcfd);--sb-ring:rgba(0,0,0,.22);--sb-bus-ring:var(--map-ring,#fff);--sb-white:var(--on-fill,#fff);--sb-shadow:0 1px 4px rgba(0,0,0,.28);
   background:var(--sb-land);
 }
 .sb-map.sb-dark{
   --sb-land:var(--map-land,#18191c);--sb-casing:rgba(24,25,28,.9);--sb-casing-flip:rgba(245,245,247,.55);--sb-stop-fill:#2c2c2e;--sb-stop-multi:#aeaeb2;
-  --sb-accent:var(--tint-fill,#0071e3);--sb-tint:var(--tint,#64b0ff);--sb-live:var(--live-mark,#32d74b);--sb-danger:var(--danger-fill,#c4291c);--sb-text:#f5f5f7;--sb-text2:#aeaeb2;
-  --sb-chrome:rgba(28,28,30,.78);--sb-chrome-solid:#1c1c1e;--sb-ring:rgba(0,0,0,.6);--sb-bus-ring:#18191c;--sb-shadow:0 1px 4px rgba(0,0,0,.6);
+  --sb-accent:var(--tint-fill,#0071e3);--sb-tint:var(--tint,#64b0ff);--sb-live:var(--live-mark,#32d74b);--sb-danger:var(--danger-fill,#c4291c);--sb-text:var(--label,#f5f5f7);--sb-text2:#aeaeb2;
+  --sb-chrome:rgba(28,28,30,.78);--sb-chrome-solid:var(--bg-chrome-solid,#2c2c2e);--sb-ring:rgba(0,0,0,.6);--sb-bus-ring:var(--map-ring,#18191c);--sb-shadow:0 1px 4px rgba(0,0,0,.6);
 }
 .sb-map .maplibregl-canvas{outline:none}
 
@@ -55,7 +55,7 @@
 .sb-acc{stroke:var(--sb-accent);stroke-opacity:.25;fill:var(--sb-accent);fill-opacity:.1}
 .sb-map .leaflet-tooltip.sb-sel-label{
   padding:4px 10px;border:0;border-radius:12px;background:var(--sb-chrome-solid);color:var(--sb-text);
-  font:var(--t-map-callout,600 13px/16px sans-serif);box-shadow:0 1px 2px rgba(30,32,45,.1),0 4px 14px rgba(30,32,45,.12);white-space:nowrap}
+  font:var(--t-map-callout,600 13px/16px sans-serif);box-shadow:var(--e-1,0 4px 14px rgba(30,32,45,.12));white-space:nowrap}
 .sb-map .leaflet-tooltip.sb-sel-label::before{display:none}
 .sb-map.sb-dark .leaflet-tooltip.sb-sel-label{box-shadow:0 0 0 1px rgba(255,255,255,.14),var(--sb-shadow)}
 
@@ -63,19 +63,19 @@
    44 px hit area (28 px below z14, where the badge shrinks); the outer 44 px box ignores pointers.
    A selected favorite gets a wider unfilled accent ring (.sb-sel-fav) around the badge. */
 /* the star is white on a #A35400 disc (spec 11.4; 5.3:1), the same in both themes */
-.sb-map{--sb-fav:#a35400;--sb-fav-ink:#ffffff}
+.sb-map{--sb-fav:var(--warn-mark,#a35400);--sb-fav-ink:var(--sb-white)}
 .sb-map .leaflet-marker-icon.sb-favicon{pointer-events:none;outline:none}
 .sb-fav-wrap{position:absolute;inset:0;display:grid;place-items:center}
 .sb-fav-hit{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;pointer-events:auto;cursor:pointer}
 .sb-fav{position:relative;box-sizing:border-box;width:20px;height:20px;border-radius:50%;border:2px solid var(--sb-bus-ring);background:var(--sb-fav);
-  display:grid;place-items:center;box-shadow:0 1px 3px rgba(30,32,45,.3);pointer-events:none}
+  display:grid;place-items:center;box-shadow:var(--e-marker,0 1px 3px rgba(30,32,45,.3));pointer-events:none}
 .sb-fav-star{display:block;width:12px;height:12px;fill:var(--sb-fav-ink)}
 .sb-fav-sm .sb-fav{width:16px;height:16px;border-width:1.5px}
 .sb-fav-sm .sb-fav-star{width:10px;height:10px}
 .sb-fav-sm .sb-fav-hit{width:28px;height:28px;margin:-14px 0 0 -14px}
 .sb-fav-pane.is-dim{opacity:.5}
 .sb-fav-name{position:absolute;left:50%;bottom:calc(50% + 14px);transform:translateX(-50%);display:none;padding:2px 8px;border-radius:9px;
-  background:var(--sb-chrome-solid);color:var(--sb-text);box-shadow:0 1px 3px rgba(30,32,45,.3);white-space:nowrap;pointer-events:none;
+  background:var(--sb-chrome-solid);color:var(--sb-text);box-shadow:var(--e-marker,0 1px 3px rgba(30,32,45,.3));white-space:nowrap;pointer-events:none;
   font:var(--t-map-callout,600 13px/16px sans-serif)}
 .sb-map.sb-dark .sb-fav-name{box-shadow:0 0 0 1px rgba(255,255,255,.14),var(--sb-shadow)}
 @media (hover:hover){.sb-favicon:hover .sb-fav-name{display:block}}
@@ -97,8 +97,8 @@
 
 /* user location (spec 11.4): an 18 pt dot in tintFill with a 3 pt white ring and a soft shadow; the accuracy circle in
    tintFill at 10% with a 1 pt 25% edge */
-.sb-me{position:relative;box-sizing:border-box;width:18px;height:18px;border-radius:50%;background:var(--sb-accent);border:3px solid #fff;
-  box-shadow:0 1px 3px rgba(30,32,45,.3)}
+.sb-me{position:relative;box-sizing:border-box;width:18px;height:18px;border-radius:50%;background:var(--sb-accent);border:3px solid var(--sb-white);
+  box-shadow:var(--e-marker,0 1px 3px rgba(30,32,45,.3))}
 /* heading cone (map.js setHeading, ui/compass.js; owner 2026-10-14): where the phone faces, an accent wedge behind the
    dot fading outward, --sb-spread wide (wider = the compass is less sure), turned by --sb-head. Hidden with the dot
    (on the bus the whole icon steps back, below). */
@@ -119,18 +119,18 @@
 .sb-you-ring{position:absolute;inset:-7px;border-radius:13px;border:3px solid var(--sb-accent);box-shadow:0 0 0 2px #fff,0 1px 3px rgba(30,32,45,.3);
   pointer-events:none}
 .sb-you-pill{position:absolute;left:50%;bottom:calc(100% + 13px);transform:translateX(-50%);padding:1px 8px;border-radius:9px;
-  background:var(--sb-accent);color:#fff;font:var(--t-map-badge,700 11px/16px sans-serif);line-height:16px;
-  white-space:nowrap;box-shadow:0 0 0 1.5px #fff,var(--sb-shadow);pointer-events:none}
+  background:var(--sb-accent);color:var(--sb-white);font:var(--t-map-badge,700 11px/16px sans-serif);line-height:16px;
+  white-space:nowrap;box-shadow:0 0 0 1.5px var(--sb-white),var(--sb-shadow);pointer-events:none}
 .sb-you{position:relative;width:20px;height:20px}
-.sb-you-dot{position:absolute;inset:0;box-sizing:border-box;border-radius:50%;background:var(--sb-accent);border:3px solid #fff;
+.sb-you-dot{position:absolute;inset:0;box-sizing:border-box;border-radius:50%;background:var(--sb-accent);border:3px solid var(--sb-white);
   box-shadow:0 0 0 1px var(--sb-ring),var(--sb-shadow)}
 .sb-you--stop .sb-you-dot{background:var(--sb-chrome-solid);border:3px dashed var(--sb-accent)}
 .sb-you .sb-you-pill{bottom:calc(100% + 4px)}
 /* trip callouts (spec 11.4): "Board here" / the get-off count as a 24 pt capsule in tintFill with mapCallout text, a 6 pt
    pointer toward the stop above it */
 .sb-tlabel{position:absolute;left:0;top:14px;transform:translateX(-50%);display:flex;align-items:center;height:24px;padding:0 10px;
-  border-radius:12px;white-space:nowrap;background:var(--sb-accent);color:#fff;font:var(--t-map-callout,600 13px/16px sans-serif);
-  box-shadow:0 1px 3px rgba(30,32,45,.3);pointer-events:none}
+  border-radius:12px;white-space:nowrap;background:var(--sb-accent);color:var(--sb-white);font:var(--t-map-callout,600 13px/16px sans-serif);
+  box-shadow:var(--e-marker,0 1px 3px rgba(30,32,45,.3));pointer-events:none}
 .sb-tlabel::before{content:"";position:absolute;left:50%;top:-6px;margin-left:-6px;border:6px solid transparent;border-top:0;border-bottom-color:var(--sb-accent)}
 
 /* trip plan */
@@ -140,8 +140,8 @@
 /* the start: a hollow ring in tintFill (green means live data only; the Directions Start mark is the same ring) */
 .sb-pin-start{fill:var(--sb-stop-fill);stroke:var(--sb-accent)}
 .sb-pin-end{position:relative;width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);margin-top:2px;
-  background:var(--sb-danger);border:3px solid #fff;box-sizing:border-box;box-shadow:0 0 0 1px var(--sb-ring),var(--sb-shadow)}
-.sb-pin-end::after{content:"";position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:#fff}
+  background:var(--sb-danger);border:3px solid var(--sb-white);box-sizing:border-box;box-shadow:0 0 0 1px var(--sb-ring),var(--sb-shadow)}
+.sb-pin-end::after{content:"";position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--sb-white)}
 
 /* buses (DESIGN-SPEC 11.4): a 26 pt rounded rectangle (radius 7, min width 32) in the route color, a 2 pt ring (white on the
    light map, the land on the dark map), the short name in mapBadge (11 Bold, never truncated; 10 pt over five characters),
@@ -150,7 +150,7 @@
 .sb-bus{position:absolute;left:50%;top:0;transform:translateX(-50%);box-sizing:border-box;min-width:32px;height:26px;padding:0 6px;
   border-radius:var(--r-marker,7px);border:2px solid var(--sb-bus-ring);background:var(--c,#555);color:var(--t,#fff);
   display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;
-  box-shadow:0 1px 3px rgba(30,32,45,.3);transition:opacity .2s}
+  box-shadow:var(--e-marker,0 1px 3px rgba(30,32,45,.3));transition:opacity .2s}
 .sb-bus-tx{position:relative;font:var(--t-map-badge,700 11px/13px sans-serif);letter-spacing:0}
 .sb-bus-tx-sm{font:var(--t-map-badge-sm,700 10px/13px sans-serif)}
 .sb-bus-num{position:relative;padding-left:4px;border-left:1px solid color-mix(in srgb,currentColor 40%,transparent);
