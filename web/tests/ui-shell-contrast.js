@@ -107,3 +107,36 @@ test("contrast: buttons, toggles, tags, badges and placeholders are >= 4.5:1 in 
   ok(n >= 40, "measured " + n);
   ok(!bad.length, bad.join("; "));
 });
+
+// DESIGN-SPEC 4.2: every text / surface pair of the redesign is >= 4.5:1 in light and dark, measured from the real tokens
+// with translucent fills composited over the surface they sit on (the spec's table, and the redesign's own pairs).
+const PAIRS = [
+  ["label", "bg-sheet"], ["label", "bg-card"], ["label-2", "bg-sheet"], ["label-2", "bg-card"],
+  ["label-2", "fill", "bg-card"], ["label-2", "fill", "bg-sheet"], ["label", "fill", "bg-card"],
+  ["tint", "bg-sheet"], ["tint", "bg-card"], ["tint", "fill", "bg-card"], ["tint", "fill", "bg-sheet"], ["tint", "tint-bg"],
+  ["label-2", "tint-bg"], ["label", "tint-bg"],
+  ["live", "bg-sheet"], ["live", "bg-card"],
+  ["warn", "bg-card"], ["warn", "warn-bg"], ["label", "warn-bg"], ["tint", "warn-bg"],
+  ["danger", "bg-sheet"], ["danger", "bg-card"], ["danger", "fill", "bg-card"], ["danger", "danger-bg"], ["label", "danger-bg"], ["tint", "danger-bg"],
+  ["on-fill", "tint-fill"], ["on-fill", "danger-fill"], ["on-fill", "neutral-fill"],
+  ["label-inverse", "bg-inverse"], ["label", "bg-chrome-solid"], ["label-2", "bg-chrome-solid"],
+];
+test("contrast: the spec's token pairs (DESIGN-SPEC 4.2) are >= 4.5:1 in light and dark", async () => {
+  const f = document.createElement("iframe");
+  f.style.cssText = "position:absolute;left:-2000px;width:200px;height:200px";
+  f.srcdoc = '<!doctype html><html><head><link rel="stylesheet" href="../css/tokens.css"></head><body></body></html>';
+  await new Promise((r) => { f.onload = () => setTimeout(r, 30); document.body.appendChild(f); });
+  const win = f.contentWindow, doc = f.contentDocument, bad = [];
+  const col = (name) => rgba(win.getComputedStyle(doc.documentElement).getPropertyValue("--" + name).trim().replace(/^#([0-9a-f]{6})$/i, (m, h) => `rgb(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4), 16)})`));
+  for (const theme of ["light", "dark"]) {
+    doc.documentElement.dataset.theme = theme;
+    for (const [fgN, bgN, underN] of PAIRS) {
+      const under = underN ? col(underN) : null, bgTop = col(bgN), fgTop = col(fgN);
+      if (!bgTop || !fgTop || (underN && !under)) { bad.push(`${theme}: unreadable token ${fgN} / ${bgN}`); continue; }
+      const bg = under ? over(bgTop, under) : bgTop, fg = over(fgTop, bg), cr = ratio(fg, bg);
+      if (!(cr >= 4.5)) bad.push(`${theme} ${fgN} on ${bgN}${underN ? " over " + underN : ""}: ${cr.toFixed(2)}`);
+    }
+  }
+  f.remove();
+  ok(!bad.length, bad.join("; "));
+});
