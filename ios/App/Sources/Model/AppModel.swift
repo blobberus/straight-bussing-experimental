@@ -517,21 +517,26 @@ final class AppModel {
         var version: Int
         var dark: Bool
         var zoom: Double
+        var plan: [String]?
     }
 
     @ObservationIgnored private var layersMemo: (key: LayersKey, layers: MapLayers)?
     /// The appearance and zoom the map last asked for (the label obstacles read the same layers).
-    @ObservationIgnored private var layersStyle: (dark: Bool, zoom: Double) = (false, 14.5)
+    @ObservationIgnored private var layersStyle: (dark: Bool, zoom: Double, plan: [String]?) = (false, 14.5, nil)
 
     /// Route lines + stops for the map as last drawn.
-    var mapLayers: MapLayers { mapLayers(dark: layersStyle.dark, zoom: layersStyle.zoom) }
+    var mapLayers: MapLayers { mapLayers(dark: layersStyle.dark, zoom: layersStyle.zoom, plan: layersStyle.plan) }
 
     /// Route lines (each with its casing) + stops for the map. Rebuilt only when visibility, focus, map order,
     /// favorites, the static data, the appearance or the zoom step change (about 4,000 shape points and every route
     /// color), never on a poll, clock tick or location update.
-    func mapLayers(dark: Bool, zoom: Double) -> MapLayers {
-        layersStyle = (dark, zoom)
-        let key = LayersKey(vis: mapVisibility, favs: routeState.favStops, version: staticVersion, dark: dark, zoom: zoom)
+    /// `plan`: the routes of a Directions option drawn on the map (not started): they take the focus like a route page
+    /// (spec 11.3), so the option reads at a glance over the dimmed network.
+    func mapLayers(dark: Bool, zoom: Double, plan: [String]? = nil) -> MapLayers {
+        layersStyle = (dark, zoom, plan)
+        var vis = mapVisibility
+        if let plan, !plan.isEmpty, vis.focus == nil { vis.focus = plan }
+        let key = LayersKey(vis: vis, favs: routeState.favStops, version: staticVersion, dark: dark, zoom: zoom, plan: plan)
         if let memo = layersMemo, memo.key == key { return memo.layers }
         let layers = Self.buildLayers(key.vis, favs: key.favs, staticData, dark: dark, zoom: zoom)
         layersMemo = (key: key, layers: layers)

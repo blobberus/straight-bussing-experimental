@@ -44,9 +44,11 @@ struct MapScreen: View {
     var body: some View {
         @Bindable var camera = model.mapCamera
         let zoom = camera.zoom
-        let layers = model.mapLayers(dark: scheme == .dark, zoom: zoom)
-        let buses = model.mapBuses.filter { !layers.hidden.contains($0.rid) }
         let drawn = plan, ring = ringed   // once per body, not once per stop
+        // a Directions option (not started) focuses its routes; a started trip already hides the others (its journey)
+        let planRoutes: [String]? = model.activeTrip == nil ? drawn.map { Array(Set($0.busLegs.map(\.rid))).sorted() } : nil
+        let layers = model.mapLayers(dark: scheme == .dark, zoom: zoom, plan: planRoutes)
+        let buses = model.mapBuses.filter { !layers.hidden.contains($0.rid) }
         let openStop: String? = { if case .stop(let id)? = model.page { return id }; return nil }()
         // you on the started trip (Kit TripYou, the same evaluation as the card, the alerts and the Live Activity)
         let you = model.activeTrip != nil ? model.tripYou : nil
