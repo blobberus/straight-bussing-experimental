@@ -8,6 +8,8 @@ import UIKit
 /// Primary: white on `tintFill` (4.7:1 in both themes), 50 tall when full width, 44 inline.
 struct PrimaryButtonStyle: ButtonStyle {
     var full = false
+    /// Side padding (12 for buttons that share a row by their words, spec 10.14).
+    var hPad: CGFloat = Space.s4
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
@@ -16,7 +18,7 @@ struct PrimaryButtonStyle: ButtonStyle {
             .font(Typo.button)
             .foregroundStyle(Palette.onFill)
             .multilineTextAlignment(.center)
-            .padding(.horizontal, Space.s4)
+            .padding(.horizontal, hPad)
             .padding(.vertical, Space.s2)
             .frame(maxWidth: full ? .infinity : nil, minHeight: full ? 50 : Space.tap)
             .background(Palette.tintFill, in: shape)
@@ -33,6 +35,8 @@ struct SecondaryButtonStyle: ButtonStyle {
     var destructive = false
     var full = false
     var compact = false
+    /// Side padding of the regular size (12 for buttons that share a row by their words).
+    var hPad: CGFloat = Space.s4
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
@@ -41,7 +45,7 @@ struct SecondaryButtonStyle: ButtonStyle {
             .font(compact ? Typo.sectionTitle : Typo.button)
             .foregroundStyle(destructive ? Palette.danger : Palette.tint)
             .multilineTextAlignment(.center)
-            .padding(.horizontal, compact ? Space.s3 : Space.s4)
+            .padding(.horizontal, compact ? Space.s3 : hPad)
             .padding(.vertical, compact ? Space.s1 : Space.s2)
             .frame(maxWidth: full ? .infinity : nil, minHeight: compact ? 36 : (full ? 50 : Space.tap))
             .background(configuration.isPressed ? Palette.fillPressed : Palette.fill, in: shape)
@@ -139,6 +143,56 @@ struct EqualWidthHStack: Layout {
         for s in subviews {
             s.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading, proposal: ProposedViewSize(width: w, height: h))
             x += w + spacing
+        }
+    }
+}
+
+/// Buttons sized by their words that share the leftover width (CSS `flex: 1 1 auto` with wrapping, the web's stop
+/// actions): each line holds as many buttons as fit at their natural width, then every button on the line grows by the
+/// same amount to fill it. A narrow phone wraps the last one to a second line; no label is ever cut.
+struct FillRowLayout: Layout {
+    var spacing: CGFloat = Space.s2
+    var lineSpacing: CGFloat = Space.s2
+
+    func lines(_ subviews: Subviews, width: CGFloat) -> [[(index: Int, size: CGSize)]] {
+        var out: [[(index: Int, size: CGSize)]] = [[]]
+        var x: CGFloat = 0
+        for (i, s) in subviews.enumerated() {
+            let size = s.sizeThatFits(.unspecified)
+            if !out[out.count - 1].isEmpty && x + spacing + size.width > width {
+                out.append([])
+                x = 0
+            }
+            x += (out[out.count - 1].isEmpty ? 0 : spacing) + size.width
+            out[out.count - 1].append((i, size))
+        }
+        return out
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        let ls = lines(subviews, width: width)
+        var h: CGFloat = 0, w: CGFloat = 0
+        for (k, l) in ls.enumerated() where !l.isEmpty {
+            h += (l.map(\.size.height).max() ?? 0) + (k > 0 ? lineSpacing : 0)
+            w = max(w, l.reduce(0) { $0 + $1.size.width } + spacing * CGFloat(l.count - 1))
+        }
+        return CGSize(width: proposal.width ?? w, height: h)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for l in lines(subviews, width: bounds.width) where !l.isEmpty {
+            let lh = l.map(\.size.height).max() ?? 0
+            let used = l.reduce(0) { $0 + $1.size.width } + spacing * CGFloat(l.count - 1)
+            let extra = max(0, (bounds.width - used) / CGFloat(l.count))
+            var x = bounds.minX
+            for item in l {
+                let w = item.size.width + extra
+                subviews[item.index].place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(width: w, height: lh))
+                x += w + spacing
+            }
+            y += lh + lineSpacing
         }
     }
 }
