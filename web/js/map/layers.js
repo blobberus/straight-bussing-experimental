@@ -157,7 +157,9 @@ export function stopStyle(z) {
 }
 
 /**
- * Short badge label for a route: GTFS short name, else initials of the long name (max 3 chars).
+ * The text on a bus marker (docs/DESIGN-SPEC.md 11.4): the same as the route badge in the sheet and on the iPhone app
+ * (Route.chipText): the published short name, never truncated ("AP/DX", was cut to "AP/D"), else the first letter of the
+ * long name ("N" for North).
  * @param {string} rid
  * @param {object} routes
  * @returns {string}
@@ -165,10 +167,9 @@ export function stopStyle(z) {
 export function routeLabel(rid, routes) {
   const r = routes?.[rid] || {};
   const s = String(r.short || '').trim();
-  if (s) return s.slice(0, 4);
-  const words = String(r.long || '').split(/[\s/&-]+/).filter(Boolean);
-  if (!words.length) return '?';
-  return (words.length === 1 ? words[0][0] : words.map((w) => w[0]).join('')).toUpperCase().slice(0, 3);
+  if (s) return s;
+  const l = String(r.long || '').trim();
+  return l ? l.charAt(0).toUpperCase() : '?';
 }
 
 /**
@@ -264,6 +265,11 @@ export function createNetworkLayer(map, cb) {
 
 const STALE_S = 60;
 
+/**
+ * A bus marker (spec 11.4): a 26 pt rounded rectangle in the route color with a 2 pt ring, the short name in mapBadge (10 pt
+ * over five characters), the bus number inside it after a thin divider when the line has 2 or more buses, and the heading
+ * notch in the route color on the ring.
+ */
 function busIcon(color, label, num = 0) {
   const root = document.createElement('div');
   root.className = 'sb-bus';
@@ -271,25 +277,31 @@ function busIcon(color, label, num = 0) {
   root.style.setProperty('--t', textOn(color));
   const hd = document.createElement('span'); hd.className = 'sb-bus-hd'; hd.setAttribute('aria-hidden', 'true');
   const tx = document.createElement('span'); tx.className = 'sb-bus-tx'; tx.textContent = label;
-  if (label.length > 3) tx.classList.add('sb-bus-tx-sm');
+  if (label.length > 5) tx.classList.add('sb-bus-tx-sm');
   root.append(hd, tx);
   setNum(root, num);
-  return window.L.divIcon({ className: 'sb-busicon', html: root, iconSize: [28, 28], iconAnchor: [14, 14] });
+  return window.L.divIcon({ className: 'sb-busicon', html: root, iconSize: [32, 26], iconAnchor: [16, 13] });
 }
 
-/** The bus number badge (core/busnum.js: routes with 2 or more buses) on a bus marker; 0 removes it. */
+/** The bus number (core/busnum.js: routes with 2 or more buses) inside the marker after a divider; 0 removes it. */
 function setNum(root, num) {
   let b = root.querySelector('.sb-bus-num');
-  if (!num) { b?.remove(); return; }
-  if (!b) { b = document.createElement('span'); b.className = 'sb-bus-num'; b.setAttribute('aria-hidden', 'true'); root.append(b); }
+  if (!num) { if (b) { b.remove(); root.dataset.w = ''; } return; }
+  if (!b) { b = document.createElement('span'); b.className = 'sb-bus-num'; b.setAttribute('aria-hidden', 'true'); root.append(b); root.dataset.w = ''; }
   if (b.textContent !== String(num)) b.textContent = String(num);
 }
 
-/** Restart the one-shot pulse ring (CSS animation) on a fresh position. */
-function pulse(el) {
-  el.classList.remove('sb-pulse');
-  void el.offsetWidth; // reflow so the animation restarts
-  el.classList.add('sb-pulse');
+/**
+ * Where the heading notch sits from the marker's center (px): half the height pointing north or south, growing toward
+ * half the width pointing east or west, so the notch never hides under a wide marker ("AP/DX | 2"; iOS does the same).
+ * @param {number} w marker width
+ * @param {number} h marker height
+ * @param {number} deg heading
+ * @returns {number}
+ */
+export function notchRadius(w, h, deg) {
+  const a = (Number(deg) || 0) * Math.PI / 180;
+  return Math.round((h / 2 + Math.max(0, w / 2 - h / 2) * Math.abs(Math.sin(a))) * 10) / 10;
 }
 
 /** A normal poll's glide (ms): about one poll interval, at constant speed, so the badge keeps moving. */
@@ -353,14 +365,17 @@ export function createBusLayer(map, cb, opt = {}) {
   map.on('zoomstart', () => { zooming = true; });
   map.on('zoomend', () => { zooming = false; kick(); });
 
-  /** Rotate the heading triangle the short way round (unwrapDeg: never a spin across north). */
+  /** Rotate the heading notch the short way round (unwrapDeg: never a spin across north), at its distance for the angle. */
   function turn(m, deg) {
     if (!Number.isFinite(deg)) return;
     const rot = unwrapDeg(m.rot, deg);
     if (Number.isFinite(m.rot) && Math.abs(rot - m.rot) < 2) return;
     m.rot = rot;
-    const hd = m.mk.getElement()?.querySelector('.sb-bus-hd');
-    if (hd) hd.style.transform = `rotate(${rot}deg)`;
+    const el = m.mk.getElement()?.firstElementChild, hd = el?.querySelector('.sb-bus-hd');
+    if (!hd) return;
+    if (!el.dataset.w) el.dataset.w = String(el.offsetWidth || 32);   // measured once per label / number change
+    hd.style.transform = `rotate(${rot}deg)`;
+    hd.style.setProperty('--sb-hr', notchRadius(+el.dataset.w, 26, rot) + 'px');
   }
 
   /** Fraction (0..1, eased) of a move done at time t. */
@@ -517,14 +532,13 @@ export function createBusLayer(map, cb, opt = {}) {
       m.ll = [lat, lon]; m.s = s; m.brg = brg; m.seen = now;
       if (Number.isFinite(vt)) m.vt = vt;
       const el = m.mk.getElement()?.firstElementChild;
-      if (m.num !== num || m.name !== name) { m.num = num; m.name = name; if (el) setNum(el, num); nameMarker(m); }
+      if (m.num !== num || m.name !== name) { m.num = num; m.name = name; if (el) { setNum(el, num); const r = m.rot; m.rot = NaN; turn(m, r); } nameMarker(m); }
       if (m.sel !== picked) { m.sel = picked; m.mk.setZIndexOffset(picked ? 650 : m.key === youId ? 700 : 500); }
       if (el) {
         el.classList.toggle('is-picked', picked);
         el.classList.toggle('is-stale', stale);
         el.classList.toggle('no-hd', !Number.isFinite(m.rot));
         el.classList.toggle('is-focus', focused);
-        if (moved && !stale) pulse(el);
       }
     }
     for (const [key, m] of markers) {

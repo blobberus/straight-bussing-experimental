@@ -1,6 +1,6 @@
 /** Tests for map/layers.js signatures + in-place updates, and the MapApi in map/map.js (needs Leaflet). */
 import { test, eq, ok, near } from './lib.js';
-import { idOf, sig, focusSet, networkSig, busSig, lineWeight, routeLabel, createNetworkLayer, createBusLayer, casingClass } from '../js/map/layers.js';
+import { idOf, sig, focusSet, networkSig, busSig, lineWeight, routeLabel, createNetworkLayer, createBusLayer, casingClass, notchRadius } from '../js/map/layers.js';
 import { createMap } from '../js/map/map.js';
 import { P, squareLoop, stop } from './map-fixtures.js';
 
@@ -61,7 +61,9 @@ test('busSig / lineWeight / routeLabel', () => {
   eq(casingClass('#F7EB07'), ' sb-cl'); eq(casingClass('#393B79'), ' sb-cd'); eq(casingClass('#D62728'), '');
   eq(casingClass('#FF9900'), ' sb-cl', 'CEN'); eq(casingClass('#0E5700'), ' sb-cd', 'DCC');
   eq(routeLabel('r1', routes), 'CEN'); eq(routeLabel('r2', routes), 'N'); eq(routeLabel('zz', routes), '?');
-  eq(routeLabel('x', { x: { short: '', long: 'Friend Center/Metra' } }), 'FCM');
+  eq(routeLabel('x', { x: { short: '', long: 'Friend Center/Metra' } }), 'F', 'like the iPhone app (Route.chipText)');
+  eq(routeLabel('x', { x: { short: 'AP/DX', long: 'Apostolic/Drexel' } }), 'AP/DX', 'never truncated (audit defect 4)');
+  eq(notchRadius(32, 26, 0), 13); eq(notchRadius(60, 26, 90), 30); eq(notchRadius(60, 26, 180), 13);
 });
 
 test('network layer: polling does not repaint; changes do', () => {

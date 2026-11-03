@@ -5,13 +5,13 @@
 .sb-map{
   --sb-land:var(--map-land,#f1f2ee);--sb-casing:rgba(255,255,255,.95);--sb-casing-flip:rgba(17,17,20,.55);--sb-stop-fill:#fcfcfd;--sb-stop-multi:#5c5c63;
   --sb-accent:var(--accent-fill,#0071e3);--sb-live:#1e9e4a;--sb-danger:#d63a2e;--sb-text:#111114;--sb-text2:#5c5c63;
-  --sb-chrome:rgba(255,255,255,.82);--sb-chrome-solid:#fff;--sb-ring:rgba(0,0,0,.22);--sb-shadow:0 1px 4px rgba(0,0,0,.28);
+  --sb-chrome:rgba(255,255,255,.82);--sb-chrome-solid:#fff;--sb-ring:rgba(0,0,0,.22);--sb-bus-ring:#fff;--sb-shadow:0 1px 4px rgba(0,0,0,.28);
   background:var(--sb-land);
 }
 .sb-map.sb-dark{
   --sb-land:var(--map-land,#18191c);--sb-casing:rgba(24,25,28,.9);--sb-casing-flip:rgba(245,245,247,.55);--sb-stop-fill:#2c2c2e;--sb-stop-multi:#aeaeb2;
   --sb-accent:var(--accent,#409cff);--sb-live:#32d74b;--sb-danger:#ff6961;--sb-text:#f5f5f7;--sb-text2:#a1a1a8;
-  --sb-chrome:rgba(28,28,30,.78);--sb-chrome-solid:#1c1c1e;--sb-ring:rgba(0,0,0,.6);--sb-shadow:0 1px 4px rgba(0,0,0,.6);
+  --sb-chrome:rgba(28,28,30,.78);--sb-chrome-solid:#1c1c1e;--sb-ring:rgba(0,0,0,.6);--sb-bus-ring:#18191c;--sb-shadow:0 1px 4px rgba(0,0,0,.6);
 }
 .sb-map .maplibregl-canvas{outline:none}
 
@@ -139,44 +139,39 @@
   background:var(--sb-danger);border:3px solid #fff;box-sizing:border-box;box-shadow:0 0 0 1px var(--sb-ring),var(--sb-shadow)}
 .sb-pin-end::after{content:"";position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:#fff}
 
-/* buses: 28 px rounded square in route color, white border, heading triangle, one-shot pulse */
-.sb-bus{position:absolute;left:50%;top:0;transform:translateX(-50%);box-sizing:border-box;min-width:28px;height:28px;padding:0 4px;
-  border-radius:9px;border:2px solid #fff;background:var(--c,#555);color:var(--t,#fff);display:grid;place-items:center;
-  box-shadow:0 0 0 1px var(--sb-ring),var(--sb-shadow);transition:opacity .22s,border-color .22s}
-.sb-bus-tx{position:relative;font:800 11.5px/1 -apple-system,BlinkMacSystemFont,system-ui,"Segoe UI",Roboto,sans-serif;letter-spacing:-.01em;white-space:nowrap}
-.sb-bus-tx-sm{font-size:10px;letter-spacing:-.03em}
-.sb-bus-hd{position:absolute;inset:-2px;pointer-events:none;transition:transform .6s ease}
-.sb-bus-hd::before{content:"";position:absolute;left:50%;top:-8px;margin-left:-5px;border:5px solid transparent;border-top:0;
-  border-bottom:7px solid var(--c,#555);filter:drop-shadow(0 -1px 0 #fff)}
+/* buses (DESIGN-SPEC 11.4): a 26 pt rounded rectangle (radius 7, min width 32) in the route color, a 2 pt ring (white on the
+   light map, the land on the dark map), the short name in mapBadge (11 Bold, never truncated; 10 pt over five characters),
+   the bus number inside after a divider in the text color at 40% ("AP/DX | 2", never an overlapping disc), the heading
+   notch in the route color on the ring, turned by map/layers.js (rotate + --sb-hr), a small slate shadow. */
+.sb-bus{position:absolute;left:50%;top:0;transform:translateX(-50%);box-sizing:border-box;min-width:32px;height:26px;padding:0 6px;
+  border-radius:var(--r-marker,7px);border:2px solid var(--sb-bus-ring);background:var(--c,#555);color:var(--t,#fff);
+  display:flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;
+  box-shadow:0 1px 3px rgba(30,32,45,.3);transition:opacity .2s}
+.sb-bus-tx{position:relative;font:var(--t-map-badge,700 11px/13px sans-serif);letter-spacing:0}
+.sb-bus-tx-sm{font:var(--t-map-badge-sm,700 10px/13px sans-serif)}
+.sb-bus-num{position:relative;padding-left:4px;border-left:1px solid color-mix(in srgb,currentColor 40%,transparent);
+  font:var(--t-map-badge,700 11px/13px sans-serif)}
+.sb-bus-hd{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none;transition:transform .6s ease}
+.sb-bus-hd::before{content:"";position:absolute;left:-4px;top:calc(-1 * var(--sb-hr,13px) - 6px);border:4px solid transparent;border-top:0;
+  border-bottom:6px solid var(--c,#555);filter:drop-shadow(0 -1px 0 var(--sb-bus-ring))}
 .sb-bus.no-hd .sb-bus-hd{display:none}
-/* focused route (route detail / highlight): bigger, outlined arrow so travel direction reads at a glance */
-.sb-bus.is-focus .sb-bus-hd::before{top:-11px;margin-left:-7px;border-width:0 7px 10px;border-bottom-color:var(--c,#555);
-  filter:drop-shadow(0 -1.5px 0 #fff) drop-shadow(0 0 1px var(--sb-ring))}
-.sb-bus::after{content:"";position:absolute;inset:-6px;border-radius:13px;border:2px solid var(--c,#555);opacity:0;pointer-events:none}
-.sb-bus.sb-pulse::after{animation:sb-pulse 2s cubic-bezier(.2,.8,.2,1) 1}
+/* focused route (route detail / highlight): a larger notch so the travel direction reads at a glance */
+.sb-bus.is-focus .sb-bus-hd::before{left:-5px;top:calc(-1 * var(--sb-hr,13px) - 8px);border-width:0 5px 8px}
 .sb-busicon{overflow:visible}
-.sb-bus.is-stale{opacity:.5;border-color:#9a9aa0}
-.sb-bus.is-stale::after{display:none}
-/* bus number (core/busnum.js: a route showing 2 or more buses): a white disc at the top right, readable on any route
-   color and on the dark map */
-.sb-bus-num{position:absolute;right:-8px;top:-8px;min-width:17px;height:17px;padding:0 3px;box-sizing:border-box;border-radius:9px;
-  background:#fff;color:#111;border:2px solid var(--c,#555);display:grid;place-items:center;
-  font:800 10.5px/1 -apple-system,BlinkMacSystemFont,system-ui,"Segoe UI",Roboto,sans-serif;box-shadow:0 1px 2px rgba(0,0,0,.35)}
-/* the bus picked on its route page */
-.sb-bus.is-picked{outline:3px solid var(--sb-accent,#0a7cff);outline-offset:3px}
-@keyframes sb-pulse{0%{transform:scale(.85);opacity:.55}100%{transform:scale(1.45);opacity:0}}
+.sb-bus.is-stale{opacity:.5}
+/* the bus picked on its route page: a 3 pt tint outline at a 3 pt offset */
+.sb-bus.is-picked{outline:3px solid var(--sb-accent);outline-offset:3px}
 /* buses move by script along their route line (map/layers.js createBusLayer, map/track.js): no CSS glide on the
    badge, except Leaflet's own zoom animation */
 .sb-map .leaflet-marker-icon.sb-busicon{transition:none}
 .sb-map .leaflet-zoom-anim .leaflet-marker-icon.sb-busicon{transition:transform .25s cubic-bezier(0,0,.25,1)}
-.sb-map .leaflet-marker-icon.sb-busicon:focus-visible{outline:2px solid var(--sb-accent);outline-offset:3px;border-radius:11px}
+.sb-map .leaflet-marker-icon.sb-busicon:focus-visible{outline:2px solid var(--sb-accent);outline-offset:3px;border-radius:10px}
 
 /* raster fallback basemap in dark */
 .sb-map.sb-dark .sb-raster{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88)}
 
 @media (prefers-reduced-motion:reduce){
   .sb-map .leaflet-marker-icon.sb-busicon,.sb-bus,.sb-bus-hd{transition:none!important}
-  .sb-bus.sb-pulse::after{animation:none}
   .sb-credits,.sb-credits.is-fading{transition:opacity .12s linear,visibility 0s linear .12s}
 }
 @media (prefers-contrast:more){
@@ -185,6 +180,5 @@
 }
 @media (forced-colors:active){
   .sb-bus,.sb-me,.sb-pin-end,.sb-fav{border:2px solid CanvasText;forced-color-adjust:none}
-  .sb-bus-num{border-color:CanvasText;forced-color-adjust:none}
   .sb-bus.is-picked{outline-color:Highlight}
 }
