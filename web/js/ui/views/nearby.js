@@ -351,14 +351,15 @@ export function unmountNearby() {
 export const _places = places;
 
 registerView("nearby", {
-  // a trip in progress (spec 10.6, O3): the current step is the title, the trip under it; else "Current trip"
-  title: (state) => tripHeader(state)?.title || "Current trip",
-  subtitle: (state) => tripHeader(state)?.sub || "",
+  // a trip in progress, collapsed (spec 10.6, O3): the next step is the title, the trip under it, Arriving In on the
+  // right; expanded, "Current trip" (the next-step card right under it says the same, in the hero size; iOS parity)
+  title: (state, o) => (o && o.detent === "full" ? "" : tripHeader(state)?.title) || "Current trip",
+  subtitle: (state, o) => (o && o.detent === "full" ? "" : tripHeader(state)?.sub) || "",
   detent: "half",
   tab: "nearby",
   render: (state) => renderNearby(state),
   meta: (state) => metaNearby(state),
-  metaHTML: (state) => metaNearbyHTML(state),
+  metaHTML: (state, o) => (o && o.detent === "full" && isPlanJourney(state) ? "" : metaNearbyHTML(state)),
   peek: (state) => peekNearby(state),
   mount: (root, ctx) => mountNearby(root, ctx),
   unmount: () => unmountNearby(),

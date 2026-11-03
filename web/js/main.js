@@ -205,10 +205,11 @@ function safe(fn, fallback) {
 }
 let rightHTML = null;
 function renderHeader(s, id, def) {
-  const title = def ? String(safe(() => def.title(s), "")) : "Current trip";
+  const o = { detent: sheet && sheet.getDetent ? sheet.getDetent() : "peek" };   // the header may differ collapsed / expanded
+  const title = def ? String(safe(() => def.title(s, o), "")) : "Current trip";
   if (el.title.textContent !== title) el.title.textContent = title;
   // a second line under the title (a trip in progress: the current step is the title, the trip under it; spec 10.6, O3)
-  const sub = def && def.subtitle ? String(safe(() => def.subtitle(s), "")) : "";
+  const sub = def && def.subtitle ? String(safe(() => def.subtitle(s, o), "")) : "";
   if (el.sub && el.sub.textContent !== sub) el.sub.textContent = sub;
   el.title.classList.toggle("is-step", !!sub);
   if (el.app && el.app.dataset.view !== id) el.app.dataset.view = id || "";   // css: hide the search bar in Directions
@@ -217,7 +218,7 @@ function renderHeader(s, id, def) {
   // trailing slot: one summary or one action (spec 10.6). metaHTML = trusted markup built with esc() (badge + ETA + live
   // dot, Arriving In, an action button); else the plain-text meta
   if (def && def.metaHTML) {
-    const h = String(safe(() => def.metaHTML(s), ""));
+    const h = String(safe(() => def.metaHTML(s, o), ""));
     if (h !== rightHTML) { rightHTML = h; el.right.innerHTML = h; }
   } else {
     rightHTML = null;
@@ -396,6 +397,7 @@ async function boot() {
   sheet = createSheet({ sheetEl: el.sheet, contentEl: el.content, headEl: el.head, grabEl: el.grab });
   // collapsing the sheet puts the keyboard away (owner 2026-10-12): blur a focused field in the app
   sheet.onChange((d) => {
+    refreshHeader();
     const a = document.activeElement;
     if (d === "peek" && a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && el.app?.contains?.(a)) a.blur();
   });

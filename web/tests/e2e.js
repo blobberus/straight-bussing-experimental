@@ -378,9 +378,7 @@ test("directions: place + station, stubbed sidewalk walking, option drawn on the
   click(await waitFor(() => $('#content .v-opt.is-on [data-action="dir:start"]'), "Start on the selected option"), "Start");
   const tt = await waitFor(() => state().view === "nearby" && $("#content .tp-title"), "Current trip with the trip in progress");
   eq(state().journey && state().journey.kind, "plan", "trip started");
-  // DESIGN-SPEC 10.6 / O3: during a trip the header names the current step, the trip under it
-  ok(/^(Walk to|Board .+ at|Ride to|Arrived at) /.test(title()), "sheet title = the current step: " + title());
-  ok(/^Trip to /.test(txt($("#subtitle"))), "the trip under it: " + txt($("#subtitle")));
+  eq(title(), "Current trip", "sheet title, expanded (the next-step card says the step; collapsed: trip-arriving.js)");
   eq($('#tabs button[data-tab="nearby"]').getAttribute("aria-current"), "page", "Current trip tab selected");
   eq($("#sheet").dataset.detent, "full", "expanded: the trip progress");
   ok($("#dirbar").hidden && W.getComputedStyle($("#topbar .searchbar")).display !== "none", "leaving Directions: the card turns back into the bar");
