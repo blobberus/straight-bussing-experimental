@@ -91,14 +91,15 @@ test("trip view: stale feed banner, stale chip and its age; missed bus note", ()
   ok(/>~\d+ min</.test(st), "ETAs get ~ while delayed");
   const mi = html("missed");
   // DESIGN-SPEC 13.8 (O8): a warning banner at the top of the next-step card, "You missed the 3:11 PM bus. Following the next one, 3:21 PM, est."
-  const MISSED = /class="tp-missed" role="status">.*?(You missed the [^<.]+ bus\.|Your planned bus has left\.) Following the next one, [^<]+, est\./;
+  // DESIGN-SPEC 13.8: a warning banner at the top of the next-step card, with the words the iPhone app shares (Kit)
+  const MISSED = /class="tp-missed" role="status">.*?Your planned bus has left\. Showing the next one\./;
   ok(MISSED.test(mi) && mi.includes("Bus 102 is 3 stops away"), mi.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 300));
   // no next bus: never promise one; on the walk to the stop the note shows too (iOS TripText.missedNote, 2026-10-11)
   const none = scene("missed");
   none.buses = none.buses.slice(0, 1); none.trips = none.trips.slice(0, 1);
   resetTripMotion();
   const nh = tripProgressHTML(none, NOW);
-  ok(/You missed the [^<.]+ bus\.|Your planned bus has left\./.test(nh) && !nh.includes("Following the next one"), "no next bus promised");
+  ok(nh.includes("Your planned bus has left.") && !nh.includes("Showing the next one"), "no next bus promised");
   const walking = { ...scene("missed"), user: { lat: stops.A4.lat + 0.0008, lon: stops.A4.lon } };
   resetTripMotion();
   const wh = tripProgressHTML(walking, NOW);

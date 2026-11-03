@@ -105,8 +105,9 @@ export function tripMetaText(state, now = nowS()) {
 }
 
 /**
- * The sheet header while a trip is on (docs/DESIGN-SPEC.md 10.6, open decision O3 default): the current step is the title
- * ("Walk to Ellis Ave & 57th St"), the trip under it ("Trip to Trader Joe's"). Same evaluation as the card (tripNow).
+ * The collapsed sheet header while a trip is on (docs/DESIGN-SPEC.md 10.6, open decision O3 default): the next-step card's
+ * words are the title ("Walk 1 min to Ellis Ave & 57th St", "Bus 1614 is 3 stops away"), the trip under it ("Trip to
+ * Trader Joe's"), as the iPhone app's BottomSheet does. Same evaluation as the card (tripNow).
  * @param {object} state
  * @param {number} [now]
  * @returns {{title:string, sub:string}|null} null with no trip
@@ -116,14 +117,9 @@ export function tripHeader(state, now = nowS()) {
   const p = tripNow(state, now);
   if (!p) {
     const w = walkTrip(state.journey, state, now);
-    return w ? { title: `Walk to ${w.to}`, sub: `Trip to ${w.to}` } : null;
+    return w ? { title: `Walk ${walkMins(w.minNow)} min to ${w.to}`, sub: `Trip to ${w.to}` } : null;
   }
-  const leg = p.legs[p.active], sub = `Trip to ${p.to}`;
-  if (p.phase === "arrived") return { title: leg && leg.type === "walk" ? `Walk to ${p.to}` : `Arrived at ${p.to}`, sub };
-  if (p.phase === "walk-to-stop") return { title: `Walk to ${leg.board.name}`, sub };
-  const short = (state.routes && state.routes[leg.rid] && (state.routes[leg.rid].short || state.routes[leg.rid].long)) || "the bus";
-  if (p.phase === "waiting") return { title: `Board ${short} at ${leg.board.name}`, sub };
-  return { title: `Ride to ${leg.alight.name}`, sub };
+  return { title: nowParts(p, state, now, tripYou(p, state)).prim, sub: `Trip to ${p.to}` };
 }
 
 /**
@@ -147,22 +143,22 @@ export function tripMetaHTML(state, now = nowS()) {
 }
 
 /**
- * The planned bus left without you (spec 13.8, O8 wording): "You missed the 3:11 PM bus. Following the next one, 3:21 PM,
- * est." when a next bus is followed, else "You missed the 3:11 PM bus." (never promise a next bus that is not there; iOS
- * TripText.missedNote). Without the planned time: "Your planned bus has left."
+ * The planned bus left without you (spec 13.8): the words the iPhone app shares (Kit TripText.missedNote), "Your planned
+ * bus has left. Showing the next one.", or only the first sentence when no next bus is there (never promise one). The
+ * spec's proposed wording (O8) waits for the owner; it is this one function on the web and one Kit string on iOS.
  * @param {object} leg active bus leg (tripNow)
- * @param {object} state
  * @returns {string}
  */
-export function missedNote(leg, state) {
-  const plan = ((state && state.journey && state.journey.legs) || []).find((l) => l && l.type === "bus" && l.rid === leg.rid && l.board && leg.board && String(l.board.id) === String(leg.board.id));
-  const planned = plan && plan.boardT ? `You missed the ${clock(plan.boardT)} bus.` : "Your planned bus has left.";
-  if (!leg.vehicle) return planned;
-  return leg.boardEta ? `${planned} Following the next one, ${clock(leg.boardEta)}, est.` : `${planned} Showing the next one.`;
+export function missedNote(leg) {
+  return leg.vehicle ? "Your planned bus has left. Showing the next one." : "Your planned bus has left.";
 }
 
-/** One-glance status card for the current phase. */
-function nowCard(p, state, now, you) {
+/**
+ * What the one-glance card says for the current phase: the step (prim, also the collapsed header's title, like the
+ * iPhone app's TripText.nowCard), the detail lines, the icon, the ETA and the missed-bus note.
+ * @returns {{ic:string, prim:string, sec:string[], right:string, missed:string}}
+ */
+function nowParts(p, state, now, you) {
   const leg = p.legs[p.active], late = !!p.stale;
   let ic = "", prim = "", sec = [], right = "", missed = "";
   if (p.phase === "arrived") {
@@ -193,8 +189,14 @@ function nowCard(p, state, now, you) {
     const live = p.phase === "on-bus" ? leg.alightLive : leg.boardLive;
     if (t) right = etaBlock(t, { stale: late || !live, now, hero: true });   // the one etaHero of the screen (spec 10.10)
     // missed bus / re-plan (spec 13.8): a warning banner at the top of the card, no modal
-    if (leg.missed && p.phase !== "on-bus") missed = `<div class="tp-missed" role="status">${svg("triangle-alert-fill", 17)}<span>${esc(missedNote(leg, state))}</span></div>`;
+    if (leg.missed && p.phase !== "on-bus") missed = `<div class="tp-missed" role="status">${svg("triangle-alert-fill", 17)}<span>${esc(missedNote(leg))}</span></div>`;
   }
+  return { ic, prim, sec, right, missed };
+}
+
+/** One-glance status card for the current phase (spec 10.17: the next-step card). */
+function nowCard(p, state, now, you) {
+  const { ic, prim, sec, right, missed } = nowParts(p, state, now, you);
   return `<div class="tp-now tp-now--${esc(p.phase)}">${missed}${ic}<span class="v-grow"><span class="v-prim tp-nowprim">${esc(prim)}</span>`
     + sec.map((s) => `<span class="v-sec">${esc(s)}</span>`).join("") + `</span>${right}</div>`;
 }
