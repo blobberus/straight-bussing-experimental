@@ -36,7 +36,7 @@
 .j-place { display: flex; gap: var(--s-3); align-items: flex-start; margin: 0 0 var(--s-3); padding: var(--s-4) var(--inset-content); border-radius: var(--r-card); background: var(--bg-card); }
 .j-placeic { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--tint-bg); color: var(--tint); }
 .j-placeic .ic { width: 17px; height: 17px; }
-.j-placename { margin: 0; font: var(--t-hero-title); color: var(--label); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.j-placename { margin: 0; font: var(--t-hero-title); color: var(--label); overflow-wrap: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .j-place .v-sec { margin-top: 2px; }
 /* far destination (owner's wording): a warnBg note inside the place card */
 .j-place .v-cover { display: flex; gap: var(--s-2); margin: var(--s-3) 0 0; padding: var(--s-3); border-radius: var(--r-nested); background: var(--warn-bg); font: var(--t-row-detail); color: var(--label); }

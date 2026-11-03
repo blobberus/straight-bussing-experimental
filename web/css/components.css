@@ -40,11 +40,11 @@ button.row:active, button.v-row:active { background: var(--fill-pressed); }
 .row > .chip:first-child, .rowvis > .chip:first-child, .v-row > .chip:first-child { min-width: var(--leading-slot); }
 .grow, .v-grow { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .prim, .v-prim {
-  display: block; margin: 0; font: var(--t-row-title); color: var(--label); overflow-wrap: anywhere;
+  display: block; margin: 0; font: var(--t-row-title); color: var(--label); overflow-wrap: break-word;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
 }
 .sec, .v-sec {
-  display: block; margin: 0; font: var(--t-row-detail); color: var(--label-2); overflow-wrap: anywhere;
+  display: block; margin: 0; font: var(--t-row-detail); color: var(--label-2); overflow-wrap: break-word;
 }
 .row .sec, .v-row .v-sec { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .right { flex: none; color: var(--label-2); font: var(--t-row-detail); white-space: nowrap; }

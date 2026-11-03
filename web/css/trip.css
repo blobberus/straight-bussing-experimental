@@ -10,7 +10,7 @@
 
 /* header: "Trip to X" + End trip; "Arrive about 3:28 PM, 29 min est." */
 .tp-head { display: flex; align-items: flex-start; gap: var(--s-3); margin: 0 0 var(--s-3); padding: 0 var(--s-1); }
-.tp-title { display: block; font: var(--t-hero-title); color: var(--label); overflow-wrap: anywhere; }
+.tp-title { display: block; font: var(--t-hero-title); color: var(--label); overflow-wrap: break-word; }
 .tp-title:focus { outline: none; }
 .tp-title:focus-visible { outline: 2px solid var(--tint); outline-offset: 2px; border-radius: var(--r-tag); }
 .tp-arrive { font-variant-numeric: tabular-nums; }
@@ -51,7 +51,7 @@ html[data-text="ax"] .tp-now > .eta { flex-basis: 100%; justify-content: flex-st
   width: 24px; height: 24px; border-radius: 50%; background: var(--tint-bg); color: var(--tint); }
 .tp-wic .ic { width: var(--i-inline); height: var(--i-inline); }
 .tp-walk.is-active .tp-wic { box-shadow: 0 0 0 2px var(--tint-fill); }
-.tp-wt { display: block; font: var(--t-row-title); color: var(--label); overflow-wrap: anywhere; }
+.tp-wt { display: block; font: var(--t-row-title); color: var(--label); overflow-wrap: break-word; }
 .tp-walk.is-done .tp-wt { font-weight: var(--w-regular); color: var(--label-2); }
 
 /* bus leg head: route badge, name, stops / ride, where the bus is (opens route details) */
@@ -93,7 +93,7 @@ html[data-text="ax"] .tp-now > .eta { flex-basis: 100%; justify-content: flex-st
 .tp-sbtn { position: relative; display: flex; align-items: center; gap: var(--s-3); width: 100%; height: 100%; min-height: 52px; padding: var(--s-2) 0; box-sizing: border-box;
   border: 0; background: none; color: inherit; font: var(--t-body); text-align: left; cursor: pointer; }
 .tp-sbtn:active { opacity: .6; }
-.tp-sname { display: block; font: var(--t-body); color: var(--label); overflow-wrap: anywhere; }
+.tp-sname { display: block; font: var(--t-body); color: var(--label); overflow-wrap: break-word; }
 .tp-stop.is-board .tp-sname, .tp-stop.is-alight .tp-sname { font-weight: var(--w-semibold); }
 .tp-stop.is-before .tp-sname, .tp-stop.is-passed .tp-sname { color: var(--label-2); font-weight: var(--w-regular); }
 .tp-tags { display: flex; flex-wrap: wrap; gap: var(--s-1); margin-top: var(--s-1); }

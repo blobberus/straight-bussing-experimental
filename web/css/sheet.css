@@ -61,7 +61,7 @@
 .back:active { opacity: .6; }
 .titletext { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
 .sheet-title {
-  margin: 0; font: var(--t-sheet-title); color: var(--label); overflow-wrap: anywhere;
+  margin: 0; font: var(--t-sheet-title); color: var(--label); overflow-wrap: break-word;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
 }
 /* a trip in progress (O3): the current step in rowTitle with the trip under it in rowDetail */
