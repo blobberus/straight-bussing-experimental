@@ -263,7 +263,7 @@ export function createMap(elId) {
       if (!ll) { me?.remove(); meAcc?.remove(); me = meAcc = null; headTurn = NaN; headS = ''; return; }
       if (!me) {
         me = L.marker(ll, { icon: L.divIcon({ className: 'sb-meicon', html: '<div class="sb-mecone"></div><div class="sb-me"></div>',
-          iconSize: [20, 20], iconAnchor: [10, 10] }), interactive: false, keyboard: false, zIndexOffset: 400 }).addTo(map);
+          iconSize: [18, 18], iconAnchor: [9, 9] }), interactive: false, keyboard: false, zIndexOffset: 400 }).addTo(map);
         renderHeading();
       } else if (!me.getLatLng().equals(ll)) me.setLatLng(ll);
       const acc = +pos.accuracy;

@@ -118,9 +118,9 @@ test('patchStyle (online): real OpenFreeMap styles patch cleanly', async () => {
   }
 });
 
-test('map.css: the map blue is the UI accent token (no literal #0a84ff; design audit 2026-10-10)', async () => {
-  const css = await (await fetch('../css/map.css', { cache: 'no-store' })).text();
+test('map.css: the map blues are the UI tokens (no literal #0a84ff; DESIGN-SPEC 11.4)', async () => {
+  const css = await (await fetch('../css/map.css', { cache: 'no-store' })).text(), flat = css.replace(/\s+/g, '');
   ok(!/#0a84ff/i.test(css), 'no literal #0a84ff left');
-  ok(/\.sb-map\{[^}]*--sb-accent:var\(--accent-fill/.test(css.replace(/\s+/g, '')), 'light map: --accent-fill');
-  ok(/\.sb-map\.sb-dark\{[^}]*--sb-accent:var\(--accent[,)]/.test(css.replace(/\s+/g, '')), 'dark map: --accent');
+  ok(/\.sb-map\{[^}]*--sb-accent:var\(--tint-fill/.test(flat) && /\.sb-map\.sb-dark\{[^}]*--sb-accent:var\(--tint-fill/.test(flat), 'the dot, walking path and callouts: tintFill in both themes');
+  ok(/\.sb-map\{[^}]*--sb-tint:var\(--tint[,)]/.test(flat) && /\.sb-map\.sb-dark\{[^}]*--sb-tint:var\(--tint[,)]/.test(flat), 'rings and outlines: tint');
 });

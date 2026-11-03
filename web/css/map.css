@@ -1,16 +1,17 @@
 /* map.css: map overlays (route casings, stops, favorites, selection, buses, user dot, trip plan, map credit).
    Owned by map/ (agent C). Theme: map.js toggles .sb-dark on the map element (.sb-map); every overlay
-   color below comes from these variables so a theme switch never needs a redraw. --sb-accent is the UI accent
-   token (tokens.css: --accent-fill on light, --accent on dark; a separate system blue until the 2026-10-10 design audit). */
+   color below comes from these variables so a theme switch never needs a redraw. --sb-accent is tintFill (the user dot,
+   the walking path, callouts: the same blue in both themes, DESIGN-SPEC 11.4), --sb-tint the accent as a ring or outline
+   (selection, the picked bus). */
 .sb-map{
   --sb-land:var(--map-land,#f1f2ee);--sb-casing:rgba(255,255,255,.95);--sb-casing-flip:rgba(17,17,20,.55);--sb-stop-fill:#fcfcfd;--sb-stop-multi:#5c5c63;
-  --sb-accent:var(--accent-fill,#0071e3);--sb-live:#1e9e4a;--sb-danger:#d63a2e;--sb-text:#111114;--sb-text2:#5c5c63;
+  --sb-accent:var(--tint-fill,#0071e3);--sb-tint:var(--tint,#0060cc);--sb-live:var(--live-mark,#1e9e4a);--sb-danger:var(--danger-fill,#c4291c);--sb-text:#111114;--sb-text2:#5c5c63;
   --sb-chrome:rgba(255,255,255,.82);--sb-chrome-solid:#fff;--sb-ring:rgba(0,0,0,.22);--sb-bus-ring:#fff;--sb-shadow:0 1px 4px rgba(0,0,0,.28);
   background:var(--sb-land);
 }
 .sb-map.sb-dark{
   --sb-land:var(--map-land,#18191c);--sb-casing:rgba(24,25,28,.9);--sb-casing-flip:rgba(245,245,247,.55);--sb-stop-fill:#2c2c2e;--sb-stop-multi:#aeaeb2;
-  --sb-accent:var(--accent,#409cff);--sb-live:#32d74b;--sb-danger:#ff6961;--sb-text:#f5f5f7;--sb-text2:#a1a1a8;
+  --sb-accent:var(--tint-fill,#0071e3);--sb-tint:var(--tint,#64b0ff);--sb-live:var(--live-mark,#32d74b);--sb-danger:var(--danger-fill,#c4291c);--sb-text:#f5f5f7;--sb-text2:#aeaeb2;
   --sb-chrome:rgba(28,28,30,.78);--sb-chrome-solid:#1c1c1e;--sb-ring:rgba(0,0,0,.6);--sb-bus-ring:#18191c;--sb-shadow:0 1px 4px rgba(0,0,0,.6);
 }
 .sb-map .maplibregl-canvas{outline:none}
@@ -50,7 +51,7 @@
 /* selected stop + picker highlights + accuracy */
 .sb-sel{stroke:var(--sb-accent);fill:var(--sb-stop-fill)}
 .sb-hl{stroke:var(--sb-accent);fill:var(--sb-accent);fill-opacity:.22}
-.sb-acc{stroke:var(--sb-accent);stroke-opacity:.35;fill:var(--sb-accent);fill-opacity:.12}
+.sb-acc{stroke:var(--sb-accent);stroke-opacity:.25;fill:var(--sb-accent);fill-opacity:.1}
 .sb-map .leaflet-tooltip.sb-sel-label{
   padding:3px 8px;border:0;border-radius:8px;background:var(--sb-chrome-solid);color:var(--sb-text);
   font:600 13px/18px -apple-system,BlinkMacSystemFont,system-ui,"Segoe UI",Roboto,sans-serif;box-shadow:var(--sb-shadow);white-space:nowrap}
@@ -95,19 +96,20 @@
     1.5px 0 0 var(--sb-lm-halo),-1.5px 0 0 var(--sb-lm-halo)}
 .sb-map.sb-zooming .sb-lm{visibility:hidden}   /* re-placed at zoomend; a zoom never shows them overlapping */
 
-/* user location */
-.sb-me{position:relative;box-sizing:border-box;width:20px;height:20px;border-radius:50%;background:var(--sb-accent);border:3px solid #fff;
-  box-shadow:0 0 0 1px var(--sb-ring),var(--sb-shadow)}
+/* user location (spec 11.4): an 18 pt dot in tintFill with a 3 pt white ring and a soft shadow; the accuracy circle in
+   tintFill at 10% with a 1 pt 25% edge */
+.sb-me{position:relative;box-sizing:border-box;width:18px;height:18px;border-radius:50%;background:var(--sb-accent);border:3px solid #fff;
+  box-shadow:0 1px 3px rgba(30,32,45,.3)}
 /* heading cone (map.js setHeading, ui/compass.js; owner 2026-10-14): where the phone faces, an accent wedge behind the
    dot fading outward, --sb-spread wide (wider = the compass is less sure), turned by --sb-head. Hidden with the dot
    (on the bus the whole icon steps back, below). */
 .sb-mecone{position:absolute;left:50%;top:50%;width:92px;height:92px;margin:-46px 0 0 -46px;display:none;pointer-events:none;
   background:conic-gradient(from calc(var(--sb-spread,60deg) / -2),var(--sb-accent) 0 var(--sb-spread,60deg),transparent 0);
-  -webkit-mask:radial-gradient(closest-side,#000 18%,rgba(0,0,0,.5) 58%,transparent 100%);
-  mask:radial-gradient(closest-side,#000 18%,rgba(0,0,0,.5) 58%,transparent 100%);
-  opacity:.55;transform:rotate(var(--sb-head,0deg));transition:transform .15s linear}
+  -webkit-mask:radial-gradient(closest-side,#000 12%,transparent 100%);
+  mask:radial-gradient(closest-side,#000 12%,transparent 100%);
+  opacity:.35;transform:rotate(var(--sb-head,0deg));transition:transform .15s linear}   /* tintFill 35% fading to 0 (spec 11.4) */
 .sb-me-head .sb-mecone{display:block}
-.sb-dark .sb-mecone{opacity:.7}
+.sb-dark .sb-mecone{opacity:.45}
 @media (prefers-reduced-motion:reduce){.sb-mecone{transition:none}}
 
 /* you on a started trip (map.js setTrip, 2026-10-13): on the bus = an accent ring + "You" pill on its marker (the
