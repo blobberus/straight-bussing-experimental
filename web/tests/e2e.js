@@ -206,8 +206,10 @@ test("layout: search bar on top opens Directions; bottom navigation; Edit map or
   ok(nav.getBoundingClientRect().bottom >= W.innerHeight - 1 && !$("#sheetHead #tabs"), "navigation at the bottom, not in the sheet");
   ok(sb.getBoundingClientRect().bottom <= $("#sheet").getBoundingClientRect().top, "search bar above the sheet");
   tab("routes");
-  const top = await waitFor(() => $('#content [data-region="routes-top"]'), "routes top region");
-  eq(top.querySelector("button")?.dataset.action, "routes:order-edit", "first control on Routes");
+  await waitFor(() => $('#content [data-region="routes-top"]'), "routes top region");
+  // DESIGN-SPEC 10.6: Edit map order is the header's trailing action, before every list control
+  const edit = await waitFor(() => $('#titleRight [data-action="routes:order-edit"]'), "Edit map order in the sheet header");
+  ok(edit.getBoundingClientRect().height >= 44, "44 pt target");
   ok(!$('#content [data-action="pick:open"]') && !$('#content [data-action="dir:open"]'), "no Routes to station / Directions on Routes");
   tab("nearby");
   await waitFor(() => title() === "Current trip" && $("#content .pt-hint") && !$("#content .pt-notrip"), "Current trip view with the quiet no-trip hint (no card)");
@@ -360,7 +362,7 @@ test("directions: place + station, stubbed sidewalk walking, option drawn on the
   await waitFor(() => $("#content .v-opt.is-on .v-steps"), "steps of the selected option");
   const steps = txt($("#content .v-opt.is-on .v-steps"));
   ok(/Bus arrives at .+ \d{1,2}:\d{2}/.test(steps), "bus step with clock: " + steps);
-  ok(/sidewalk route/.test(steps), "walking leg labeled sidewalk route: " + steps);
+  ok(/sidewalk route/.test(steps), "walking leg says sidewalk route: " + steps);
   ok(txt(content()).includes("Bus times are estimates from schedules and live predictions."), "estimate note");
   await waitFor(() => $$("#map path.sb-walk").length > 0 && $$("#map .sb-plan-casing").length > 0, "plan drawn on the map (walk + bus legs)");
   // the bus leg follows the route's road shape (map/geometry.js alongShape), never straight stop-to-stop links
@@ -376,7 +378,9 @@ test("directions: place + station, stubbed sidewalk walking, option drawn on the
   click(await waitFor(() => $('#content .v-opt.is-on [data-action="dir:start"]'), "Start on the selected option"), "Start");
   const tt = await waitFor(() => state().view === "nearby" && $("#content .tp-title"), "Current trip with the trip in progress");
   eq(state().journey && state().journey.kind, "plan", "trip started");
-  eq(title(), "Current trip", "sheet title");
+  // DESIGN-SPEC 10.6 / O3: during a trip the header names the current step, the trip under it
+  ok(/^(Walk to|Board .+ at|Ride to|Arrived at) /.test(title()), "sheet title = the current step: " + title());
+  ok(/^Trip to /.test(txt($("#subtitle"))), "the trip under it: " + txt($("#subtitle")));
   eq($('#tabs button[data-tab="nearby"]').getAttribute("aria-current"), "page", "Current trip tab selected");
   eq($("#sheet").dataset.detent, "full", "expanded: the trip progress");
   ok($("#dirbar").hidden && W.getComputedStyle($("#topbar .searchbar")).display !== "none", "leaving Directions: the card turns back into the bar");
