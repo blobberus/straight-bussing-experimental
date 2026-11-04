@@ -189,7 +189,8 @@ a card or row background, never as a button color.
 - **Badge ring**: when the route color is under 3:1 against the surface it sits on, the badge gets a 1 pt inside ring,
   `rgba(17,17,20,.22)` on light surfaces, `rgba(245,245,247,.30)` on dark ones (53RD yellow on `bgCard` is 1.2:1; RE
   navy on dark `bgCard` 1.4:1). Every badge has the same shape whether ringed or not.
-- **Map line casing** follows the same 3:1 rule, measured against the default casing color (section 11.3).
+- **Map line casing**: removed 2026-11-04 (owner: "Remove the outlines for the lines"); route lines are drawn without
+  an edge, so a few route colors sit under 3:1 on the land (section 11.3).
 
 ### 4.4 Status color rule: green means live data, and nothing else
 
@@ -662,10 +663,16 @@ cannot be recolored, so iOS parity is on the overlays (11.3 to 11.6), not the ba
 
 ### 11.3 Route lines
 
-- Width by map zoom (Leaflet zoom on the web): z13 3, z14 3.5, z15 4.5, z16 5.5, z17 6.5, z18 8. Round caps and joins.
-- **Network state** (nothing focused): every visible line at 0.9 opacity with its casing.
-- **Focused state** (a route page, a trip, a stop, a custom route): focused lines +2 width, opacity 1; others 0.2 with
-  no casing; stops of unfocused routes hidden.
+- Width by map zoom (Leaflet zoom on the web): z13 2, z14 2.25, z15 3, z16 4, z17 5, z18 6 since 2026-11-04 (owner:
+  "Remove the outlines for the lines but make the lines themselves thinner"; was 3, 3.5, 4.5, 5.5, 6.5, 8). Round caps
+  and joins. The line tap still measures from the old widths plus the old casing (hit width = old casing width + 14 px).
+- **No casing since 2026-11-04**: the casing and its contrast switch below are gone on the web (route lines, planned bus
+  legs, walking dots); kept here for the record. Weakest without an edge: 53RD yellow on the light map, RE navy on the
+  dark map.
+- **Network state** (nothing focused): every visible line at 0.9 opacity.
+- **Focused state** (a route page, a trip, a stop, a custom route): focused lines +2 width, opacity 1; others 0.2;
+  stops of unfocused routes hidden; buses of unfocused routes faded with them (2026-11-04: smaller, see-through, no
+  tap). A trip in progress draws only the trip's lines and buses (a walk: none).
 - **Casing**: 1.5 per side (line width + 3). Default casing: light map `rgba(255,255,255,.95)`, dark map
   `rgba(24,25,28,.9)`. **Contrast switch**: when the route color is under 3:1 against the default casing, the casing
   flips to the opposite edge, light map `rgba(17,17,20,.55)`, dark map `rgba(245,245,247,.55)`, so every line keeps a
@@ -697,7 +704,7 @@ cannot be recolored, so iOS parity is on the overlays (11.3 to 11.6), not the ba
 
 ### 11.6 Night style
 
-Dark basemap (11.2), route lines at full color with the dark casing rule, bus marker rings `#18191C`, landmark text
+Dark basemap (11.2), route lines at full color (no casing since 2026-11-04), bus marker rings `#18191C`, landmark text
 `#B4B9C2`, user dot unchanged. Follows the app appearance (Auto / Light / Dark), not the clock.
 
 ---

@@ -867,3 +867,21 @@ and tests rely on:
   that comes back starts closed. The demo chip has no Details.
 - **Feedback circle** `#feedbackBtn` inside `#topbar` under Settings (see "Beta feedback" above).
 Deviations from the glass spec: `docs/redesign/NOTES-glass-web.md`; screens: `docs/redesign/glass/web/`. sw `sb-v2-87`.
+
+## Faded buses, trip-only lines, thinner lines without outlines (2026-11-04, owner: "The buses on faded routes should also be faded. If on a trip, only the lines on the particular trip should be displayed.", "Remove the outlines for the lines but make the lines themselves thinner. All these changes should go onto the experimental build.")
+Ported by hand from the live app (straight-bussing commit d0e20d0e on its branch `fade-buses`; the live
+docs/ARCHITECTURE.md has the full section).
+- core/visibility.js (same file as live): `tripRoutes(state)` (the trip in progress: its bus legs' routes, [] for a walk),
+  `mapHidden(state)` (on a trip every route but the trip's, a walk none; else effectiveHidden; `mapVisibility().hidden`),
+  `busFaded(rid, focus, plan)` (other routes in focus, or a drawn plan that does not ride it). A display rule only:
+  nothing saved changes; the lines come back when the trip ends. A route page opened during a trip still draws its
+  route. The Directions preview is not a trip (every line stays, dimmed).
+- map/layers.js: a bus on a faded route is faded (`dress`: `.is-faded`, scale .8, opacity .42, z offset 300, no tap; the
+  bus you ride never); hidden routes' buses never (unless in focus). No casing (casingClass, CASING_EXTRA, CASING_BASE,
+  the `sb-cl` / `sb-cd` css are gone); map/map.js passes the plan's routes to the bus layer and draws plan legs
+  (`sb-plan-bus`) and walking dots without casings. Thinner at every zoom: LINE_WIDTHS z13 2, z14 2.25, z15 3, z16 4,
+  z17 5, z18 6 (was 3, 3.5, 4.5, 5.5, 6.5, 8), focused lines + FOCUS_EXTRA; `lineTapWidth` keeps the old tap reach.
+  (The live app only thins lines zoomed out, 30% up to z15, and keeps focused lines at full width.)
+- Tests: core-custom.js, map-layers.js, map-direction.js, map-trip.js, map-style.js (the route edge test removed), e2e.js
+  (preview fades the other buses; a started trip draws only its lines and buses; all back after End trip). sw `sb-v2-90`.
+- iPhone: paused; what to port is in docs/redesign/GLASS-IOS-PAUSED.md.
