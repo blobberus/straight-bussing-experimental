@@ -155,10 +155,12 @@ test('palette: parks and woods are clearly green, water a clear blue, land warm 
     eq(P.minor, theme === 'light' ? '#ffffff' : P.minor, `${theme}: white streets in light`);
     ok(contrast(P.text, P.halo) >= 7 && contrast(P.textMinor, P.halo) >= 7 && contrast(P.place, P.halo) >= 4.5 && contrast(P.waterText, P.halo) >= 4.5, `${theme}: a quiet but legible label hierarchy`);
   }
-  const maj = hsl(PALETTE.light.major), mot = hsl(PALETTE.light.motorway);
-  ok(maj.h >= 38 && maj.h <= 55 && maj.s >= 0.6 && mot.h >= 32 && mot.h <= 50 && mot.s >= 0.6 && mot.l < maj.l, 'light: major roads soft yellow, motorways yellow-orange');
-  const dm = hsl(PALETTE.dark.motorway);
+  const mot = hsl(PALETTE.light.motorway), dm = hsl(PALETTE.dark.motorway);
+  ok(mot.h >= 32 && mot.h <= 50 && mot.s >= 0.6, 'light: motorways yellow-orange (Apple Maps)');
   ok(dm.h >= 30 && dm.h <= 55 && dm.l <= 0.35, 'dark: motorways a muted amber');
+  for (const [theme, P] of [['light', PALETTE.light], ['dark', PALETTE.dark]]) {
+    for (const k of ['minor', 'minorCase', 'major', 'majorCase', 'path']) ok(hsl(P[k]).s <= 0.15, `${theme} ${k} ${P[k]}: a neutral street color, never yellow`);
+  }
 });
 
 test('palette: patchStyle adds the green and campus fills just below water (lagoons in a park stay blue)', () => {
@@ -187,4 +189,38 @@ test('palette: the land token is the basemap land (first paint = map)', async ()
   const vals = (name) => [...css.matchAll(new RegExp(name + ':\s*([^;]+);', 'g'))].map((m) => m[1].trim());
   const [landL, landD] = vals('--map-land');
   eq([landL, landD], [PALETTE.light.bg, PALETTE.dark.bg], 'the land token is the basemap land (first paint = map)');
+});
+
+// Owner 2026-11-04: "Do not make the main streets yellow. The highways being yellow is ok. This coloring of roads can
+// confuse the user to think it is a bus line." Every road layer of the patched styles except motorways: no yellow or
+// orange hue (fixtures, and the live OpenFreeMap styles when online).
+test('palette: no road but a motorway is yellow or orange (a street must never look like a bus line)', async () => {
+  const probe = document.body.appendChild(document.createElement('i'));
+  const rgb = (c) => { probe.style.color = ''; probe.style.color = c; return probe.style.color ? getComputedStyle(probe).color : null; };
+  const colorsIn = (v) => (typeof v === 'string' ? [v] : Array.isArray(v) ? v.flatMap(colorsIn) : []).filter((x) => /^(#|rgb|hsl)/.test(x));
+  const warm = (c) => {
+    const m = String(rgb(c) || '').match(/[\d.]+/g);
+    if (!m) return false;
+    const [r, g, b, a = 1] = m.map(Number), hex = '#' + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+    const x = hsl(hex);
+    return a > 0.3 && x.s > 0.2 && x.l > 0.12 && x.l < 0.97 && x.h >= 18 && x.h <= 70;
+  };
+  const styles = [['positron fixture', POSITRON, false], ['dark fixture', DARK, true]];
+  try {
+    const live = await Promise.all(['positron', 'dark'].map((n) => fetch('https://tiles.openfreemap.org/styles/' + n).then((r) => r.json())));
+    styles.push(['positron (live)', live[0], false], ['dark (live)', live[1], true]);
+  } catch (e) { console.warn('offline: live styles skipped'); }
+  const bad = [];
+  let motorways = 0;
+  for (const [name, base, dark] of styles) {
+    for (const l of patchStyle(base, dark).layers) {
+      if (l.type !== 'line' || !/^(highway|road|bridge|tunnel|sb_minor)/.test(l.id)) continue;
+      const cols = colorsIn(l.paint && l.paint['line-color']);
+      if (/motorway/.test(l.id)) { if (cols.some(warm)) motorways++; continue; }
+      for (const c of cols) if (warm(c)) bad.push(`${name} ${l.id}: ${c}`);
+    }
+  }
+  probe.remove();
+  eq(bad, [], 'yellow / orange non-motorway roads');
+  ok(motorways >= 2, 'the motorways stay yellow-orange (' + motorways + ' layers)');
 });

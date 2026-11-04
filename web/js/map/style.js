@@ -52,19 +52,21 @@ const COPY = /(&copy;|\u00a9)\s*/g;
 
 /**
  * Basemap palettes, closer to Apple Maps (owner 2026-11-04: "Change the background map to resemble something closer to
- * apple maps"; DESIGN-SPEC-GLASS 11.2 delta in docs/redesign/NOTES-glass-web.md). Light: a warm off-white land, parks a
- * fresh mid green (woods a step deeper), water a clear blue, white streets with soft gray casing, major roads in a soft
- * yellow and motorways in Apple's yellow-orange, light warm gray buildings, labels in a quiet gray hierarchy. Dark: a
- * neutral dark gray land, deep muted greens that still read as green, a clear dark blue, neutral gray roads with muted
- * amber motorways. Street text vs its land-colored halo: light 7.3:1 (minor) / 12.6:1 (major), dark 9.6:1 / 12.8:1;
+ * apple maps"; DESIGN-SPEC-GLASS 18.1). Light: a warm off-white land, parks a fresh mid green (woods a step deeper),
+ * water a clear blue, white streets with soft gray casing (main streets too, a step wider and a darker edge), only
+ * motorways in Apple's yellow-orange (owner 2026-11-04: "Do not make the main streets yellow. The highways being yellow
+ * is ok. This coloring of roads can confuse the user to think it is a bus line."), light warm gray buildings, labels
+ * in a quiet gray hierarchy. Dark: a neutral dark gray land, deep muted greens that still read as green, a clear dark
+ * blue, neutral gray streets with muted amber motorways. tests/map-style.js checks that no road but a motorway has a
+ * yellow or orange hue. Street text vs its land-colored halo: light 7.3:1 (minor) / 12.6:1 (major), dark 9.6:1 / 12.8:1;
  * minor text on a road fill >= 6.6:1. Route lines have no casing since 2026-11-04 (owner: "Remove the outlines on each
  * line"), so a few route colors sit under 3:1 on the land (53RD yellow on the light map, RE navy on the dark one).
  */
 export const PALETTE = {
   light: { bg: '#f5f3ee', park: '#c2e5ae', wood: '#aed79b', pitch: '#b5dda0', cemetery: '#d4e6c8', campus: '#efe9dc',
     resid: '#f2f0ea', water: '#a3d0f2', waterText: '#2b6596',
-    bldg: '#e8e4dc', bldgLine: '#d6d0c5', path: '#d9d5cc', minor: '#ffffff', minorCase: '#d9d5cc', major: '#fde9a6',
-    majorCase: '#e2c46f', motorway: '#f8c967', motorwayCase: '#d9a23a', text: '#2c2c2e', textMinor: '#4f4f54',
+    bldg: '#e8e4dc', bldgLine: '#d6d0c5', path: '#d9d5cc', minor: '#ffffff', minorCase: '#d9d5cc', major: '#ffffff',
+    majorCase: '#c9c4ba', motorway: '#f8c967', motorwayCase: '#d9a23a', text: '#2c2c2e', textMinor: '#4f4f54',
     halo: '#f5f3ee', hn: '#6a6a70', poi: '#545458', place: '#646469' },
   dark: { bg: '#202124', park: '#1f3c28', wood: '#1b3523', pitch: '#234430', cemetery: '#25332a', campus: '#28272b',
     resid: '#222326', water: '#1b3a5a', waterText: '#8fb8dc',
@@ -177,8 +179,8 @@ export function patchStyle(styleJson, isDark, landmarks = []) {
       layout(l, { 'line-cap': 'round', 'line-join': 'round' });
     } else if (id === 'highway_major_inner') {
       paint(l, { 'line-color': P.major, 'line-width': ['interpolate', ['exponential', 1.3], ['zoom'], 10, 2, 16, 7.4, 20, 23] });
-    } else if (id === 'highway_motorway_casing') paint(l, { 'line-color': P.motorwayCase });
-    else if (id === 'highway_motorway_inner') paint(l, { 'line-color': P.motorway });
+    } else if (id === 'highway_motorway_casing' || id === 'highway_motorway_bridge_casing') paint(l, { 'line-color': P.motorwayCase });
+    else if (id === 'highway_motorway_inner' || id === 'highway_motorway_bridge_inner') paint(l, { 'line-color': P.motorway });
     else if (/^(highway-shield|road_shield|road_oneway)/.test(id)) layout(l, { visibility: 'none' });
     else if (/^(label_|place_)/.test(id) && l.type === 'symbol') {
       paint(l, { 'text-color': P.place, 'text-halo-color': P.halo, 'text-halo-width': 1.4, 'text-halo-blur': 0.3 });

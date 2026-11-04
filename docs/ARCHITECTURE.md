@@ -866,7 +866,10 @@ and tests rely on:
   follows `--pill-h`), so fast taps on it never land on the trip chip. Open stays open across state changes; a banner
   that comes back starts closed. The demo chip has no Details.
 - **Feedback circle** `#feedbackBtn` inside `#topbar` under Settings (see "Beta feedback" above).
-Deviations from the glass spec: `docs/redesign/NOTES-glass-web.md`; screens: `docs/redesign/glass/web/`. sw `sb-v2-87`.
+- **Basemap roads** (owner 2026-11-04: "Do not make the main streets yellow. The highways being yellow is ok."): only
+  motorways (and motorway bridges) are yellow-orange; main streets white / gray (`map/style.js PALETTE`); a test checks
+  no other road layer has a yellow or orange hue.
+Deviations from the glass spec: `docs/redesign/NOTES-glass-web.md`; screens: `docs/redesign/glass/web/`. sw `sb-v2-91`.
 
 ## Faded buses, trip-only lines, thinner lines without outlines (2026-11-04, owner: "The buses on faded routes should also be faded. If on a trip, only the lines on the particular trip should be displayed.", "Remove the outlines for the lines but make the lines themselves thinner. All these changes should go onto the experimental build.")
 Ported by hand from the live app (straight-bussing commit d0e20d0e on its branch `fade-buses`; the live

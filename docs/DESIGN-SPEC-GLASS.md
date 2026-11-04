@@ -728,6 +728,7 @@ Acceptance (in addition to DESIGN-SPEC 16):
 | D1 | "Remove the give feedback notification when the user logs onto the app. Keep the one overlayed on the map" | The beta welcome popup is gone; Q7 is yes: the map feedback button, 44 tinted glass circle under Settings (8.5) | done | paused (GLASS-IOS-PAUSED.md) |
 | D2 | "Reduce the size of the reconnecting notification." | The status banner (8.1) is one 44 pt line in the footnote role: [Retry / See alert slot, unchanged] [icon] [a short line that still says the times can't be relied on + chevron]; the line is a Details button that opens the full sentence and "Call 773.702.8181" under it; screen readers always hear the full sentence; the line never moves | done | paused |
 | D3 | "Change the background map to resemble something closer to apple maps", "the current map should make green spaces like parks actually green" | Replaces DESIGN-SPEC 11.2's "nothing colored except water and parks, both desaturated" with the palette below | done | MapKit already draws Apple's map: drop `emphasis: .muted` (one line) |
+| D4 | "Do not make the main streets yellow. The highways being yellow is ok. This coloring of roads can confuse the user to think it is a bus line." | Only motorways are yellow-orange; main streets are white (light) / gray (dark) with a soft edge; a test checks no other road has a yellow or orange hue | done | MapKit's own colors |
 
 ### 18.1 Basemap palette (replaces DESIGN-SPEC 11.2's table; structure, zooms and label rules unchanged)
 
@@ -740,8 +741,8 @@ Acceptance (in addition to DESIGN-SPEC 16):
 | Water / water text | `#A3D0F2` / `#2B6596` | `#1B3A5A` / `#8FB8DC` |
 | Buildings / outline | `#E8E4DC` / `#D6D0C5` | `#2B2C30` / `#36373C` |
 | Minor road / casing | `#FFFFFF` / `#D9D5CC` | `#3A3B40` / `#141416` |
-| Major road / casing | `#FDE9A6` soft yellow / `#E2C46F` | `#4D4E55` / `#141416` |
-| Motorway / casing | `#F8C967` yellow-orange / `#D9A23A` | `#6A5A36` muted amber / `#141416` |
+| Major road / casing (primary, secondary, tertiary, trunk) | `#FFFFFF` / `#C9C4BA` (never yellow, D4) | `#4D4E55` / `#141416` |
+| Motorway (and motorway bridges) / casing | `#F8C967` yellow-orange / `#D9A23A` | `#6A5A36` muted amber / `#141416` |
 | Street names minor / major, place names | `#4F4F54` / `#2C2C2E` Bold, `#646469` | `#C7C7CC` / `#E5E5EA` Bold, `#A8A8AD` |
 
 The green fills sit below the water layer (lagoons inside a park stay blue). Route lines: the casing flip
