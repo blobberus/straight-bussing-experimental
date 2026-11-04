@@ -115,13 +115,16 @@ extension View {
 /// `reportsSheetScroll` when a `SheetScroll` is in the environment (the map screen's sheet), nothing otherwise.
 struct OptionalSheetScrollReporter: ViewModifier {
     @Environment(SheetScroll.self) private var scroll: SheetScroll?
+    @Environment(AppModel.self) private var model
     func body(content: Content) -> some View {
+        // -scrollend (CI): open at the end, as the other sheet pages do
+        let anchored = content.defaultScrollAnchor(model.config.scrollEnd ? .bottom : nil)
         if #available(iOS 18.0, *), let scroll {
-            content.onScrollGeometryChange(for: Bool.self, of: { g in g.contentOffset.y + g.contentInsets.top > 1 }) { _, v in
+            anchored.onScrollGeometryChange(for: Bool.self, of: { g in g.contentOffset.y + g.contentInsets.top > 1 }) { _, v in
                 if scroll.scrolled != v { scroll.scrolled = v }
             }
         } else {
-            content
+            anchored
         }
     }
 }
