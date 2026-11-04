@@ -433,6 +433,7 @@ extension AppModel {
         }
         dir.result = nil
         dir.selected = 0
+        dir.optionsUpdated = false
         let task = Task { [weak self] in
             guard let self else { return }
             let r = await self.computePlan(from: f.coord, to: t.coord)
@@ -492,7 +493,11 @@ extension AppModel {
             guard self.page == .directions, self.dir.from == f, self.dir.to == t, let old = self.dir.result else { return }
             let key = old.options.indices.contains(self.dir.selected) ? old.options[self.dir.selected].key : nil
             self.dir.result = r
-            self.dir.selected = key.flatMap { k in r.options.firstIndex { $0.key == k } } ?? min(self.dir.selected, max(0, r.options.count - 1))
+            let kept = key.flatMap { k in r.options.firstIndex { $0.key == k } }
+            self.dir.selected = kept ?? min(self.dir.selected, max(0, r.options.count - 1))
+            // the option the rider was looking at is gone: say so once under the list (spec 13.8), no modal
+            let updated = key != nil && kept == nil
+            if self.dir.optionsUpdated != updated { self.dir.optionsUpdated = updated }
             // a live re-plan never moves the boarding stop of a started trip; only another set of routes replaces it
             if let trip = self.activeTrip, r.options.indices.contains(self.dir.selected),
                let j = TripJourney.plan(r.options[self.dir.selected], to: trip.label), Set(j.rids) != Set(trip.journey.rids) {

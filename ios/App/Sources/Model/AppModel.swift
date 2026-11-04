@@ -64,6 +64,8 @@ struct DirectionsState {
     var selected = 0
     /// Sidewalk routes are being fetched for `result` ("Checking sidewalk routes…").
     var refining = false
+    /// A live re-plan dropped the option the rider had selected (spec 13.8: "Options updated with live times.").
+    var optionsUpdated = false
 }
 
 /// A started trip (Directions > option > Start). `journey` is what the timeline follows (web store.journey).

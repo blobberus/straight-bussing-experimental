@@ -272,6 +272,12 @@ struct DirectionsView: View {
                         .padding(.horizontal, Space.insetContent)
                 }
                 refiningNote
+                if model.dir.optionsUpdated {
+                    Text("Options updated with live times.").font(Typo.footnote.weight(.semibold)).foregroundStyle(Palette.label2)
+                        .padding(.horizontal, Space.insetContent)
+                        .accessibilityAddTraits(.updatesFrequently)
+                        .accessibilityIdentifier("dirOptionsUpdated")
+                }
                 Text("Bus times are estimates from schedules and live predictions. They will get more accurate as we collect more ride data.")
                     .font(Typo.footnote).foregroundStyle(Palette.label2)
                     .fixedSize(horizontal: false, vertical: true)
