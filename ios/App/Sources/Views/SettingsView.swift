@@ -82,7 +82,13 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.accessibilityIdentifier("settingsDone") }
+                // iOS 26: the tinted checkmark (DESIGN-SPEC-GLASS 9.8), named "Done"; swipe down also closes. Earlier iOS:
+                // the word, as their own sheets do.
+                ToolbarItem(placement: .confirmationAction) {
+                    Button { dismiss() } label: { SheetActionLabel(text: "Done", symbol: "checkmark") }
+                        .accessibilityLabel("Done")
+                        .accessibilityIdentifier("settingsDone")
+                }
             }
         }
     }

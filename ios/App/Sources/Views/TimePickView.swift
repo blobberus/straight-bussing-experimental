@@ -86,8 +86,12 @@ struct TimePickView: View {
             .navigationTitle(TimeActive.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // iOS 26: an xmark named "Cancel" and "Set time" as the tinted capsule (a word: no symbol says it,
+                // DESIGN-SPEC-GLASS 9.9); earlier iOS: both words
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.accessibilityIdentifier("timeCancel")
+                    Button { dismiss() } label: { SheetActionLabel(text: "Cancel", symbol: "xmark") }
+                        .accessibilityLabel("Cancel")
+                        .accessibilityIdentifier("timeCancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Set time") { setTime() }.fontWeight(.semibold).accessibilityIdentifier("timeSet")
