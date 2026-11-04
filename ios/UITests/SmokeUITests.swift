@@ -80,10 +80,11 @@ final class SmokeUITests: XCTestCase {
         app.buttons["searchBar"].tap()
         let to = app.textFields["dirTo"]
         XCTAssertTrue(to.waitForExistence(timeout: 10), "destination field")
-        // the fields are a card at the top, where the search bar was (owner 2026-10-12), not inside the sheet
+        // the fields are a card at the top of the expanded sheet, under its title (Apple Maps' search field at the top
+        // of the card, DESIGN-SPEC-GLASS 9.2)
         let card = app.descendants(matching: .any)["directionsCard"]
         XCTAssertTrue(card.exists, "the Directions card")
-        XCTAssertLessThan(card.frame.maxY, app.staticTexts["sheetTitle"].frame.minY, "the card sits above the sheet")
+        XCTAssertGreaterThanOrEqual(card.frame.minY, app.staticTexts["sheetTitle"].frame.maxY - 1, "the card sits under the sheet's title")
         to.tap()
         to.typeText("chipotle")
         let suggestion = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Chipotle")).firstMatch
@@ -120,13 +121,48 @@ final class SmokeUITests: XCTestCase {
 
         // Lines by Time (owner 2026-10-18): the clock next to the gear opens its sheet; Cancel changes nothing
         let clock = app.buttons["timeButton"]
-        XCTAssertTrue(clock.waitForExistence(timeout: 10) && clock.isHittable, "the clock in the search bar")
+        XCTAssertTrue(clock.waitForExistence(timeout: 10) && clock.isHittable, "the clock in the lower-right group")
         clock.tap()
         if !app.navigationBars["Lines by Time"].waitForExistence(timeout: 6) { clock.tap() }   // a tap lost to a settling sheet
         XCTAssertTrue(app.navigationBars["Lines by Time"].waitForExistence(timeout: 10), "Lines by Time sheet")
         save(app, "41-lines-by-time-light")
         app.buttons["timeCancel"].tap()
         XCTAssertTrue(app.buttons["searchBar"].waitForExistence(timeout: 10))
+    }
+
+    /// The glass layout (DESIGN-SPEC-GLASS 3, the "what moves where" table): the search circle at the trailing end of
+    /// the tab bar's row under the collapsed card; Settings alone at the top right; Lines by Time over Locate riding
+    /// above the card at the trailing edge; expanded, the group is gone and the bottom row stays.
+    func testGlassLayout() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo"]
+        app.launch()
+        let search = app.buttons["searchBar"], gear = app.buttons["settingsButton"]
+        let clock = app.buttons["timeButton"], locate = app.buttons["locateButton"]
+        let grab = app.descendants(matching: .any)["sheetGrabber"]
+        XCTAssertTrue(search.waitForExistence(timeout: 30), "the search circle")
+        XCTAssertTrue(grab.waitForExistence(timeout: 10))
+        XCTAssertEqual(sheetState(app), "Collapsed")
+        let w = app.windows.firstMatch.frame
+        let first = app.buttons["tab.current"].frame, last = app.buttons["tab.myroutes"].frame
+        XCTAssertEqual(search.frame.midY, first.midY, accuracy: 6, "search sits on the tab bar's row: \(search.frame) vs \(first)")
+        XCTAssertGreaterThan(search.frame.minX, last.maxX, "at its trailing end")
+        XCTAssertGreaterThanOrEqual(search.frame.width, 44, "a 56 pt circle")
+        XCTAssertGreaterThan(first.minY, grab.frame.maxY, "the bottom row under the collapsed card")
+        XCTAssertTrue(gear.isHittable, "Settings")
+        XCTAssertLessThan(gear.frame.maxY, w.midY, "Settings at the top")
+        XCTAssertGreaterThan(gear.frame.midX, w.midX, "on the right")
+        XCTAssertTrue(clock.isHittable && locate.isHittable, "Lines by Time and Locate on the map")
+        XCTAssertLessThanOrEqual(clock.frame.maxY, locate.frame.minY + 1, "Lines by Time over Locate")
+        XCTAssertLessThan(locate.frame.maxY, grab.frame.minY, "the group rides above the card")
+        XCTAssertGreaterThan(locate.frame.midX, w.midX, "at the trailing edge")
+        save(app, "61-glass-collapsed-light")
+        grab.tap()
+        waitSheet(app, "Expanded", "expanded")
+        waitGone(clock, 5, "the lower-right group leaves while the sheet is expanded")
+        XCTAssertTrue(search.isHittable, "the bottom row stays")
+        XCTAssertTrue(gear.isHittable, "Settings stays")
+        save(app, "62-glass-expanded-light")
     }
 
     /// A started trip ends when a stop's Directions picks a new destination (else "Trip to Chipotle" would follow a
