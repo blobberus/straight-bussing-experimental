@@ -59,7 +59,7 @@
 .v-choice--primary { margin: 0 0 var(--s-3); border-radius: var(--r-card); background: var(--bg-card); }
 .v-choices .v-row + .v-row::before { left: var(--separator-inset); }
 
-/* ---------- native dialogs (confirm, picker lists, the beta welcome): centered card over the scrim (10.13) ---------- */
+/* ---------- native dialogs (confirm, picker lists): centered card over the scrim (10.13) ---------- */
 .v-dialog {
   width: min(calc(100vw - 48px), 360px); max-height: 86vh; box-sizing: border-box; padding: var(--s-5); border: 0;
   border-radius: var(--r-sheet); background: var(--bg-card); color: var(--label); box-shadow: var(--e-3); font: var(--t-body);

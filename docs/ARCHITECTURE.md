@@ -370,6 +370,28 @@ its own list: Apple Maps for the map and walks instead of the web map stack).
   is pure (a date far in the future, from a changed clock, counts by its distance). Storage blocked: once per session,
   or per page load. Tests: tests/feedback-welcome.js (wording, frequency, contrast, Settings card), feedback-app.js
   (real app: a new visit within the week shows nothing, a week later it asks). sw sb-v2-81.
+- 2026-11-04, experimental (owner: "Remove the give feedback notification when the user logs onto the app. Keep the one
+  overlayed on the map"; the live repo did the same in fe88ed78, re-implemented here by hand, never merged): **the welcome
+  popup is gone** (showWelcome, maybeShowWelcome, welcomeAfterPaint, welcomeDue, the session flag `sb-welcome-seen`, the
+  `.v-welcome*` CSS, every write to `sb-welcome-log`). Kept: `FEEDBACK_URL`, `feedbackLinkHTML`, Settings > Give
+  feedback, the words (renamed `FEEDBACK_BODY`, `FEEDBACK_IN_SETTINGS`, `FEEDBACK_NOTE` moved into ui/feedback.js).
+  New: the given-feedback memory `localStorage` `sb-feedback-done` = `{how: "gave" | "silenced", at}` (`feedbackDone`,
+  `markFeedbackDone`, `noteFeedbackOpened`; "gave" wins; a form date in the old `sb-welcome-log` still counts as gave;
+  blocked storage = this page load; every change emits `feedback:done` on the bus).
+- 2026-11-04, experimental (glass spec Q7 = yes, owner): **the map feedback button** `ui/feedback-button.js` (from the
+  live repo's ec63088d, adapted): `#feedbackBtn` inside `#topbar`, a 44 tinted glass circle 8 under Settings (glass spec
+  4, 8.5: `--glass-tint-fill` = tintBg at 85% with the glass filter, speech bubble in tint, badge dot; solid tintBg while
+  a chip shows so at most 6 surfaces blur, and wherever glass is solid), hidden at the full detent. Ping: two ring pulses
+  on the dot 20 s after start, then every 3 min, at most 4 a visit; waits during a trip, with the sheet expanded, an
+  overlay or dialog open, a field focused or the page hidden; none under reduced motion. Tap: the Settings sheet's shell
+  (kind "feedback", title "Beta feedback", zooms out of the button, the app's sheet stays where it was): the tinted card,
+  Send feedback (the form, new tab), "Once you give feedback, the feedback button on the map disappears.", then the quiet
+  "I already gave feedback". Either choice (or Settings > Give feedback) removes the button at once, in other tabs
+  (`storage` event) and on later visits; focus goes to Settings. Test seam: `sessionStorage` `sb-feedback-btn-off` = "1"
+  (e2e.js, e2e-demo.js). Tests: feedback-shared.js (link, memory, Settings card, privacy wording, nothing of the popup in
+  any shipped file), feedback-button.js (rules, schedule, panel, CSS in the glass layout, real app incl. the blur budget
+  with the button on), feedback-app.js (the real app shows no popup, the button appears). privacy.html effective
+  November 4, 2026; About says the same. sw sb-v2-87.
 
 ### You on the trip map + trip alerts (2026-10-13, owner: "the Current Trip map should show the user's location in the current trip's location (especially for bus routes). Make this sync to the notification center's get off in X stops")
 ONE evaluation of the followed trip per data change, `core/tripprogress.js tripNow(state, nowS)` (memo: same journey,

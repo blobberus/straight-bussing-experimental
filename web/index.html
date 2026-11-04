@@ -118,12 +118,18 @@
 <div id="map" role="region" aria-label="Shuttle map"></div>
 
 <!-- top rows (docs/DESIGN-SPEC-GLASS.md 3): Row A = the status banner (#pill, opaque, its Retry / See alert slot on the
-     LEADING edge, owner 2026-11-03), Row B = the simulated-buses chip (#pill in its chip form) and the Settings circle,
-     the trip chip (#ctxbar) beside Settings or under the chip. Positions: css/base.css from --search-top and --pill-h. -->
+     LEADING edge, owner 2026-11-03), Row B = the simulated-buses chip (#pill in its chip form) and the Settings circle
+     with the feedback circle under it, the trip chip (#ctxbar) beside Settings or under the chip. Positions: css/base.css from --search-top and --pill-h. -->
 <div id="pill" class="statuspill" role="status" aria-live="polite" hidden><button id="pillRetry" class="pillbtn pillslot" type="button" data-action="retry" hidden>Retry</button><button id="pillAlert" class="pillbtn pillslot" type="button" data-action="alerts:open" aria-label="Read the service alert" hidden>See alert</button><span id="pillIcon" class="pillicon" aria-hidden="true"></span><span id="pillText" class="pilltext"></span></div>
 <div id="topbar" class="topbar">
   <button id="settingsBtn" class="glass gcircle gpress" type="button" data-action="settings:open" aria-label="Settings">
       <svg class="ic" width="20" height="20" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+  </button>
+  <!-- the beta feedback button under Settings (glass spec 4, 8.5; owner 2026-11-04 Q7: yes): js/ui/feedback-button.js
+       shows it until the rider gives feedback or taps "I already gave feedback" -->
+  <button id="feedbackBtn" class="glass gpress fbfab" type="button" aria-label="Give feedback" aria-haspopup="dialog" aria-expanded="false" hidden>
+    <svg class="ic" width="20" height="20" stroke-width="2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <span class="fbfab-dot" aria-hidden="true"></span>
   </button>
 </div>
 <div id="ctxbar" class="ctxbar" role="status" aria-live="polite" hidden></div>

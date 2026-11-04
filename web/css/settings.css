@@ -156,31 +156,27 @@
 .st-other summary { min-height: var(--tap); display: flex; align-items: center; cursor: pointer; color: var(--tint); font: var(--t-button); }
 .st-tried { margin: var(--s-2) 0 0; }
 
-/* Beta feedback (owner 2026-10-13, ui/feedback.js): the Settings card and the welcome popup, on the accent tint tintBg
-   (never the live green; label and label2 stay AA on it in both themes), a speech bubble on an accent disc. */
+/* Beta feedback (owner 2026-10-13, ui/feedback.js): the Settings card and the map feedback button's panel (the welcome
+   popup that shared this look was removed on 2026-11-04), on the accent tint tintBg (never the live green; label and
+   label2 stay AA on it in both themes), a speech bubble on an accent disc. */
 .fb-badge { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
   border-radius: var(--r-capsule); background: var(--tint-fill); color: var(--on-fill); }
 .fb-badge .ic { width: 20px; height: 20px; }
 .v-btn .fb-ext { width: var(--i-inline); height: var(--i-inline); }
 .st-feedback { margin: 0 0 var(--s-3); padding: var(--s-4) var(--inset-content); border-radius: var(--r-card); background: var(--tint-bg); }
 .st-fbhead { display: flex; align-items: center; gap: var(--s-3); }
-.st-fblead, .v-welcome-lead { margin: 0; font: var(--t-row-title); color: var(--label); }
+.st-fblead { margin: 0; font: var(--t-row-title); color: var(--label); }
 .st-feedback .st-intro { margin: var(--s-3) 0 0; padding: 0; }
 .st-feedback .st-fbbtn { margin: var(--s-3) 0 0; }
 .st-feedback .st-fbnote { margin: var(--s-2) 0 0; padding: 0; }
-/* the popup: as wide as the confirm popup; scaled with the desktop phone frame (--frame-k, ui/frame.js) so it never
-   spills over a shrunken frame (native dialogs center on the window, outside the frame's transform). The tinted band
-   runs edge to edge under the rounded top. */
-.v-welcome { width: min(calc(100vw - 48px), 340px); scale: var(--frame-k, 1); padding: 0; overflow: hidden auto; }
-.v-welcome-band { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-3); padding: var(--s-5) var(--s-5) var(--s-4); background: var(--tint-bg); }
-.v-welcome-main { padding: var(--s-4) var(--s-5) var(--s-5); }
-.v-welcome-b { margin: var(--s-2) 0 0; }
-.v-welcome-note { margin: var(--s-3) 0 0; }
-.v-welcome-acts { flex-wrap: wrap; margin: var(--s-5) 0 0; }
-.v-welcome-acts .v-btn { flex: 1 1 auto; }   /* sized by their words: with larger text they stack instead of wrapping a label */
+/* the map feedback button's panel (js/ui/feedback-button.js, owner 2026-11-02): the Settings card in the Settings sheet,
+   then the quieter "I already gave feedback" (tint text on the sheet's own surface, not on the tint card) */
+.fbp { padding: var(--s-3) 0 var(--s-2); }
+.fbp .fbp-card { margin-top: 0; }
+.fbp .fbp-silence { display: flex; margin: var(--s-2) auto 0; }
+.fbp .fbp-note { margin: var(--s-2) 0 0; text-align: center; }
 @media (forced-colors: active) {
-  .v-welcome, .st-feedback { border: 1px solid CanvasText; }
-  .v-welcome-band { border-bottom: 1px solid CanvasText; }
+  .st-feedback { border: 1px solid CanvasText; }
   .fb-badge { border: 1px solid CanvasText; }
 }
 

@@ -17,6 +17,9 @@
   --glass-edge: 0 0 0 .5px rgba(17, 17, 20, .10);
   --glass-shadow: 0 1px 2px rgba(30, 32, 45, .08), 0 6px 20px rgba(30, 32, 45, .12);
   --label-glass-2: #3c3c43;       /* secondary text on glass (label2 and tint text are not allowed there, 5.3) */
+  /* tinted glass, only the feedback circle (8.5): tintBg at 85% with the glass filter; the tint icon keeps 3:1 over any
+     backdrop with no blur (3.2:1 light over black, 3.6:1 dark over white). Solid wherever --glass-fill is. */
+  --glass-tint-fill: color-mix(in srgb, var(--tint-bg) 85%, transparent);
   --bg-chrome: var(--glass-fill);         /* old names: the first redesign's chrome material */
   --bg-chrome-solid: var(--glass-solid);
   --bg-inverse: #2c2c2e;          /* toasts */
@@ -166,8 +169,8 @@
   --z-sheet: 1000;
   --z-nav: 1010;          /* bottom bar */
   --z-chip: 1090;         /* trip / filter chip */
-  --z-float: 1100;        /* status chip / banner, locate button */
-  --z-search: 1105;       /* floating search bar */
+  --z-float: 1100;        /* status chip / banner */
+  --z-search: 1105;       /* the top rows' Settings and feedback circles */
   --z-overlay-scrim: 1140;
   --z-overlay: 1150;      /* Settings, Lines by Time */
   --z-dialog: 1200;       /* #dlg scrim + card */
@@ -360,7 +363,7 @@
     --separator: #c6c6c8;
   }
   /* glass turns solid with a contrasting border (glass spec 5.4) */
-  :root, :root:not([data-theme="light"]), :root[data-theme] { --glass-fill: var(--glass-solid); --glass-filter: none; --glass-rim: inset 0 0 0 1px rgba(17, 17, 20, .55); }
+  :root, :root:not([data-theme="light"]), :root[data-theme] { --glass-fill: var(--glass-solid); --glass-tint-fill: var(--tint-bg); --glass-filter: none; --glass-rim: inset 0 0 0 1px rgba(17, 17, 20, .55); }
   :root[data-theme="dark"] { --label-2: #c7c7cc; --tint: #8ac4ff; --separator: #38383a; --glass-rim: inset 0 0 0 1px rgba(245, 245, 247, .55); }
 }
 @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
@@ -368,11 +371,11 @@
 }
 /* Reduce transparency (Chrome, Edge, Samsung; iPhone Safari cannot report it, hence the 80% fill): solid glass */
 @media (prefers-reduced-transparency: reduce) {
-  :root, :root:not([data-theme="light"]), :root[data-theme] { --glass-fill: var(--glass-solid); --glass-filter: none; }
+  :root, :root:not([data-theme="light"]), :root[data-theme] { --glass-fill: var(--glass-solid); --glass-tint-fill: var(--tint-bg); --glass-filter: none; }
 }
 /* no backdrop-filter at all: solid glass (the same shapes) */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  :root, :root:not([data-theme="light"]), :root[data-theme] { --glass-fill: var(--glass-solid); --glass-filter: none; }
+  :root, :root:not([data-theme="light"]), :root[data-theme] { --glass-fill: var(--glass-solid); --glass-tint-fill: var(--tint-bg); --glass-filter: none; }
 }
 /* glass-lite (glass spec 12.4, ui/frame.js): a slow device gets solid glass for the session */
-html.glass-lite, html.glass-lite:root:not([data-theme="light"]), html.glass-lite[data-theme] { --glass-fill: var(--glass-solid); --glass-filter: none; }
+html.glass-lite, html.glass-lite:root:not([data-theme="light"]), html.glass-lite[data-theme] { --glass-fill: var(--glass-solid); --glass-tint-fill: var(--tint-bg); --glass-filter: none; }
