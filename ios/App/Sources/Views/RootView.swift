@@ -84,11 +84,8 @@ struct RootView: View {
                 // pinned to the screen's width: a too-wide child (very large text) can never widen its siblings
                 .frame(width: geo.size.width)
                 VStack(spacing: 0) {
-                    BottomSheet(detent: $model.detent, available: available, onSettled: { d, h in
-                        if abs(h - settledSheetH) > 0.5 {
-                            settledSheetH = h
-                            model.sheetSettled(d)
-                        }
+                    BottomSheet(detent: $model.detent, available: available, onSettled: { _, h in
+                        if abs(h - settledSheetH) > 0.5 { settledSheetH = h }
                     }) {
                         SheetHeader()
                     } content: {
@@ -123,6 +120,8 @@ struct RootView: View {
         // a light tap when a trip starts or ends (spec 9: Start), none for live updates
         .sensoryFeedback(.impact(weight: .light), trigger: model.activeTrip != nil)
         .onChange(of: model.tab) { _, _ in sheetScroll.scrolled = false }
+        // collapsing Directions frames the selected option again once the sheet has settled (AppModel.sheetCollapsed)
+        .onChange(of: model.detent) { _, d in if d == .peek { model.sheetCollapsed() } }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardUp = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardUp = false }
         .sheet(isPresented: $model.showSettings) { SettingsView() }

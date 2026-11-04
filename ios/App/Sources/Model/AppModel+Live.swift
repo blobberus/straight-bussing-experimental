@@ -394,17 +394,18 @@ extension AppModel {
 
     /// A card tapped in Directions: select and frame it; during a trip the timeline follows that option (web
     /// syncJourney(picked) replaces the stops and bus to follow, even on the same route).
-    /// The sheet came to rest (RootView). Collapsed in Directions with an option selected and no trip started: frame
-    /// the option again in the now larger visible map (spec J3, "collapsing the sheet shows the selected option drawn
-    /// on the map with the destination pin"); it was framed for the small strip above the expanded sheet.
-    func sheetSettled(_ d: Detent) {
-        guard d == .peek, page == .directions, activeTrip == nil, let r = dir.result,
-              r.options.indices.contains(dir.selected) else { return }
-        let o = r.options[dir.selected]
+    /// The sheet was collapsed (RootView watches `detent`). In Directions with an option selected and no trip started:
+    /// once the sheet has settled and the map's bottom padding has followed, frame the option again in the now larger
+    /// visible map (spec J3, "collapsing the sheet shows the selected option drawn on the map with the destination
+    /// pin"); it was framed for the small strip above the expanded sheet. Keyed on the detent change, not on a new
+    /// settled height (a collapse that lands on the height the sheet had before still frames).
+    func sheetCollapsed() {
+        guard page == .directions, activeTrip == nil else { return }
         Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 60_000_000)   // the map's new bottom padding applies first
-            guard let self, self.detent == .peek, self.page == .directions else { return }
-            self.fit(self.planPoints(o))
+            try? await Task.sleep(nanoseconds: 560_000_000)   // the settle (0.45 s) and the new map padding first
+            guard let self, self.detent == .peek, self.page == .directions, self.activeTrip == nil,
+                  let r = self.dir.result, r.options.indices.contains(self.dir.selected) else { return }
+            self.fit(self.planPoints(r.options[self.dir.selected]))
         }
     }
 
