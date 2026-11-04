@@ -98,6 +98,18 @@ enum Palette {
     /// The favorite badge on the map: a white star on dark gold (5.3:1) in both themes.
     static let starBadge = fixed(0xA35400)
 
+    // MARK: Glass (docs/DESIGN-SPEC-GLASS.md 5.2). iOS 26 draws real Liquid Glass; these are the iOS 17 to 25 fallback
+    // and the parity values of the web's frosted glass.
+
+    /// The frosted fill where Liquid Glass is unavailable (80%: `label` stays AA over any backdrop, spec 5.3).
+    static let glassFill = dynamicAlpha(0xFAFAFC, 0.80, 0x26262A, 0.80)
+    /// Glass drawn solid (Increase Contrast, moving elements on the web).
+    static let glassSolid = dynamic(0xFAFAFC, 0x26262A)
+    /// The thin outer edge of glass (iOS 27's darker edge), stroked around the fallback material.
+    static let glassEdge = dynamicAlpha(0x111114, 0.10, 0x000000, 0.50)
+    /// Secondary text on glass (placeholders, "est.", unselected tab labels): `label2` is too light on glass.
+    static let labelGlass2 = dynamic(0x3C3C43, 0xC7C7CC)
+
     // MARK: Map overlays (spec 11)
 
     /// Building and place names on the map: 6.0:1 on the light land, 8.9:1 on the dark land.

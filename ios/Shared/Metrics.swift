@@ -33,6 +33,16 @@ enum Space {
     static let sheetHeaderMin: CGFloat = 56
     /// Bottom bar (plus the bottom safe area).
     static let tabBar: CGFloat = 49
+
+    // Glass redesign (DESIGN-SPEC-GLASS 3, 6)
+    /// The floating glass tab bar capsule.
+    static let tabBarH: CGFloat = 56
+    /// The search circle at the trailing end of the tab bar row.
+    static let searchButton: CGFloat = 56
+    /// Settings circle, the lower-right group's buttons, the compass.
+    static let chromeButton: CGFloat = 44
+    /// Bottom edge of the floating bottom row: clears the home indicator on Face ID iPhones, 12 without a safe area.
+    static func bottomRowInset(safeBottom: CGFloat) -> CGFloat { max(12, safeBottom - 12) }
 }
 
 /// Corner radii (spec section 6): five values, every rounded rectangle drawn `.continuous`. A shape nested in
@@ -42,10 +52,13 @@ enum Radius {
     static let tag: CGFloat = 6
     /// Buttons, fields inside the sheet, segmented track, menus.
     static let control: CGFloat = 12
-    /// Grouped cards, option cards, in-sheet banners, place summary.
-    static let card: CGFloat = 14
-    /// Sheet top corners, dialogs, the Directions field card.
-    static let sheet: CGFloat = 20
+    /// Grouped cards, option cards, in-sheet banners, place summary, the status banner (iOS 26's rounder sections,
+    /// DESIGN-SPEC-GLASS 6).
+    static let card: CGFloat = 20
+    /// The collapsed glass card (all corners), the expanded sheet's top corners, dialogs (DESIGN-SPEC-GLASS `rGlass`).
+    static let glass: CGFloat = 28
+    /// Older name of the sheet radius: now the glass radius.
+    static let sheet: CGFloat = 28
     /// The bus marker on the map (7 at 26 pt tall: the badge's proportion).
     static let busMarker: CGFloat = 7
 }
@@ -81,6 +94,13 @@ enum Motion {
     static let camera = Animation.easeInOut(duration: 0.6)
     /// What every motion becomes under Reduce Motion.
     static let reduced = Animation.easeInOut(duration: 0.15)
+    // Glass redesign (DESIGN-SPEC-GLASS 7)
+    /// Glass controls appearing (chips, the compass, the lower-right group, the bottom row after the keyboard).
+    static let materialize = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.22)
+    /// The selection capsule sliding to another tab.
+    static let tabPill = Animation.spring(response: 0.35, dampingFraction: 0.78)
+    /// The status banner (Row A) coming and going.
+    static let banner = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.25)
 
     static func pick(_ a: Animation, reduce: Bool) -> Animation { reduce ? reduced : a }
 }

@@ -243,6 +243,51 @@ struct FlowLayout: Layout {
     }
 }
 
+// MARK: Liquid Glass (docs/DESIGN-SPEC-GLASS.md 5, 13.1)
+
+extension View {
+    /// The one glass helper: real Liquid Glass (regular, never clear, never tinted) on iOS 26 and later; the system
+    /// material with the thin glass edge on iOS 17 to 25. Only for the control layer over the map (the tab bar, the
+    /// search and Settings circles, the lower-right group, the chips, the collapsed card's header), never for content.
+    @ViewBuilder
+    func sbGlass<S: Shape>(in shape: S, interactive: Bool = false) -> some View {
+        if #available(iOS 26.0, *) {
+            glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+        } else {
+            background(.regularMaterial, in: shape)
+                .overlay(shape.stroke(Palette.glassEdge, lineWidth: 0.5).allowsHitTesting(false))
+        }
+    }
+
+    /// Groups glass elements that sit together (the bottom row; the card and its lower-right group) so they blend and
+    /// morph as one on iOS 26 (glass cannot sample other glass across containers); nothing on iOS 17 to 25.
+    @ViewBuilder
+    func sbGlassContainer(spacing: CGFloat = Space.gapChrome) -> some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing) { self }
+        } else {
+            self
+        }
+    }
+}
+
+/// A round glass control (Settings, search, the compass): 44 or 56 pt, the glyph in `label`, glass press response on
+/// iOS 26 (`.interactive()`), opacity .6 on iOS 17 to 25 and under Reduce Motion.
+struct GlassCircleStyle: ButtonStyle {
+    var size: CGFloat = Space.chromeButton
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(Palette.label)
+            .frame(width: size, height: size)
+            .sbGlass(in: Circle(), interactive: true)
+            .contentShape(Circle())
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 1.06 : 1)
+            .animation(Motion.press, value: configuration.isPressed)
+    }
+}
+
 /// SF Symbol names (spec section 5: one glyph per meaning). Symbols newer than the deployment target fall back.
 enum Sym {
     static func pick(_ name: String, _ fallback: String) -> String { UIImage(systemName: name) != nil ? name : fallback }
