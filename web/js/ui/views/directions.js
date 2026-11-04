@@ -114,6 +114,9 @@ function sugHTML() {
   if (D.sugs.length) h += `<div class="v-card v-sugs" role="listbox" aria-label="Suggestions for ${key === "from" ? "start" : "destination"}">` + D.sugs.map((s, i) => `<button type="button" class="v-row" role="option" data-action="dir:sug" data-i="${i}"><span class="v-ic" aria-hidden="true">${s.kind === "me" ? ICONS.loc : s.kind === "stop" ? ICONS.stop : ICONS.place}</span><span class="v-grow"><span class="v-prim">${esc(s.label)}</span><span class="v-sec">${esc(s.sub || "")}</span></span></button>`).join("") + "</div>";
   if (mine && ps.status === "busy") h += D.sugs.some((s) => s.kind === "place") ? '<p class="v-fine v-more" role="status">Searching more places&hellip;</p>' : '<p class="v-hint" role="status">Searching places&hellip;</p>';
   if (mine && ps.status === "err") h += '<p class="v-hint">Couldn&rsquo;t search places right now. Station names still work.</p>';
+  // nothing at all once every search has answered (spec J2): the empty state in a card, in the words the place picker
+  // and the iPhone app use; before, the list simply stayed blank
+  else if (mine && !ps.status && !D.sugs.length && q.length >= 3) h += `<div class="v-card">${emptyState("No places found", "Check the spelling or try a nearby landmark.", { icon: "search" })}</div>`;
   if (D.meDenied) h += '<p class="v-hint">Location is off. Allow it in your browser settings, or type a start.</p>';
   if (q.length >= 2) h += '<p class="v-fine">Places near campus are searched on your device; otherwise only the text you type (or its spelling fix) is sent to photon.komoot.io.</p>';
   return h;
