@@ -63,26 +63,56 @@ conflict; the iOS counterpart is `docs/redesign/NOTES-ios.md`. Screens: `docs/re
 17. **Font**: the system stack renders SF Pro on Apple devices; the screenshots in `after/web/` come from Windows
     (Segoe UI Variable), so letterforms differ from an iPhone while spacing, color and hierarchy hold.
 
+## Kept in step with the iPhone app during the run
+
+- Status banner Retry rule (owner 2026-11-03, spec 10.3): leading 84 x 44 slot, 2.5 s hold, "Live data is back."
+  (`ui/pill.js`; unit test and the e2e "Retry tapped again and again during a trip").
+- Directions: when the sheet comes to rest collapsed, the selected option is framed again in the larger map (spec J3;
+  iOS 2c80933; `directions.js onSheetRest`, the sheet's `sheet:inset` event now carries `detent`).
+- The Directions field card's text caps at 1.35 x like the search bar (iOS caps DirectionsCard at xxxLarge).
+- The place summary shows the whole name at accessibility sizes (spec 13.6; iOS a189b50).
+- Already on the web before iOS asked: the option's routes stand out on the map while Directions shows options (the
+  network is dimmed under the drawn plan), the search capsule's whole-capsule press, the stop's three place actions in
+  one row (`.v-stopacts`).
+
+Housekeeping: the redesign's edit scripts had turned 57 web files into CRLF; they are LF again (commit "Web: LF line
+endings again"), so a diff against the pre-redesign build shows the real 2,700 changed lines.
+
 ## Performance (measured)
 
-Headless Edge 156 with SwiftShader (software GPU), 393 x 852 at DPR 2, demo mode, median of 4 runs per build, the
-unchanged build (`base/`, commit 0d1b602) and the redesign served side by side and measured interleaved
-(`tmp/redesign-web/trace.py`: a Chrome trace of a scripted sheet drag up and down, and of 5 s idle with buses gliding;
-`perf.py`: first paint with 4x CPU throttling). Headless rAF is not vsync-bound, so frame cost is read from the trace.
+Headless Edge with SwiftShader (software GPU), 393 x 852 at DPR 2, demo mode. The unchanged build (`base/`, commit
+0d1b602, served on its own port) and the redesign measured side by side and interleaved, final run on the finished
+build with nothing else running (scratch scripts in the job folder: `trace.py` = a Chrome trace of a scripted sheet
+drag up and down, then 5 s idle with buses gliding, median of 4 runs per build; `fcp.py` / `cpuprof.py` = load with 4x
+CPU throttling). Headless rAF is not vsync-bound, so frame cost is read from the trace, not from frame intervals.
 
 | Measure | Before | After | Change |
 |---|---|---|---|
-| Sheet drag: GPU / raster time per frame (SkiaRenderer swap + draw) | 6.43 ms | 4.67 ms | -27% |
-| Sheet drag: main-thread BeginMainFrame per frame | 0.45 ms | 0.28 ms | -38% |
-| Sheet drag: paint + pre-paint, whole drag | 25.8 ms | 11.1 ms | -57% |
-| Idle 5 s, buses gliding: style recalculation | 30.5 ms | 8.3 ms | -73% |
-| Idle 5 s: paint + pre-paint | 27.5 ms | 11.5 ms | -58% |
-| Idle 5 s: GPU time per frame | 5.91 ms | 5.47 ms | -7% |
-| First contentful paint, 4x CPU throttle | 512 ms | 556 ms | +44 ms (within the 2 s budget; inline chrome icons and a larger token file) |
+| Sheet drag: GPU / raster time per presented frame | 5.80 ms | 4.69 ms | -19% |
+| Sheet drag: GPU time, whole drag | 1,596 ms | 984 ms | -38% |
+| Sheet drag: paint + pre-paint, whole drag | 18.0 ms | 11.0 ms | -39% |
+| Sheet drag: main thread per frame (BeginMainFrame) | 0.33 ms | 0.30 ms | -9% |
+| Sheet drag: style recalculation, whole drag | 24.0 ms | 25.4 ms | +6% |
+| Idle 5 s with buses gliding: style recalculation | 35.4 ms | 14.6 ms | -59% |
+| Idle 5 s: paint + pre-paint | 31.8 ms | 17.0 ms | -47% |
+| Idle 5 s: frames presented / GPU time | 374 / 1,578 ms | 30 / 142 ms | far fewer frames (see below) |
+| Load, 4x CPU: boot() main-thread time (CPU profile, 3 runs) | 54 ms | 53 ms | same (was 87 ms before the boot fix) |
+| Load, 4x CPU: first contentful paint, third parties blocked (8 runs) | 374 to 406 ms | 466 to 500 ms | +90 ms, see below |
 
-No long tasks in either build. Why: the sheet is opaque (no 24 px blur, saturate 1.8 layer moving under the finger),
-blur is limited to four small controls at 20 px / 1.2, the bus pulse animation is gone, and `will-change` is set only
-while dragging. Final numbers are re-measured on the shipped build at the end of the run (see the report).
+No long tasks in either build during the drag or idle. Why the drag and idle are cheaper: the sheet is opaque (no 24 px
+blur and saturate 1.8 layer moving under the finger), blur is limited to four small controls at 20 px / 1.2, the bus
+pulse animation is gone, and `will-change` is set only while dragging. The idle frame count differs a lot (the
+pre-redesign build kept presenting frames continuously); buses glide in both builds (a check sampled every bus marker
+every 500 ms for 15 s: 28 and 30 of 30 samples moved).
+
+First paint: two redesign additions read layout synchronously at boot (the text-size class and the collapsed sheet
+height) and cost about 45 ms of main-thread time at 4x CPU; both now read in the first frame (commit "Web boot: no
+forced style or layout pass"), which brought boot() back to the old 53 ms. The remaining first-paint gap in headless
+Edge on Windows is in text rendering: with every font forced to Arial the two builds paint at the same time (324 vs
+314 ms), with every weight forced to Regular the gap is about 55 ms, with the family forced to system-ui about 30 ms.
+The redesign uses the system stack with three weights (400 / 600 / 700, spec 2.1) and tabular figures; on an iPhone the
+system font is always resident, so this is not expected there (not measured on a device). Both builds stay far under the
+2 s budget.
 
 ## Verified (headless Edge, `tmp/redesign-web/cdp.py` scenarios, 393 x 852 DPR 2 unless noted)
 
