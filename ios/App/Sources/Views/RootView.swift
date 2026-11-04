@@ -331,14 +331,20 @@ struct StatusBanner: View {
     }
 
     /// The fixed leading slot: Retry (progress while its poll runs), See alert, or, once the feed is back, a check mark
-    /// that takes no tap of its own (the banner absorbs it).
+    /// in the same button frame whose tap only keeps the banner in place (no poll).
     @ViewBuilder func slot(_ s: RetryHold.Shown) -> some View {
         let p = s.pill
         if s.recovered {
-            Image(systemName: "checkmark").font(.system(size: IconSize.status, weight: .semibold)).foregroundStyle(Palette.live)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityLabel("Live data is back")
-                .accessibilityIdentifier("bannerRetry")
+            // the same control in the same place: a tap only keeps the banner (retryFeed polls nothing then)
+            Button { model.retryFeed() } label: {
+                Image(systemName: "checkmark").font(.system(size: IconSize.status, weight: .semibold)).foregroundStyle(Palette.live)
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(ChromePressStyle())
+            .accessibilityLabel("Live data is back")
+            .accessibilityIdentifier("bannerRetry")
         } else if p.retry {
             Button { model.retryFeed() } label: {
                 ZStack {
