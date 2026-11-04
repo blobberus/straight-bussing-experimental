@@ -254,8 +254,12 @@ extension View {
         if #available(iOS 26.0, *) {
             glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
         } else {
-            background(.regularMaterial, in: shape)
-                .overlay(shape.stroke(Palette.glassEdge, lineWidth: 0.5).allowsHitTesting(false))
+            background {
+                shape.fill(.regularMaterial)
+                    .overlay(shape.stroke(Palette.glassEdge, lineWidth: 0.5))
+                    .modifier(GlassShadow())
+                    .allowsHitTesting(false)
+            }
         }
     }
 
@@ -267,6 +271,73 @@ extension View {
             GlassEffectContainer(spacing: spacing) { self }
         } else {
             self
+        }
+    }
+}
+
+/// The glass shadow of the iOS 17 to 25 material (spec 5.2 `glassShadow` = the floating elevation; none in dark mode,
+/// where the edge does the work). iOS 26 glass draws its own.
+struct GlassShadow: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+    func body(content: Content) -> some View {
+        if scheme == .dark {
+            content
+        } else {
+            content
+                .shadow(color: Palette.shadow.opacity(0.08), radius: 1, y: 1)
+                .shadow(color: Palette.shadow.opacity(0.12), radius: 10, y: 6)
+        }
+    }
+}
+
+/// A control that sits ON glass (a chip's Show all / Clear, the collapsed card's Edit map order / New): a `fill`
+/// capsule with `label` text, never glass on glass and never tint text on glass (spec 5.1, 5.3); 32 tall inside a 44
+/// pt hit area.
+struct FillCapsuleStyle: ButtonStyle {
+    var font: Font = Typo.footnote.weight(.semibold)
+    /// Inside a 36 pt chip: 2 pt around the capsule (concentric with the chip), the hit area 4 pt past it.
+    var compact = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(font)
+            .foregroundStyle(Palette.label)
+            .lineLimit(1)
+            .padding(.horizontal, Space.s3)
+            .frame(minHeight: 32)
+            .background(configuration.isPressed ? Palette.fillPressed : Palette.fill, in: Capsule())
+            .padding(.vertical, compact ? 2 : 6)
+            .contentShape(Rectangle().inset(by: compact ? -4 : 0))
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .animation(Motion.press, value: configuration.isPressed)
+    }
+}
+
+extension View {
+    /// Settings and Lines by Time open out of their buttons and shrink back into them (`mZoomSheet`, iOS 18 and
+    /// later; the default sheet rise before). The source half.
+    @ViewBuilder
+    func sbZoomSource(_ id: String, in ns: Namespace.ID) -> some View {
+        if #available(iOS 18.0, *) { matchedTransitionSource(id: id, in: ns) } else { self }
+    }
+
+    /// The sheet half of `sbZoomSource` (on the presented view).
+    @ViewBuilder
+    func sbZoomFrom(_ id: String, in ns: Namespace.ID) -> some View {
+        if #available(iOS 18.0, *) { navigationTransition(.zoom(sourceID: id, in: ns)) } else { self }
+    }
+}
+
+/// A sheet's toolbar action (Settings' Done, Lines by Time's Cancel): the symbol on iOS 26, where the system draws it
+/// as a glass circle (tinted for the confirming action), the word on iOS 17 to 25, as their own sheets do.
+struct SheetActionLabel: View {
+    let text: String
+    let symbol: String
+    var body: some View {
+        if #available(iOS 26.0, *) {
+            Image(systemName: symbol).fontWeight(.semibold)
+        } else {
+            Text(text).fontWeight(text == "Done" ? .semibold : .regular)
         }
     }
 }
