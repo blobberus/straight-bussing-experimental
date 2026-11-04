@@ -224,6 +224,9 @@ function allowedHere() {
   try {
     if (navigator.webdriver) return false;
     if (location.protocol !== "https:") return false;
+    // the experimental test site (blobberus.github.io/straight-bussing-experimental/) never counts: its visits would mix
+    // into the live app's statistics in the owner's Sheet (owner 2026-11-03 enabled the test site)
+    if (/^\/straight-bussing-experimental(\/|$)/.test(location.pathname)) return false;
   } catch (e) { return false; }
   return true;
 }
