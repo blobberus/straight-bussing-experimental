@@ -42,6 +42,31 @@ async function frame(w, h) {
   };
 }
 
+test("layout: map chrome text stops growing at 1.35 x, sheet text does not (spec 2.2; the Directions fields too, as on iOS)", async () => {
+  const f = document.createElement("iframe");
+  f.style.cssText = "position:absolute;left:-10000px;top:0;width:393px;height:852px;border:0";
+  const css = ["tokens", "base", "sheet", "components", "views"].map((n) => `<link rel="stylesheet" href="../css/${n}.css">`).join("");
+  // 34 px root = 200% browser text (2 x 17)
+  f.srcdoc = `<!doctype html><html style="font-size:34px"><head>${css}</head><body><div id="app" class="app">`
+    + '<div class="searchbar"><button class="searchbar-btn" type="button"><span class="searchbar-text">Search for a destination</span></button></div>'
+    + '<div class="dirbar"><div class="v-dirbox"><div class="v-dfield"><input type="text" value="My location"></div></div></div>'
+    + '<div id="pill" class="statuspill" data-form="banner"><span class="pilltext">Live data delayed.</span></div>'
+    + '<div id="ctxbar" class="ctxbar"><span class="ctx-text"><span class="ctx-v">Trip to X</span></span></div>'
+    + '<nav class="bottomnav"><button type="button"><span class="bn-label">Routes</span></button></nav>'
+    + '<section id="sheet" class="sheet"><div class="sheet-content"><label class="v-search"><input type="text" value="Search stations"></label>'
+    + '<div class="v-dirbox"><div class="v-dfield"><input id="panelField" type="text" value="My location"></div></div></div></section></div></body></html>';
+  await new Promise((res) => { f.onload = res; document.body.appendChild(f); });
+  try {
+    const d = f.contentDocument, px = (sel) => parseFloat(f.contentWindow.getComputedStyle(d.querySelector(sel)).fontSize);
+    near(px(".searchbar-btn"), 22.95, 0.1, "search bar: body capped at 17 x 1.35");
+    near(px(".dirbar .v-dfield input"), 22.95, 0.1, "Directions fields over the map: the same cap");
+    near(px("#pill"), 20.25, 0.1, "status banner: rowDetail capped at 15 x 1.35");
+    near(px(".bottomnav button"), 14.85, 0.1, "tab labels: 11 x 1.35");
+    near(px(".v-search input"), 34, 0.1, "sheet content never caps");
+    near(px("#panelField"), 34, 0.1, "the same fields in the sheet (landscape panel) keep growing");
+  } finally { f.remove(); }
+});
+
 for (const [name, w, h] of [["phone", 393, 852], ["desktop frame", 1000, 900]]) {
   test(`layout (${name}): the context chip never moves or resizes the sheet, at any detent`, async () => {
     const t = await frame(w, h);

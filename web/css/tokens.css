@@ -70,7 +70,7 @@
   --t-section: 600 var(--size-row-detail) / calc(1rem * 20 / 17) var(--font);
   --t-footnote: 400 var(--size-footnote) / calc(1rem * 18 / 17) var(--font);
   --t-caption: 600 var(--size-caption) / calc(1rem * 16 / 17) var(--font);
-  --t-tab: 600 min(var(--size-tab), 14.85px) / 1.18 var(--font);
+  --t-tab: 600 min(var(--size-tab), var(--cap-tab)) / 1.18 var(--font);
   --t-badge: 700 var(--size-caption) / calc(1rem * 16 / 17) var(--font);
   --t-badge-sm: 700 var(--size-tab) / calc(1rem * 13 / 17) var(--font);
   --t-eta-hero: 700 2rem / calc(1rem * 41 / 17) var(--font);

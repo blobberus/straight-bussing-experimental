@@ -90,6 +90,10 @@ html[data-text="ax"] .searchbar-text .sb-short { display: inline; }
 .dirbar { padding: 10px; border-radius: var(--r-sheet); transform-origin: 0 0; }
 .dirbar[hidden] { display: none; }
 .dirbar .v-dirbox { margin: 0; }
+/* map chrome: the fields grow with the text size only up to 1.35 x, like the search bar they replace (spec 2.2 chrome
+   caps; the iPhone app's DirectionsCard stops at xxxLarge), so at 200% text the card does not cover half the map. In the
+   landscape panel the fields sit in the sheet and keep growing. */
+.dirbar .v-dfield input { font-size: min(var(--size-body), var(--cap-body)); }
 #app[data-view="directions"] .searchbar { display: none; }
 #app[data-view="directions"] {
   --chip-top: calc(var(--search-top) + var(--dirbar-h, 108px) + var(--gap-chrome));
