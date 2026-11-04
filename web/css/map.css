@@ -2,17 +2,22 @@
    Owned by map/ (agent C). Theme: map.js toggles .sb-dark on the map element (.sb-map); every overlay
    color below comes from these variables so a theme switch never needs a redraw. --sb-accent is tintFill (the user dot,
    the walking path, callouts: the same blue in both themes, DESIGN-SPEC 11.4), --sb-tint the accent as a ring or outline
-   (selection, the picked bus). */
+   (selection, the picked bus). Every color reads its css/tokens.css token (spec 14: no literal colors outside the token
+   files); the literals after the commas are only fallbacks for the map test pages that load map.css alone. */
 .sb-map{
-  --sb-land:var(--map-land,#f1f2ee);--sb-casing:rgba(255,255,255,.95);--sb-casing-flip:rgba(17,17,20,.55);--sb-stop-fill:#fcfcfd;--sb-stop-multi:#5c5c63;
-  --sb-accent:var(--tint-fill,#0071e3);--sb-tint:var(--tint,#0060cc);--sb-live:var(--live-mark,#1e9e4a);--sb-danger:var(--danger-fill,#c4291c);--sb-text:var(--label,#111114);--sb-text2:#5c5c63;
-  --sb-chrome:rgba(255,255,255,.82);--sb-chrome-solid:var(--bg-chrome-solid,#fcfcfd);--sb-ring:rgba(0,0,0,.22);--sb-bus-ring:var(--map-ring,#fff);--sb-white:var(--on-fill,#fff);--sb-shadow:0 1px 4px rgba(0,0,0,.28);
+  --sb-land:var(--map-land,#f1f2ee);--sb-casing:var(--map-casing,rgba(255,255,255,.95));--sb-casing-flip:var(--map-casing-contrast,rgba(17,17,20,.55));
+  --sb-stop-fill:var(--bg-card,#fcfcfd);--sb-stop-multi:var(--label-2,#5c5c63);
+  --sb-accent:var(--tint-fill,#0071e3);--sb-tint:var(--tint,#0060cc);--sb-live:var(--live-mark,#1e9e4a);--sb-danger:var(--danger-fill,#c4291c);--sb-text:var(--label,#111114);--sb-text2:var(--label-2,#5c5c63);
+  --sb-chrome-solid:var(--bg-chrome-solid,#fcfcfd);--sb-ring:rgba(0,0,0,.22);--sb-bus-ring:var(--map-ring,#fff);--sb-white:var(--on-fill,#fff);--sb-shadow:var(--e-marker,0 1px 3px rgba(30,32,45,.3));
+  --sb-hairline:var(--separator,rgba(60,60,67,.29));
   background:var(--sb-land);
 }
 .sb-map.sb-dark{
-  --sb-land:var(--map-land,#18191c);--sb-casing:rgba(24,25,28,.9);--sb-casing-flip:rgba(245,245,247,.55);--sb-stop-fill:#2c2c2e;--sb-stop-multi:#aeaeb2;
-  --sb-accent:var(--tint-fill,#0071e3);--sb-tint:var(--tint,#64b0ff);--sb-live:var(--live-mark,#32d74b);--sb-danger:var(--danger-fill,#c4291c);--sb-text:var(--label,#f5f5f7);--sb-text2:#aeaeb2;
-  --sb-chrome:rgba(28,28,30,.78);--sb-chrome-solid:var(--bg-chrome-solid,#2c2c2e);--sb-ring:rgba(0,0,0,.6);--sb-bus-ring:var(--map-ring,#18191c);--sb-shadow:0 1px 4px rgba(0,0,0,.6);
+  --sb-land:var(--map-land,#18191c);--sb-casing:var(--map-casing,rgba(24,25,28,.9));--sb-casing-flip:var(--map-casing-contrast,rgba(245,245,247,.55));
+  --sb-stop-fill:var(--bg-card,#2c2c2e);--sb-stop-multi:var(--label-2,#aeaeb2);
+  --sb-accent:var(--tint-fill,#0071e3);--sb-tint:var(--tint,#64b0ff);--sb-live:var(--live-mark,#32d74b);--sb-danger:var(--danger-fill,#c4291c);--sb-text:var(--label,#f5f5f7);--sb-text2:var(--label-2,#aeaeb2);
+  --sb-chrome-solid:var(--bg-chrome-solid,#2c2c2e);--sb-ring:rgba(0,0,0,.6);--sb-bus-ring:var(--map-ring,#18191c);--sb-shadow:var(--e-marker,0 1px 4px rgba(0,0,0,.6));
+  --sb-hairline:var(--separator,rgba(84,84,88,.65));
 }
 .sb-map .maplibregl-canvas{outline:none}
 
@@ -57,7 +62,7 @@
   padding:4px 10px;border:0;border-radius:12px;background:var(--sb-chrome-solid);color:var(--sb-text);
   font:var(--t-map-callout,600 13px/16px sans-serif);box-shadow:var(--e-1,0 4px 14px rgba(30,32,45,.12));white-space:nowrap}
 .sb-map .leaflet-tooltip.sb-sel-label::before{display:none}
-.sb-map.sb-dark .leaflet-tooltip.sb-sel-label{box-shadow:0 0 0 1px rgba(255,255,255,.14),var(--sb-shadow)}
+.sb-map.sb-dark .leaflet-tooltip.sb-sel-label{box-shadow:0 0 0 1px var(--sb-hairline),var(--sb-shadow)}
 
 /* favorite stations (map/favorites.js): gold disc, dark star, white casing; static (never pulses).
    44 px hit area (28 px below z14, where the badge shrinks); the outer 44 px box ignores pointers.
@@ -77,7 +82,7 @@
 .sb-fav-name{position:absolute;left:50%;bottom:calc(50% + 14px);transform:translateX(-50%);display:none;padding:2px 8px;border-radius:9px;
   background:var(--sb-chrome-solid);color:var(--sb-text);box-shadow:var(--e-marker,0 1px 3px rgba(30,32,45,.3));white-space:nowrap;pointer-events:none;
   font:var(--t-map-callout,600 13px/16px sans-serif)}
-.sb-map.sb-dark .sb-fav-name{box-shadow:0 0 0 1px rgba(255,255,255,.14),var(--sb-shadow)}
+.sb-map.sb-dark .sb-fav-name{box-shadow:0 0 0 1px var(--sb-hairline),var(--sb-shadow)}
 @media (hover:hover){.sb-favicon:hover .sb-fav-name{display:block}}
 .sb-favicon:focus-visible .sb-fav-name{display:block}
 .sb-favicon.is-sel .sb-fav-name{display:none}
