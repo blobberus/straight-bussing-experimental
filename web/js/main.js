@@ -411,8 +411,9 @@ async function boot() {
     setTimeout(() => toast("Couldn't load the map. Lists and times still work."), 0);
   }
   mapCall("setTheme", isDark());
-  // the map is visible above the collapsed card (its px already counts the floating bottom row, glass spec 3)
-  bus.on("sheet:inset", (p) => mapCall("setBottomInset", (p && p.px) || 0));
+  // the map is visible above the collapsed card (its px already counts the floating bottom row, glass spec 3); while it
+  // is collapsed, fits and the follow camera also keep clear of the lower-right group riding on it (44 x 88 + 8)
+  bus.on("sheet:inset", (p) => mapCall("setBottomInset", (p && p.px) || 0, p && p.px && p.detent === "peek" && el.mapctl ? el.mapctl.offsetHeight + 8 : 0));
   bus.on("toast", (p) => toast(p && p.text));
   bus.on("sheet:header", () => refreshHeader());
   bus.on("settings:toggle", () => syncHistory());   // Settings overlay opened / closed (ui/settings-overlay.js)

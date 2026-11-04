@@ -178,11 +178,15 @@ export function createMap(elId) {
 
     /**
      * Height in px of the sheet covering the bottom of the map; fits/flies keep targets above it and the
-     * map credit (while shown) sits just above it (hidden when almost no map shows). @param {number} px
+     * map credit (while shown) sits just above it (hidden when almost no map shows). `controls` (px) = map chrome
+     * riding on the sheet (the lower-right group, glass spec 3: the visible rectangle excludes it): fits and the
+     * follow camera keep clear of it too, the credit does not move for it.
+     * @param {number} px
+     * @param {number} [controls]
      */
-    setBottomInset(px) {
-      const v = Math.max(0, Math.round(+px || 0)), h = map.getSize().y;
-      inset = Math.min(v, Math.max(0, h - 160));
+    setBottomInset(px, controls = 0) {
+      const v = Math.max(0, Math.round(+px || 0)), h = map.getSize().y, c = Math.max(0, Math.round(+controls || 0));
+      inset = Math.min(v + c, Math.max(0, h - 160));
       credits.place(v, h);
     },
 
