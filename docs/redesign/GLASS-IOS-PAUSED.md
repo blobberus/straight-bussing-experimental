@@ -44,6 +44,23 @@ without re-reading everything.
 - Open owner questions are in DESIGN-SPEC-GLASS (Q1 to Q9; defaults used; Q7, porting the live app's map feedback
   button, on hold).
 
+## Owner request noted while paused: an Apple Maps-like map with green parks (2026-11-04)
+Owner: "Change the background map to resemble something closer to apple maps (if this is easy on swift and appstore
+then note that)" and "the current map should make green spaces like parks actually green."
+- **On iPhone this is easy and App Store safe:** the app's map IS Apple's map (MapKit), so it looks like Apple Maps by
+  default. The first redesign deliberately toned it down in `ios/App/Sources/Views/MapScreen.swift`:
+  `.mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))`. `emphasis: .muted`
+  washes out parks and water; `.excludingAll` hides every place icon.
+- **Change when iOS resumes (one line):** `.mapStyle(.standard(elevation: .flat, emphasis: .automatic,
+  pointsOfInterest: .including([.park, .publicTransport, .university, .hospital])))` (or `.excludingAll` kept if the
+  icons crowd the bus markers). Parks then render green, water blue, exactly as in Apple Maps, in light and dark.
+- **App Store:** nothing to add: MapKit is free, needs no API key, no attribution work beyond the built-in legal link,
+  and it is what App Review expects on iPhone. No tile costs at any scale.
+- **Check after the change:** route lines and bus badges must keep their contrast on the more colorful map (the
+  first redesign's contrast edges on route lines and badges apply), and the screenshots in light, dark and larger
+  text should be re-checked. The web map is being restyled toward Apple Maps at the same time (web/js/map/style.js),
+  so the two stay close.
+
 ## How to resume
 1. `git fetch origin && git checkout -B glass origin/redesign-ios`, then `git rebase origin/main` (the web side keeps
    changing docs and web/; resolve docs conflicts by keeping both).
