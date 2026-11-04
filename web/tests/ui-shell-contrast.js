@@ -140,3 +140,35 @@ test("contrast: the spec's token pairs (DESIGN-SPEC 4.2) are >= 4.5:1 in light a
   f.remove();
   ok(!bad.length, bad.join("; "));
 });
+
+test("contrast: text and icons on glass pass over the worst backdrop with no blur (DESIGN-SPEC-GLASS 5.3)", async () => {
+  // light glass over pure black, dark glass over pure white (blur only makes real maps better); label and labelGlass2
+  // as text need 4.5:1, tint as an icon 3:1; label2 and tint as TEXT must fail (they are not allowed on glass), which
+  // keeps the 80% fill honest if someone lowers it
+  const f = document.createElement("iframe");
+  f.style.cssText = "position:absolute;left:-2000px;width:200px;height:200px";
+  f.srcdoc = '<!doctype html><html><head><link rel="stylesheet" href="../css/tokens.css"></head><body></body></html>';
+  await new Promise((r) => { f.onload = () => setTimeout(r, 30); document.body.appendChild(f); });
+  const win = f.contentWindow, doc = f.contentDocument, bad = [];
+  const hex = (v) => v.trim().replace(/^#([0-9a-f]{6})$/i, (m, h) => `rgb(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4), 16)})`);
+  const col = (name) => rgba(hex(win.getComputedStyle(doc.documentElement).getPropertyValue("--" + name)));
+  const worst = { light: { r: 0, g: 0, b: 0, a: 1 }, dark: { r: 255, g: 255, b: 255, a: 1 } };
+  for (const theme of ["light", "dark"]) {
+    doc.documentElement.dataset.theme = theme;
+    const fill = col("glass-fill");
+    if (!fill || !(fill.a < 1)) { bad.push(`${theme}: glass-fill is not translucent (${JSON.stringify(fill)})`); continue; }
+    const bg = over(fill, worst[theme]);
+    for (const [fg, need] of [["label", 4.5], ["label-glass-2", 4.5], ["tint", 3]]) {
+      const cr = ratio(over(col(fg), bg), bg);
+      if (!(cr >= need)) bad.push(`${theme} ${fg} on glass: ${cr.toFixed(2)} < ${need}`);
+    }
+    for (const fg of ["label-2", "tint"]) {
+      const cr = ratio(over(col(fg), bg), bg);
+      if (cr >= 4.5) bad.push(`${theme} ${fg} as text on glass passes (${cr.toFixed(2)}): the rule in 5.3 no longer matches the fill`);
+    }
+    const solid = col("glass-solid");
+    if (!solid || solid.a < 1) bad.push(`${theme}: glass-solid must be opaque`);
+  }
+  f.remove();
+  ok(!bad.length, bad.join("; "));
+});

@@ -9,8 +9,16 @@
   /* ---- color (spec 4.1), light ---- */
   --bg-sheet: #f2f2f7;            /* the sheet, tab bar, Settings and Lines by Time backgrounds (iOS grouped background) */
   --bg-card: #fcfcfd;             /* grouped cards and rows on the sheet, option cards, dialogs (never pure white) */
-  --bg-chrome: rgba(252, 252, 253, .86);   /* floating controls over the map, with blur (section 7) */
-  --bg-chrome-solid: #fcfcfd;     /* the same without blur */
+  /* ---- glass (DESIGN-SPEC-GLASS 5.2): the control layer floating over the map, and only there. 80% frosted fill
+     (legible with no blur over any backdrop, 5.3), a static rim and edge painted once, a soft shadow ---- */
+  --glass-fill: rgba(250, 250, 252, .80);
+  --glass-solid: #fafafc;         /* the same surface without blur: while moving, glass-lite, no backdrop-filter */
+  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, .65), inset 0 0 0 .5px rgba(255, 255, 255, .40);
+  --glass-edge: 0 0 0 .5px rgba(17, 17, 20, .10);
+  --glass-shadow: 0 1px 2px rgba(30, 32, 45, .08), 0 6px 20px rgba(30, 32, 45, .12);
+  --label-glass-2: #3c3c43;       /* secondary text on glass (label2 and tint text are not allowed there, 5.3) */
+  --bg-chrome: var(--glass-fill);         /* old names: the first redesign's chrome material */
+  --bg-chrome-solid: var(--glass-solid);
   --bg-inverse: #2c2c2e;          /* toasts */
   --fill: rgba(118, 118, 128, .12);          /* secondary buttons, fields in the sheet, segmented track, skeletons */
   --fill-pressed: rgba(118, 118, 128, .20);
@@ -97,16 +105,20 @@
   --row-min: 44px;
   --leading-slot: 40px;
   --separator-inset: 68px;
-  --search-h: 48px;
+  --chrome-btn: 44px;             /* glass circles: Settings, the lower-right group's buttons */
+  --search-btn: 56px;             /* the search circle beside the tab bar */
+  --row-h: 56px;                  /* the floating bottom row: tab bar capsule and search circle */
+  --search-h: var(--chrome-btn);  /* old name: the top row's height (Row B: the Settings circle) */
   --sheet-header-min: 56px;
-  --tab-h: 49px;
+  --tab-h: var(--row-h);
   --grab-zone: 16px;              /* the grab bar: 36 x 5, 6 from the top */
 
   /* ---- radii (spec 6) ---- */
   --r-tag: 6px;
   --r-control: 12px;
-  --r-card: 14px;
-  --r-sheet: 20px;
+  --r-card: 20px;                 /* glass spec 6: iOS 26 sections are rounder (was 14) */
+  --r-glass: 28px;                /* the collapsed card, the expanded sheet's top corners, the tab bar ends, sheets, dialogs */
+  --r-sheet: var(--r-glass);      /* old name (retired by the glass spec) */
   --r-capsule: 999px;
   --r-nested: 10px;               /* concentric, not a token of its own: a 12 control or 20 card with a 2 / 10 inset */
   --r-marker: 7px;                /* the 26 pt bus marker (rTag in proportion) */
@@ -123,7 +135,8 @@
   --e-thumb: 0 1px 3px rgba(var(--shadow-rgb), .15);      /* segmented thumb */
   --e-knob: 0 1px 3px rgba(var(--shadow-rgb), .30);       /* switch knob */
   --e-marker: 0 1px 3px rgba(var(--shadow-rgb), .30);     /* map markers, bus chips on timelines */
-  --blur-chrome: blur(20px) saturate(1.2);
+  --glass-filter: blur(14px) saturate(1.4);   /* glass spec 5.2 / 12.1 rule 4 (down from 20 px) */
+  --blur-chrome: var(--glass-filter);
 
   /* ---- motion (spec 9) ---- */
   --m-press: 100ms;
@@ -137,6 +150,16 @@
   --ease-standard: cubic-bezier(.2, 0, 0, 1);
   --ease-exit: cubic-bezier(.4, 0, 1, 1);
   --ease-sheet: cubic-bezier(.32, .72, 0, 1);
+  /* glass motion (DESIGN-SPEC-GLASS 7) */
+  --m-glass-press: 160ms;         /* press on a glass control: scale 1.06 and back */
+  --m-materialize: 220ms;         /* glass appearing: scale .85 + fade in (mStandard curve) */
+  --m-materialize-exit: 160ms;    /* glass leaving (mExit curve) */
+  --m-tab-pill: 320ms;            /* the selection capsule sliding to the new tab */
+  --ease-tab-pill: cubic-bezier(.34, 1.25, .64, 1);
+  --m-zoom-sheet: 340ms;          /* Settings, Lines by Time and dialogs open out of their button */
+  --ease-zoom-sheet: cubic-bezier(.32, .72, 0, 1);
+  --m-minimize: 280ms;            /* the tab bar shrinking to a circle while a long list scrolls */
+  --m-banner: 250ms;              /* the status banner sliding in (8 px) */
 
   /* ---- stacking: the ONE z-index scale (unchanged); local 1 / 2 inside a component is fine ---- */
   --z-map: 0;
@@ -159,8 +182,11 @@
   /* app viewport: the window on phones, the 393x852 phone frame on desktop/tablet (see base.css) */
   --app-w: 100vw;
   --app-h: 100vh;
-  --nav-h: calc(var(--tab-h) + var(--safe-b));                 /* bottom bar (Current trip / Routes / My Routes) */
-  --search-top: calc(var(--safe-t) + 8px);                     /* floating controls start 8 below the safe area */
+  /* the bottom row floats: its bottom edge max(12, safe bottom - 12) above the screen's (22 on Face ID iPhones, clear of
+     the home indicator; glass spec 3); --nav-h = the space it takes from the bottom (old name, kept for every calc) */
+  --bottom-inset: max(12px, calc(var(--safe-b) - 12px));
+  --nav-h: calc(var(--bottom-inset) + var(--row-h));
+  --search-top: calc(var(--safe-t) + 8px);                     /* the top rows start 8 below the safe area */
   --top-clear: calc(var(--search-top) + var(--search-h) + var(--gap-chrome));   /* below the search bar */
   --chip-top: var(--top-clear);                                /* status chip / banner, trip chip, locate button */
   /* sheet heights are measured from the top of the bottom bar. The sheet element is always --v-max tall (a chip or
@@ -234,8 +260,12 @@
   :root:not([data-theme="light"]) {
     --bg-sheet: #1c1c1e;
     --bg-card: #2c2c2e;
-    --bg-chrome: rgba(44, 44, 46, .86);
-    --bg-chrome-solid: #2c2c2e;
+    --glass-fill: rgba(38, 38, 42, .80);
+    --glass-solid: #26262a;
+    --glass-rim: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 0 0 .5px rgba(255, 255, 255, .10);
+    --glass-edge: 0 0 0 .5px rgba(0, 0, 0, .50);
+    --glass-shadow: 0 0 0 transparent;
+    --label-glass-2: #c7c7cc;
     --bg-inverse: #f2f2f7;
     --fill: rgba(118, 118, 128, .24);
     --fill-pressed: rgba(118, 118, 128, .36);
@@ -276,8 +306,12 @@
 :root[data-theme="dark"] {
   --bg-sheet: #1c1c1e;
   --bg-card: #2c2c2e;
-  --bg-chrome: rgba(44, 44, 46, .86);
-  --bg-chrome-solid: #2c2c2e;
+  --glass-fill: rgba(38, 38, 42, .80);
+  --glass-solid: #26262a;
+  --glass-rim: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 0 0 .5px rgba(255, 255, 255, .10);
+  --glass-edge: 0 0 0 .5px rgba(0, 0, 0, .50);
+  --glass-shadow: 0 0 0 transparent;
+  --label-glass-2: #c7c7cc;
   --bg-inverse: #f2f2f7;
   --fill: rgba(118, 118, 128, .24);
   --fill-pressed: rgba(118, 118, 128, .36);
@@ -323,13 +357,20 @@
     --tint: #004a9e;
     --separator: #c6c6c8;
   }
-  :root, :root:not([data-theme="light"]), :root[data-theme] { --bg-chrome: var(--bg-chrome-solid); --blur-chrome: none; }
-  :root[data-theme="dark"] { --label-2: #c7c7cc; --tint: #8ac4ff; --separator: #38383a; }
+  /* glass turns solid with a contrasting border (glass spec 5.4) */
+  :root, :root:not([data-theme="light"]), :root[data-theme] { --glass-fill: var(--glass-solid); --glass-filter: none; --glass-rim: inset 0 0 0 1px rgba(17, 17, 20, .55); }
+  :root[data-theme="dark"] { --label-2: #c7c7cc; --tint: #8ac4ff; --separator: #38383a; --glass-rim: inset 0 0 0 1px rgba(245, 245, 247, .55); }
 }
 @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --label-2: #c7c7cc; --tint: #8ac4ff; --separator: #38383a; }
+  :root:not([data-theme="light"]) { --label-2: #c7c7cc; --tint: #8ac4ff; --separator: #38383a; --glass-rim: inset 0 0 0 1px rgba(245, 245, 247, .55); }
 }
-/* Reduce transparency: the chrome turns solid */
+/* Reduce transparency (Chrome, Edge, Samsung; iPhone Safari cannot report it, hence the 80% fill): solid glass */
 @media (prefers-reduced-transparency: reduce) {
-  :root, :root:not([data-theme="light"]), :root[data-theme] { --bg-chrome: var(--bg-chrome-solid); --blur-chrome: none; }
+  :root, :root:not([data-theme="light"]), :root[data-theme] { --glass-fill: var(--glass-solid); --glass-filter: none; }
 }
+/* no backdrop-filter at all: solid glass (the same shapes) */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root, :root:not([data-theme="light"]), :root[data-theme] { --glass-fill: var(--glass-solid); --glass-filter: none; }
+}
+/* glass-lite (glass spec 12.4, ui/frame.js): a slow device gets solid glass for the session */
+html.glass-lite, html.glass-lite:root:not([data-theme="light"]), html.glass-lite[data-theme] { --glass-fill: var(--glass-solid); --glass-filter: none; }
