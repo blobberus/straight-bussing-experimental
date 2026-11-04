@@ -322,6 +322,7 @@ struct TripStopRow: View {
     let time: TripFollow.StopTime?
     /// Text on the route color.
     var textOn: Color = .white
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     /// The rail between row j and j+1 is dimmed before boarding and once the bus has passed it.
     func dimSeg(_ j: Int) -> Bool {
@@ -356,13 +357,15 @@ struct TripStopRow: View {
                     }
                 }
                 .frame(width: TripBusLeg.railW)
+                // accessibility sizes: the tags stack and the minutes go under the name (never pushed past the edge)
+                let ax = typeSize.isAccessibilitySize
                 VStack(alignment: .leading, spacing: 3) {
                     Text(stop.name)
                         .font(key ? Typo.rowTitle : Typo.body)
                         .foregroundStyle(passed || stop.role == .before ? Palette.label2 : Palette.label)
-                        .lineLimit(2)
+                        .lineLimit(ax ? nil : 2)
                     if stop.role == .board || stop.role == .alight || pill != nil {
-                        HStack(spacing: Space.s1) {
+                        (ax ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.s1)) : AnyLayout(HStackLayout(spacing: Space.s1))) {
                             if stop.role == .board { RoleTag(text: "Board here") }
                             if stop.role == .alight { RoleTag(text: "Get off here") }
                             if let pill {
@@ -373,9 +376,12 @@ struct TripStopRow: View {
                             }
                         }
                     }
+                    if ax { stopTime(eta, passed: passed) }
                 }
-                Spacer(minLength: 0)
-                stopTime(eta, passed: passed)
+                if !ax {
+                    Spacer(minLength: 0)
+                    stopTime(eta, passed: passed)
+                }
             }
             .padding(.horizontal, Space.insetContent)
             .frame(minHeight: rowH)

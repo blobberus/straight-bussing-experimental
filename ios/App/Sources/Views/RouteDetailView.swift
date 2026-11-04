@@ -12,6 +12,7 @@ import StraightBussingKit
 /// tapping its row again clears it; leaving the page or the map no longer drawing the bus too).
 struct RouteDetailView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var typeSize
     let rid: String
     /// Stop row height on the rail: 48 pt at the default text size, more with Dynamic Type.
     @ScaledMetric(relativeTo: .body) private var rowH: CGFloat = 48
@@ -210,7 +211,12 @@ struct RouteDetailView: View {
                     Button { model.push(.stop(id)) } label: {
                         HStack(spacing: Space.s2) {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(name).font(Typo.body).foregroundStyle(Palette.label).lineLimit(2)
+                                Text(name).font(Typo.body).foregroundStyle(Palette.label).lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                                // accessibility sizes: the minutes under the name, never pushed past the edge
+                                if typeSize.isAccessibilitySize && !eta.isEmpty {
+                                    Text(eta).font(Typo.rowDetail.weight(.semibold)).monospacedDigit()
+                                        .foregroundStyle(eta == "Now" ? Palette.live : eta.hasPrefix("~") ? Palette.label2 : Palette.label)
+                                }
                                 ForEach(Array(here.enumerated()), id: \.offset) { b in
                                     Text("\(b.element.name) heading here\(b.element.stale ? ", seen \(TimeFmt.ago(b.element.seen, from: model.now))" : "")")
                                         .font(Typo.badgeSmall).foregroundStyle(Color.badgeText(hex: route.color))
@@ -219,11 +225,13 @@ struct RouteDetailView: View {
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
-                            Spacer(minLength: 0)
-                            if !eta.isEmpty {
-                                Text(eta).font(Typo.rowDetail.weight(.semibold)).monospacedDigit()
-                                    .foregroundStyle(eta == "Now" ? Palette.live : eta.hasPrefix("~") ? Palette.label2 : Palette.label)
-                                    .fixedSize()
+                            if !typeSize.isAccessibilitySize {
+                                Spacer(minLength: 0)
+                                if !eta.isEmpty {
+                                    Text(eta).font(Typo.rowDetail.weight(.semibold)).monospacedDigit()
+                                        .foregroundStyle(eta == "Now" ? Palette.live : eta.hasPrefix("~") ? Palette.label2 : Palette.label)
+                                        .fixedSize()
+                                }
                             }
                         }
                         .frame(minHeight: rowH)
