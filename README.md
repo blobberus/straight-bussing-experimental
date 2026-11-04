@@ -13,9 +13,13 @@ change that works here goes to the main project only when it is ported by hand (
 
 ## What is different from the main project
 
-- **GitHub Actions: only `ios.yml` is enabled** (owner, 2026-11-02): it builds and tests the iPhone app and keeps
-  the simulator screenshots as the run artifact `ios-simulator-preview` (its publish step runs only in the main
-  repo, so nothing is published from here). Disabled: the ground-truth collector, archive and context jobs (the main
+- **Test site (since 2026-11-03, owner):** https://blobberus.github.io/straight-bussing-experimental/ serves the
+  redesigned web app (`pages.yml`, Pages source GitHub Actions; it also refreshes the schedule data daily). Visits there
+  never count in the live app's usage statistics (`web/js/data/usage.js` skips this path); the feedback form is the
+  same as the live app's.
+- **GitHub Actions: `ios.yml` and `pages.yml` are enabled** (owner, 2026-11-02 and 2026-11-03): ios.yml builds and
+  tests the iPhone app and keeps the simulator screenshots as the run artifact `ios-simulator-preview` (its gallery
+  publish step still runs only in the main repo). Disabled: the ground-truth collector, archive and context jobs (the main
   project keeps collecting; a second collector would only duplicate it), `collector-tests.yml`, the Pages deploy, and
   never the App Store release job (`ios-release.yml` uses the same bundle id as the real app).
 - **Not copied:** the `data` branch (the main project's live dataset), the release archives, issues, secrets,
@@ -23,8 +27,8 @@ change that works here goes to the main project only when it is ported by hand (
 
 ## Turning on a test site or iOS builds
 
-1. Settings > Pages > Source: **GitHub Actions**; then enable `pages.yml` in the Actions tab and run it. The test site
-   is then at https://blobberus.github.io/straight-bussing-experimental/.
+1. Done on 2026-11-03: Pages source GitHub Actions, `pages.yml` enabled; the test site is at
+   https://blobberus.github.io/straight-bussing-experimental/.
 2. `ios.yml` is already enabled; its gallery publish step is limited to the main repo, so with a test site you
    would also lift that condition in `.github/workflows/ios.yml`.
 
