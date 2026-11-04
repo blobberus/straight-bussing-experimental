@@ -16,6 +16,9 @@
 .tp-arrive { font-variant-numeric: tabular-nums; }
 .v-btn.tp-end { flex: none; min-height: 36px; padding: 0 var(--s-3); border-radius: var(--r-capsule); font: var(--t-row-detail); font-weight: var(--w-semibold); }
 .v-btn.tp-end::after { content: ""; position: absolute; inset: -4px 0; }   /* 44 pt hit area */
+/* accessibility sizes: End trip moves under the title, which gets the whole width (10.8; the title was squeezed into a
+   narrow column, "Trip to / Trader / Joe's") */
+html[data-text="ax"] .tp-head { flex-direction: column; gap: var(--s-2); }
 
 /* next-step card (10.17): icon circle 40, the step in heroTitle, the ETA as etaHero, detail lines in rowDetail */
 .tp-now { display: flex; align-items: center; gap: var(--s-3); min-height: 76px; margin: 0 0 var(--s-3); padding: var(--s-4) var(--inset-content); box-sizing: border-box;

@@ -87,6 +87,27 @@ test("layout: the place summary shows the whole name at accessibility sizes, two
   } finally { f.remove(); }
 });
 
+test("layout: at 200% text route badges grow instead of clipping their name, and the trip header stacks End trip under the title", async () => {
+  const f = document.createElement("iframe");
+  f.style.cssText = "position:absolute;left:-10000px;top:0;width:393px;height:852px;border:0";
+  const css = ["tokens", "components", "views", "journey", "trip"].map((n) => `<link rel="stylesheet" href="../css/${n}.css">`).join("");
+  f.srcdoc = `<!doctype html><html style="font-size:34px" data-text="ax"><head>${css}</head><body style="width:393px;margin:0">`
+    + '<span class="chip" id="b1">RE</span> <span class="chip sm" id="b2">AP/DX</span>'
+    + '<div class="tp-head"><span class="v-grow"><span class="tp-title" id="tt">Trip to Trader Joe&rsquo;s</span></span><button type="button" class="v-btn tp-end" id="te">End trip</button></div></body></html>';
+  await new Promise((res) => { f.onload = res; document.body.appendChild(f); });
+  try {
+    const d = f.contentDocument, r = (id) => d.getElementById(id).getBoundingClientRect();
+    for (const id of ["b1", "b2"]) {
+      const el = d.getElementById(id);
+      const lh = parseFloat(f.contentWindow.getComputedStyle(el).lineHeight);
+      ok(r(id).height >= lh - 0.5, `${id}: the badge is at least one line of its text tall (${r(id).height} vs ${lh})`);
+      ok(r(id).height > 24, `${id}: taller than at the default size`);
+    }
+    ok(r("te").top >= r("tt").bottom - 1, "End trip sits under the title");
+    ok(r("tt").width > 300, "the title gets the whole width: " + Math.round(r("tt").width));
+  } finally { f.remove(); }
+});
+
 for (const [name, w, h] of [["phone", 393, 852], ["desktop frame", 1000, 900]]) {
   test(`layout (${name}): the context chip never moves or resizes the sheet, at any detent`, async () => {
     const t = await frame(w, h);
