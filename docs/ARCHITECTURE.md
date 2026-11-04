@@ -936,3 +936,20 @@ docs/ARCHITECTURE.md has the full section).
 - Tests: core-custom.js, map-layers.js, map-direction.js, map-trip.js, map-style.js (the route edge test removed), e2e.js
   (preview fades the other buses; a started trip draws only its lines and buses; all back after End trip). sw `sb-v2-90`.
 - iPhone: paused; what to port is in docs/redesign/GLASS-IOS-PAUSED.md.
+
+## Route search on the Routes list (2026-11-04, owner: "You should be able to search routes from the routes menu which will bring them to the top. Allow keywords and smart search such as allowing 53rdst -> 53rd Street or 53rd St -> 53rd Street etc.")
+Hand-ported from the live repo (same core files; its docs/ARCHITECTURE.md "Route search" has the full contract).
+- `core/routesearch.js` (pure): `buildRouteIndex` / `routeIndexFor(state, ids)`, `searchRoutes(index, q)` -> `[{id,
+  score, stop?}]` best first, `splitByHits`, `matchText`, `routeWords`, `canon`. Text = `core/text.js norm` (the
+  place search's; data/places.js imports `norm` and `near1` from there) + letters split from digits with the ordinal
+  dropped ("53rdst" = "53rd st" = "53 st"), number words, abbreviations both ways (st, ave, ctr, dt, sth, n / s / e /
+  w, ...), keywords = short name, long-name words, stop names; one typo on 4+ letter words. Ranking: exact 100 > start
+  of a name 90 > all words 80+ > abbreviations 70+ > one stop's words 60+ (names the stop) > typos 50+ / 45+.
+- `ui/views/routes.js`: region `[data-region="routes-search"]` between the custom-route bar and the body (Edit map
+  order stays the sheet header's action, `routesMetaHTML`), drawn once and never rebuilt while typing. Body with a
+  query: "N routes match" (a grouped card, "Stops at <stop>" on stop matches), or the "No routes match" empty-state
+  card + Clear search, then the "Other routes" divider, the bulk capsules and the usual groups. Clear button
+  (`circle-x-fill`, label2) "Clear route search", Escape clears, aria-live count, focus opens the sheet; display
+  order only, nothing stored. css `.rt-search`, `.rt-qx`, `.rt-qdiv`, `.rt-qnone`, `.rt-why`.
+- Tests: tests/core-routesearch.js, tests/routes-search.js; golden `web/tests/routesearch-golden.json`
+  (`python tools/gen_routesearch_golden.py`). iPhone: noted in docs/redesign/GLASS-IOS-PAUSED.md. sw `sb-v2-94`.
