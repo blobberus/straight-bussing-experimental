@@ -144,6 +144,8 @@ test("glass budget: at rest at most 6 blurred surfaces on at most 22% of the scr
   for (const a of $("#ctxbar").getAnimations()) a.finish();
   b = blurBudget();
   ok(b.n <= 6 && b.share <= 0.22, `with the trip chip: ${b.n} blurred (${b.names}), ${(b.share * 100).toFixed(1)}%`);
+  const chip = W.getComputedStyle($("#ctxbar"));
+  ok(/ctxbar/.test(b.names) && chip.backgroundColor !== "rgba(0, 0, 0, 0)", "the trip chip is a glass capsule (spec 8.3), not bare text on the map: " + chip.backgroundColor);
   eq(glassTextOffenders(), [], "with the trip chip: text on glass");
   SB.store.set({ journey: null });
   $("#grab").dispatchEvent(new W.KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
