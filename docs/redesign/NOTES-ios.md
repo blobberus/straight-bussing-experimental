@@ -75,8 +75,8 @@ notification so if the user spams it while on a route, it doesn't shift and acci
 6. **Missed bus (13.8, O8).** The warnBg note at the top of the next-step card shows the Kit's existing words ("Your
    planned bus has left. Showing the next one."). The proposed wording (O8) is not answered yet and would change a Kit
    string shared with the web; it is one line in `TripText.missedNote` when the owner decides.
-7. **"Options updated with live times." (13.8, new).** Not added: the re-plan keeps the selected index, and telling a
-   vanished option from a renumbered one needs a Kit change; noted for a later pass.
+7. **"Options updated with live times." (13.8, new).** Shown as a footnote under the options when a live re-plan drops
+   the option the rider had selected (`DirectionsState.optionsUpdated`); the wording is the spec's proposal (O8).
 8. **Step text (10.16).** Step actions are `body` with the stop names and clock times Semibold (the existing bold runs
    of `TripInfo.steps`) rather than all `rowTitle`: the steps are long sentences, and all-Semibold lines lost the
    emphasis on where and when.
