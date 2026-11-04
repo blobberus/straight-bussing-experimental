@@ -124,3 +124,86 @@ test('map.css: the map blues are the UI tokens (no literal #0a84ff; DESIGN-SPEC 
   ok(/\.sb-map\{[^}]*--sb-accent:var\(--tint-fill/.test(flat) && /\.sb-map\.sb-dark\{[^}]*--sb-accent:var\(--tint-fill/.test(flat), 'the dot, walking path and callouts: tintFill in both themes');
   ok(/\.sb-map\{[^}]*--sb-tint:var\(--tint[,)]/.test(flat) && /\.sb-map\.sb-dark\{[^}]*--sb-tint:var\(--tint[,)]/.test(flat), 'rings and outlines: tint');
 });
+
+/* ---------- the Apple Maps-like palette (owner 2026-11-04: "Change the background map to resemble something closer to
+   apple maps", "the current map should make green spaces like parks actually green") ---------- */
+const rgbOf = (hex) => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+const hsl = (hex) => {
+  const [r, g, b] = rgbOf(hex).map((v) => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (!d) return { h: 0, s: 0, l };
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return { h: (h * 60 + 360) % 360, s, l };
+};
+/** "rgba(r, g, b, a)" laid over an opaque hex: hex. */
+const over = (rgba, hex) => {
+  const [r, g, b, a] = String(rgba).match(/[\d.]+/g).map(Number), bk = rgbOf(hex);
+  return '#' + [r, g, b].map((v, i) => Math.round(v * a + bk[i] * (1 - a)).toString(16).padStart(2, '0')).join('');
+};
+
+test('palette: parks and woods are clearly green, water a clear blue, land warm off-white (light) / neutral dark gray (dark)', () => {
+  for (const [theme, P] of [['light', PALETTE.light], ['dark', PALETTE.dark]]) {
+    for (const k of ['park', 'wood', 'pitch']) {
+      const c = hsl(P[k]);
+      ok(c.h >= 85 && c.h <= 150, `${theme} ${k} ${P[k]}: a green hue (${c.h.toFixed(0)})`);
+      ok(c.s >= (theme === 'light' ? 0.35 : 0.25), `${theme} ${k}: not desaturated (s ${c.s.toFixed(2)})`);
+      ok(contrast(P[k], P.bg) >= 1.2, `${theme} ${k}: stands out from the land (${contrast(P[k], P.bg).toFixed(2)}:1)`);
+    }
+    ok(hsl(P.wood).l < hsl(P.park).l, `${theme}: woods a step deeper than parks`);
+    const w = hsl(P.water);
+    ok(w.h >= 195 && w.h <= 220 && w.s >= 0.45, `${theme} water ${P.water}: a clear blue (h ${w.h.toFixed(0)}, s ${w.s.toFixed(2)})`);
+    ok(contrast(P.water, P.bg) >= 1.3, `${theme}: water stands out from the land`);
+    const [r, , b] = rgbOf(P.bg), land = hsl(P.bg);
+    if (theme === 'light') ok(land.l >= 0.92 && r > b && land.s <= 0.4, `light land ${P.bg}: a warm off-white`);
+    else ok(land.l <= 0.16 && Math.abs(r - b) <= 8, `dark land ${P.bg}: a neutral dark gray`);
+    eq(P.halo, P.bg, `${theme}: label halos in the land color`);
+    eq(P.minor, theme === 'light' ? '#ffffff' : P.minor, `${theme}: white streets in light`);
+    ok(contrast(P.text, P.halo) >= 7 && contrast(P.textMinor, P.halo) >= 7 && contrast(P.place, P.halo) >= 4.5 && contrast(P.waterText, P.halo) >= 4.5, `${theme}: a quiet but legible label hierarchy`);
+  }
+  const maj = hsl(PALETTE.light.major), mot = hsl(PALETTE.light.motorway);
+  ok(maj.h >= 38 && maj.h <= 55 && maj.s >= 0.6 && mot.h >= 32 && mot.h <= 50 && mot.s >= 0.6 && mot.l < maj.l, 'light: major roads soft yellow, motorways yellow-orange');
+  const dm = hsl(PALETTE.dark.motorway);
+  ok(dm.h >= 30 && dm.h <= 55 && dm.l <= 0.35, 'dark: motorways a muted amber');
+});
+
+test('palette: patchStyle adds the green and campus fills just below water (lagoons in a park stay blue)', () => {
+  for (const [base, dark] of [[POSITRON, false], [DARK, true]]) {
+    const s = patchStyle(base, dark), L = ids(s), P = dark ? PALETTE.dark : PALETTE.light, w = L.indexOf('water');
+    const order = ['sb_campus', 'sb_cemetery', 'sb_green', 'sb_pitch'].map((id) => L.indexOf(id));
+    ok(order.every((i) => i >= 0 && i < w), 'every added fill sits below water');
+    eq([...order].sort((a, b) => a - b), order, 'campus < cemetery < green < pitch');
+    const g = byId(s, 'sb_green');
+    eq([g['source-layer'], g.paint['fill-color']], ['landcover', P.park]);
+    ok(JSON.stringify(g.filter).includes('"grass"'), 'grass covers parks, recreation grounds, lawns, gardens, golf courses');
+    eq(byId(s, 'sb_pitch').paint['fill-color'], P.pitch);
+    ok(JSON.stringify(byId(s, 'sb_pitch').filter).includes('"pitch"'), 'sports fields');
+    eq(byId(s, 'water').paint['fill-color'], P.water);
+    ok(byId(s, 'park') ? byId(s, 'park').paint['fill-color'] === P.park : true, 'nature reserves green too');
+    eq(new Set(L).size, L.length, 'unique ids');
+  }
+  const noWater = patchStyle({ version: 8, sources: {}, layers: [{ id: 'background', type: 'background' }] }, false);
+  eq(ids(noWater).slice(0, 5), ['background', 'sb_campus', 'sb_cemetery', 'sb_green', 'sb_pitch'], 'no water layer: right above the background');
+});
+
+test('palette: every route line keeps a 3:1 edge over land, parks, woods, sports fields and water in both themes (casing or its flip)', async () => {
+  const routes = await (await fetch('../data/routes.json', { cache: 'no-store' })).json();
+  const list = Array.isArray(routes) ? routes : Object.values(routes.routes || routes);
+  const colors = [...new Set(list.map((r) => r && r.color).filter(Boolean).map((c) => '#' + String(c).replace('#', '').toUpperCase()))];
+  ok(colors.length >= 10, colors.length + ' route colors');
+  const css = await (await fetch('../css/tokens.css', { cache: 'no-store' })).text();
+  const vals = (name) => [...css.matchAll(new RegExp(name + ':\s*([^;]+);', 'g'))].map((m) => m[1].trim());
+  const [caseL, caseD] = vals('--map-casing'), [flipL, flipD] = vals('--map-casing-contrast'), [landL, landD] = vals('--map-land');
+  eq([landL, landD], [PALETTE.light.bg, PALETTE.dark.bg], 'the land token is the basemap land (first paint = map)');
+  const { casingClass } = await import('../js/map/layers.js');
+  const bad = [];
+  for (const [theme, P, cas, flip, cls] of [['light', PALETTE.light, caseL, flipL, 'sb-cl'], ['dark', PALETTE.dark, caseD, flipD, 'sb-cd']]) {
+    for (const c of colors) {
+      const flipped = casingClass(c).includes(cls);
+      for (const k of ['bg', 'park', 'wood', 'pitch', 'water', 'campus']) {
+        const edge = over(flipped ? flip : cas, P[k]), r = contrast(c, edge);
+        if (r < 3) bad.push(`${theme} ${c} over ${k}: ${r.toFixed(2)} (${flipped ? 'flipped ' : ''}edge ${edge})`);
+      }
+    }
+  }
+  eq(bad, [], 'route edges under 3:1');
+});

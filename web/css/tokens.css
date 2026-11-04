@@ -45,14 +45,14 @@
   --shadow-rgb: 30, 32, 45;       /* cool slate shadows, never pure black */
   --map-landmark: #565c66;
   --map-casing: rgba(255, 255, 255, .95);
-  --map-casing-contrast: rgba(17, 17, 20, .55);
+  --map-casing-contrast: rgba(17, 17, 20, .75);   /* the flipped route edge: 3:1 for every route color over land, park, water */
   --badge-ring: rgba(17, 17, 20, .22);
   --map-ring: #ffffff;            /* bus marker ring (spec 11.4) */
   --warn-mark: #a35400;           /* the favorite star's disc on the map: white on it 5.3:1, both themes */
   --neutral-fill: #636366;        /* neutral fills under white text (the Details swipe action): 6:1 */
   --rail-dim-base: #fcfcfd;       /* passed parts of a timeline rail: the route color mixed toward this */
   --rail-dim-pct: 45%;
-  --map-land: #f1f2ee;            /* = js/map/style.js PALETTE.light.bg */
+  --map-land: #f5f3ee;            /* = js/map/style.js PALETTE.light.bg (warm off-white, Apple Maps-like) */
   --frame-page: #dcdce1;          /* the page around the desktop phone frame */
   --frame-island: #000000;
   --frame-shadow: 0 0 0 1px rgba(0, 0, 0, .28), 0 0 0 9px #1d1d1f, 0 0 0 10px rgba(0, 0, 0, .35), 0 28px 70px rgba(0, 0, 0, .28);
@@ -292,11 +292,11 @@
     --scrim: rgba(8, 8, 12, .55);
     --shadow-rgb: 8, 8, 12;
     --map-landmark: #b4b9c2;
-    --map-casing: rgba(24, 25, 28, .9);
-    --map-casing-contrast: rgba(245, 245, 247, .55);
+    --map-casing: rgba(32, 33, 36, .9);
+    --map-casing-contrast: rgba(245, 245, 247, .75);
     --badge-ring: rgba(245, 245, 247, .30);
-    --map-ring: #18191c;
-    --map-land: #18191c;
+    --map-ring: #202124;
+    --map-land: #202124;
     --rail-dim-base: #6e6e73;
     --rail-dim-pct: 35%;
     --frame-page: #0c0c0d;
@@ -338,11 +338,11 @@
   --scrim: rgba(8, 8, 12, .55);
   --shadow-rgb: 8, 8, 12;
   --map-landmark: #b4b9c2;
-  --map-casing: rgba(24, 25, 28, .9);
-  --map-casing-contrast: rgba(245, 245, 247, .55);
+  --map-casing: rgba(32, 33, 36, .9);
+  --map-casing-contrast: rgba(245, 245, 247, .75);
   --badge-ring: rgba(245, 245, 247, .30);
-  --map-ring: #18191c;
-  --map-land: #18191c;
+  --map-ring: #202124;
+  --map-land: #202124;
   --rail-dim-base: #6e6e73;
   --rail-dim-pct: 35%;
   --frame-page: #0c0c0d;

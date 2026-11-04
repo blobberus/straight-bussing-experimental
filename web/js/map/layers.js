@@ -133,7 +133,7 @@ export const FOCUS_EXTRA = 2;
 /** The casing is the line plus 1.5 px per side. */
 export const CASING_EXTRA = 3;
 /** The default casing colors the 3:1 rule is measured against: white on the light map, the land on the dark map. */
-export const CASING_BASE = Object.freeze({ light: '#FFFFFF', dark: '#18191C' });
+export const CASING_BASE = Object.freeze({ light: '#FFFFFF', dark: '#202124' });   // dark = map/style.js PALETTE.dark.bg
 
 /**
  * Casing classes for a route color (spec 11.3 contrast switch, from the color at runtime, never a list): " sb-cl" when

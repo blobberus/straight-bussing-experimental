@@ -718,3 +718,34 @@ Acceptance (in addition to DESIGN-SPEC 16):
 | Q7 | Bring the main app's map feedback button into this redesign (under Settings, top right)? | Yes, when the two repos meet |
 | Q8 | Keep Start blue (green stays for live data) although Apple Maps' Go button has been green? | Blue |
 | Q9 | Raise the iPhone app's minimum to iOS 26 so every rider sees the glass (iOS 17 to 25 get the frosted material)? | No, keep iOS 17 |
+
+---
+
+## 18. Owner decisions after v1 (2026-11-04)
+
+| # | Owner's words | Decision | Web | iOS |
+|---|---|---|---|---|
+| D1 | "Remove the give feedback notification when the user logs onto the app. Keep the one overlayed on the map" | The beta welcome popup is gone; Q7 is yes: the map feedback button, 44 tinted glass circle under Settings (8.5) | done | paused (GLASS-IOS-PAUSED.md) |
+| D2 | "Reduce the size of the reconnecting notification." | The status banner (8.1) is one 44 pt line in the footnote role: [Retry / See alert slot, unchanged] [icon] [a short line that still says the times can't be relied on + chevron]; the line is a Details button that opens the full sentence and "Call 773.702.8181" under it; screen readers always hear the full sentence; the line never moves | done | paused |
+| D3 | "Change the background map to resemble something closer to apple maps", "the current map should make green spaces like parks actually green" | Replaces DESIGN-SPEC 11.2's "nothing colored except water and parks, both desaturated" with the palette below | done | MapKit already draws Apple's map: drop `emphasis: .muted` (one line) |
+
+### 18.1 Basemap palette (replaces DESIGN-SPEC 11.2's table; structure, zooms and label rules unchanged)
+
+| Layer | Light | Dark |
+|---|---|---|
+| Land (`background`, `--map-land`) | `#F5F3EE` warm off-white | `#202124` neutral dark gray |
+| Parks, lawns, recreation grounds, gardens (landcover grass, added) / nature reserves | `#C2E5AE` | `#1F3C28` |
+| Woods / sports fields (landuse pitch, playground, added) | `#AED79B` / `#B5DDA0` | `#1B3523` / `#234430` |
+| Cemetery / campus tint (landuse university, college, school, added) | `#D4E6C8` / `#EFE9DC` | `#25332A` / `#28272B` |
+| Water / water text | `#A3D0F2` / `#2B6596` | `#1B3A5A` / `#8FB8DC` |
+| Buildings / outline | `#E8E4DC` / `#D6D0C5` | `#2B2C30` / `#36373C` |
+| Minor road / casing | `#FFFFFF` / `#D9D5CC` | `#3A3B40` / `#141416` |
+| Major road / casing | `#FDE9A6` soft yellow / `#E2C46F` | `#4D4E55` / `#141416` |
+| Motorway / casing | `#F8C967` yellow-orange / `#D9A23A` | `#6A5A36` muted amber / `#141416` |
+| Street names minor / major, place names | `#4F4F54` / `#2C2C2E` Bold, `#646469` | `#C7C7CC` / `#E5E5EA` Bold, `#A8A8AD` |
+
+The green fills sit below the water layer (lagoons inside a park stay blue). Route lines: the casing flip
+(`--map-casing-contrast`) is now 75% instead of 55%, so every route color keeps a 3:1 edge over land, parks, woods,
+sports fields, campus and water in both themes (mid-tone lines such as East `#54BD00` and Apostolic/Drexel `#EA7948`
+were under 3:1 with either edge before); the dark casing and bus ring follow the new land (`#202124`). Tests:
+`tests/map-style.js` (parks green, water blue, land warm / neutral, roads yellow-orange, every route edge >= 3:1).

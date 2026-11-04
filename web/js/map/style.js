@@ -7,6 +7,11 @@
  * Layer ids patched by patchStyle (OpenMapTiles schema; ids from positron and dark as of 2026-10):
  *   recolored:  background, water, park (positron), landuse_park (dark), landuse_residential,
  *               landcover_wood, building (+ outline, opacity ramp), waterway
+ *   added fills (just below `water`, so lagoons inside a park stay blue; owner 2026-11-04: "the current map should make
+ *               green spaces like parks actually green"): sb_green (landcover class grass: parks, recreation grounds,
+ *               lawns, gardens, golf courses, grassland; neither OpenFreeMap style draws them), sb_pitch (landuse
+ *               pitch / playground), sb_cemetery (landuse cemetery), sb_campus (landuse university / college / school,
+ *               a faint warm tint like Apple Maps' campuses)
  *   roads:      highway_path, highway_minor (wider, round caps), highway_major_casing,
  *               highway_major_inner, highway_motorway_casing, highway_motorway_inner
  *   hidden:     highway-shield-non-us, highway-shield-us-interstate, road_shield_us,
@@ -46,21 +51,42 @@ export const RASTER_ATTRIBUTION = link('https://www.openstreetmap.org/copyright'
 const COPY = /(&copy;|\u00a9)\s*/g;
 
 /**
- * Basemap palettes (docs/DESIGN-SPEC.md 11.2): quiet, low-contrast land; streets readable; nothing colored but water and
- * parks, both desaturated; roads in dark stay neutral gray (color is for the data layers on top). Street text vs its
- * land-colored halo: light 7.7:1 (minor) / 13:1 (major), dark 10.7:1 / 13:1; minor text on a road fill >= 7.6:1.
- * The keys the spec does not list (residential, paths, motorways, house numbers, place names, campus POIs) follow it.
+ * Basemap palettes, closer to Apple Maps (owner 2026-11-04: "Change the background map to resemble something closer to
+ * apple maps"; DESIGN-SPEC-GLASS 11.2 delta in docs/redesign/NOTES-glass-web.md). Light: a warm off-white land, parks a
+ * fresh mid green (woods a step deeper), water a clear blue, white streets with soft gray casing, major roads in a soft
+ * yellow and motorways in Apple's yellow-orange, light warm gray buildings, labels in a quiet gray hierarchy. Dark: a
+ * neutral dark gray land, deep muted greens that still read as green, a clear dark blue, neutral gray roads with muted
+ * amber motorways. Street text vs its land-colored halo: light 7.3:1 (minor) / 12.6:1 (major), dark 9.6:1 / 12.8:1;
+ * minor text on a road fill >= 6.6:1. Route lines keep a 3:1 edge over land, park, wood and water through their casing
+ * (map/layers.js casingClass, map.css; tests/map-style.js checks every route color).
  */
 export const PALETTE = {
-  light: { bg: '#f1f2ee', park: '#dce9d5', wood: '#e2eadc', resid: '#edeeea', water: '#b7d3e6', waterText: '#4a6e8c',
-    bldg: '#e4e3de', bldgLine: '#cfcdc6', path: '#d6d3c8', minor: '#ffffff', minorCase: '#d3d5cf', major: '#ffffff',
-    majorCase: '#b3b7b0', motorway: '#f7e7bd', motorwayCase: '#d8c189', text: '#2e3036', textMinor: '#4a4c53',
-    halo: '#f1f2ee', hn: '#686b72', poi: '#565c66', place: '#6a6d74' },
-  dark: { bg: '#18191c', park: '#1c2621', wood: '#1a221d', resid: '#1b1c1f', water: '#10202d', waterText: '#86a9c6',
-    bldg: '#232327', bldgLine: '#303036', path: '#3a3b41', minor: '#33343a', minorCase: '#0b0b0d', major: '#45464e',
-    majorCase: '#0b0b0d', motorway: '#4f4a40', motorwayCase: '#0b0b0d', text: '#e2e3ea', textMinor: '#c9cad2',
-    halo: '#18191c', hn: '#a7a8b1', poi: '#b4b9c2', place: '#a2a3ab' },
+  light: { bg: '#f5f3ee', park: '#c2e5ae', wood: '#aed79b', pitch: '#b5dda0', cemetery: '#d4e6c8', campus: '#efe9dc',
+    resid: '#f2f0ea', water: '#a3d0f2', waterText: '#2b6596',
+    bldg: '#e8e4dc', bldgLine: '#d6d0c5', path: '#d9d5cc', minor: '#ffffff', minorCase: '#d9d5cc', major: '#fde9a6',
+    majorCase: '#e2c46f', motorway: '#f8c967', motorwayCase: '#d9a23a', text: '#2c2c2e', textMinor: '#4f4f54',
+    halo: '#f5f3ee', hn: '#6a6a70', poi: '#545458', place: '#646469' },
+  dark: { bg: '#202124', park: '#1f3c28', wood: '#1b3523', pitch: '#234430', cemetery: '#25332a', campus: '#28272b',
+    resid: '#222326', water: '#1b3a5a', waterText: '#8fb8dc',
+    bldg: '#2b2c30', bldgLine: '#36373c', path: '#3d3e43', minor: '#3a3b40', minorCase: '#141416', major: '#4d4e55',
+    majorCase: '#141416', motorway: '#6a5a36', motorwayCase: '#141416', text: '#e5e5ea', textMinor: '#c7c7cc',
+    halo: '#202124', hn: '#a1a1a6', poi: '#b6b9c0', place: '#a8a8ad' },
 };
+
+/** The green and campus fills patchStyle adds just below `water` (bottom to top). */
+function addedFills(P) {
+  const fill = (id, sourceLayer, classes, color, opacity) => ({
+    id, type: 'fill', source: 'openmaptiles', 'source-layer': sourceLayer,
+    filter: ['all', ['match', ['geometry-type'], ['MultiPolygon', 'Polygon'], true, false], ['match', ['get', 'class'], classes, true, false]],
+    paint: { 'fill-color': color, 'fill-opacity': opacity, 'fill-antialias': true },
+  });
+  return [
+    fill('sb_campus', 'landuse', ['university', 'college', 'school'], P.campus, 1),
+    fill('sb_cemetery', 'landuse', ['cemetery'], P.cemetery, 1),
+    fill('sb_green', 'landcover', ['grass'], P.park, zoomed([10, 0.6, 13, 1])),
+    fill('sb_pitch', 'landuse', ['pitch', 'playground'], P.pitch, 1),
+  ];
+}
 
 const NAME = ['coalesce', ['get', 'name_en'], ['get', 'name']];
 const LINES = ['match', ['geometry-type'], ['LineString', 'MultiLineString'], true, false];
@@ -122,10 +148,11 @@ export function patchStyle(styleJson, isDark, landmarks = []) {
   const s = JSON.parse(JSON.stringify(styleJson || { version: 8, sources: {}, layers: [] }));
   const P = isDark ? PALETTE.dark : PALETTE.light;
   const out = [];
-  let namesAt = -1;
+  let namesAt = -1, fillsIn = false;
   for (const l of s.layers || []) {
     const id = l.id;
     if (STREET_NAME_IDS.test(id)) { if (namesAt < 0) namesAt = out.length; continue; }
+    if (id === 'water' && !fillsIn) { out.push(...addedFills(P)); fillsIn = true; }   // parks below water: lagoons stay blue
     if (id === 'background') paint(l, { 'background-color': P.bg });
     else if (id === 'water') paint(l, { 'fill-color': P.water });
     else if (id === 'waterway') paint(l, { 'line-color': P.water });
@@ -161,6 +188,10 @@ export function patchStyle(styleJson, isDark, landmarks = []) {
     out.push(l);
   }
   out.splice(namesAt < 0 ? out.length : namesAt, 0, ...addedSymbols(P, landmarks));
+  if (!fillsIn) {   // a style without a water layer: the fills go right above the background
+    const at = out.findIndex((l) => l.type === 'background');
+    out.splice(at + 1, 0, ...addedFills(P));
+  }
   s.layers = out;
   // source credits carry "&copy;" too; nothing shows them today (the GL map has no attribution
   // control), but keep them sign-free so no copyright sign can surface
