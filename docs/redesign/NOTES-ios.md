@@ -22,7 +22,8 @@ notification so if the user spams it while on a route, it doesn't shift and acci
 - `StatusBanner` (`RootView.swift`): Retry (and See alert) sit in a fixed slot at the banner's top-leading corner, 84 x
   44 pt (scaled with Dynamic Type only), a `bgCard` capsule with `tint` text. A running Retry poll shows a spinner in
   the same slot; the banner is top-aligned, so a text change (for example "Retrying. Showing last known data.") never
-  moves the slot.
+  moves the slot. After the feed comes back the slot stays the same Button (a check mark, "Live data is back"), so the
+  control under a hurried finger is literally the same one; its tap only keeps the banner.
 - `AppModel.retryFeed()`: one Retry poll at a time; every tap (on Retry or on the held banner) extends the hold.
 - Kit `RetryHold` (pure, `RetryHoldTests`): when the feed comes back right after a tap, the banner keeps its height and
   place for 2.5 s after the last tap, drawn as "Live data is back." (new copy, a check mark, `chromeSolid` surface), and
@@ -43,6 +44,10 @@ notification so if the user spams it while on a route, it doesn't shift and acci
   pinned to the screen's width, so one wide child can never push the gear or My Routes off screen again (AX5 did).
 - The place summary shows the full name and address at accessibility sizes (no line limit).
 - Rows follow `RowLayout`: the badge above the title and the ETA under the text from AX1.
+- The trip timeline's and the route page's stop rows put the minutes under the stop name at accessibility sizes, stack
+  the Board here / Get off here tags and the bus pill, and let names wrap freely (AX5 was cut on both sides).
+- The bus chips on the rails show the bus and its number only ("Bus 2" as the bus and "2"), 10 pt Bold, centered on the
+  24 pt rail, so they never cover the stop names that start 52 pt in.
 
 ## Directions on the map
 
