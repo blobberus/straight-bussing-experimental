@@ -30,6 +30,8 @@ struct RootView: View {
     @Namespace private var mapNS
     /// Settings and Lines by Time open out of their buttons (`mZoomSheet`, iOS 18 and later).
     @Namespace private var zoomNS
+    /// The tab bar's glass and its minimized circle are one glass element (iOS 26 morphs one into the other).
+    @Namespace private var glassNS
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -78,7 +80,7 @@ struct RootView: View {
                     .frame(width: geo.size.width)
                     .accessibilitySortPriority(3)
                 if !keyboardUp {
-                    bottomRow(narrow: geo.size.width < 360)
+                    bottomRow(narrow: geo.size.width < 360, minimized: expanded && sheetScroll.minimized)
                         .padding(.bottom, rowInset)
                         .frame(width: geo.size.width)
                         .frame(maxHeight: .infinity, alignment: .bottom)
@@ -107,12 +109,18 @@ struct RootView: View {
         .mapScope(mapNS)
         .environment(dirUI)
         .environment(sheetScroll)
-        .onChange(of: model.page) { _, _ in sheetScroll.scrolled = false }
+        .onChange(of: model.page) { _, _ in sheetScroll.reset() }
         // a light tap when a trip starts or ends (spec 9: Start), none for live updates
         .sensoryFeedback(.impact(weight: .light), trigger: model.activeTrip != nil)
-        .onChange(of: model.tab) { _, _ in sheetScroll.scrolled = false }
-        // collapsing Directions frames the selected option again once the sheet has settled (AppModel.sheetCollapsed)
-        .onChange(of: model.detent) { _, d in if d == .peek { model.sheetCollapsed() } }
+        .onChange(of: model.tab) { _, _ in sheetScroll.reset() }
+        // collapsing Directions frames the selected option again once the sheet has settled (AppModel.sheetCollapsed);
+        // a collapsed sheet has no scrolled content, so the tab bar comes back
+        .onChange(of: model.detent) { _, d in
+            if d == .peek {
+                sheetScroll.reset()
+                model.sheetCollapsed()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardUp = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardUp = false }
         .sheet(isPresented: $model.showSettings) { SettingsView().sbZoomFrom("settings", in: zoomNS) }
@@ -173,16 +181,29 @@ struct RootView: View {
     }
 
     /// The bottom row: the glass tab bar from the leading inset to 8 pt before the 56 pt search circle (one glass
-    /// container, so on iOS 26 they sample the map together).
-    @ViewBuilder func bottomRow(narrow: Bool) -> some View {
+    /// container, so on iOS 26 they sample the map together). Minimized (8.9), the bar is a 56 pt circle with the
+    /// section's filled glyph at the leading side (on iOS 26 the capsule morphs into it, `mMinimize`; Reduce Motion: a
+    /// crossfade); the search circle stays.
+    @ViewBuilder func bottomRow(narrow: Bool, minimized: Bool) -> some View {
+        let swap: AnyTransition = reduceMotion ? .opacity : .scale(scale: 0.9, anchor: .leading).combined(with: .opacity)
         HStack(alignment: .center, spacing: Space.gapChrome) {
-            TabBar(narrow: narrow)
-                .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { h in
-                    if abs(h - tabH) > 0.5 { tabH = h }
-                }
+            if minimized {
+                MinimizedTabBar { sheetScroll.minimized = false }
+                    .sbGlassID("tabs", in: glassNS)
+                    .transition(swap)
+                Spacer(minLength: 0)
+            } else {
+                TabBar(narrow: narrow)
+                    .sbGlassID("tabs", in: glassNS)
+                    .transition(swap)
+            }
             SearchCircle()
         }
+        .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { h in
+            if abs(h - tabH) > 0.5 { tabH = h }
+        }
         .sbGlassContainer(spacing: Space.gapChrome)
+        .animation(Motion.pick(Motion.minimize, reduce: reduceMotion), value: minimized)
         .padding(.horizontal, Space.insetChrome)
     }
 
@@ -295,9 +316,38 @@ struct SearchCircle: View {
 }
 
 /// Whether the expanded sheet's content has scrolled under its header: the header shows a hairline then (spec 10.6).
+/// And whether the tab bar is minimized (DESIGN-SPEC-GLASS 8.9, iOS 26's tab bar, iOS 18 and later): scrolling the
+/// content down past 24 pt shrinks it to a circle with the section's glyph; scrolling back up 16 pt, reaching the top,
+/// a tap on the circle, or a new page, tab or collapse restores it. Never while VoiceOver runs (every tab stays one
+/// swipe away).
 @MainActor @Observable
 final class SheetScroll {
     var scrolled = false
+    var minimized = false
+    /// The furthest offset in the current direction (down while restored, up while minimized).
+    @ObservationIgnored private var turn: CGFloat = 0
+
+    /// The content's offset from its top, clamped to its end (a bounce at the end is not a turn).
+    func offset(_ y: CGFloat) {
+        if y <= 24 || UIAccessibility.isVoiceOverRunning {
+            turn = y
+            if minimized { minimized = false }
+            return
+        }
+        if minimized {
+            turn = max(turn, y)
+            if y < turn - 16 { minimized = false; turn = y }
+        } else {
+            turn = min(turn, y)
+            if y > turn + 16 { minimized = true; turn = y }
+        }
+    }
+
+    func reset() {
+        turn = 0
+        if scrolled { scrolled = false }
+        if minimized { minimized = false }
+    }
 }
 
 extension View {
@@ -327,9 +377,13 @@ struct SheetScrollReporter: ViewModifier {
 
     @ViewBuilder func reporting(_ content: some View) -> some View {
         if #available(iOS 18.0, *) {
-            content.onScrollGeometryChange(for: Bool.self, of: { g in g.contentOffset.y + g.contentInsets.top > 1 }) { _, v in
-                if scroll.scrolled != v { scroll.scrolled = v }
-            }
+            content
+                .onScrollGeometryChange(for: Bool.self, of: { g in g.contentOffset.y + g.contentInsets.top > 1 }) { _, v in
+                    if scroll.scrolled != v { scroll.scrolled = v }
+                }
+                .onScrollGeometryChange(for: CGFloat.self, of: { g in SheetScroll.clampedOffset(g) }) { _, y in
+                    scroll.offset(y)
+                }
         } else {
             content
         }
@@ -680,6 +734,33 @@ struct TabBar: View {
         .sbGlass(in: Capsule())
         .animation(reduceMotion ? nil : Motion.tabPill, value: model.tab)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+}
+
+/// The minimized tab bar (DESIGN-SPEC-GLASS 8.9): a 56 pt glass circle with the selected section's filled glyph in
+/// `tint`; a tap brings the whole bar back.
+struct MinimizedTabBar: View {
+    @Environment(AppModel.self) private var model
+    let restore: () -> Void
+    var body: some View {
+        Button(action: restore) {
+            Image(systemName: model.tab.iconSelected).font(.system(size: 20, weight: .regular)).foregroundStyle(Palette.tint)
+        }
+        .buttonStyle(GlassCircleStyle(size: Space.tabBarH))
+        .accessibilityLabel("\(model.tab.title), tab bar")
+        .accessibilityHint("Shows all the tabs")
+        .accessibilityIdentifier("tabBarMinimized")
+        .accessibilityShowsLargeContentViewer { Label(model.tab.title, systemImage: model.tab.iconSelected) }
+    }
+}
+
+extension SheetScroll {
+    /// The offset from the content's top, clamped to its end (iOS 18 scroll geometry).
+    @available(iOS 18.0, *)
+    nonisolated static func clampedOffset(_ g: ScrollGeometry) -> CGFloat {
+        let y = g.contentOffset.y + g.contentInsets.top
+        let end = g.contentSize.height + g.contentInsets.top + g.contentInsets.bottom - g.containerSize.height
+        return min(y, max(0, end)).rounded()
     }
 }
 

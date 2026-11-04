@@ -105,6 +105,8 @@ enum Motion {
     static let tabPill = Animation.spring(response: 0.35, dampingFraction: 0.78)
     /// The status banner (Row A) coming and going.
     static let banner = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.25)
+    /// The tab bar shrinking to a circle while the content scrolls, and back (`mMinimize`).
+    static let minimize = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.28)
 
     static func pick(_ a: Animation, reduce: Bool) -> Animation { reduce ? reduced : a }
 }

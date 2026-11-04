@@ -265,6 +265,13 @@ extension View {
         }
     }
 
+    /// One identity for glass that turns into other glass (the tab bar and its minimized circle): iOS 26 morphs
+    /// between them inside a glass container; nothing on iOS 17 to 25 (the transition crossfades).
+    @ViewBuilder
+    func sbGlassID(_ id: String, in ns: Namespace.ID) -> some View {
+        if #available(iOS 26.0, *) { glassEffectID(id, in: ns) } else { self }
+    }
+
     /// Groups glass elements that sit together (the bottom row; the card and its lower-right group) so they blend and
     /// morph as one on iOS 26 (glass cannot sample other glass across containers); nothing on iOS 17 to 25.
     @ViewBuilder

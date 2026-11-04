@@ -120,9 +120,13 @@ struct OptionalSheetScrollReporter: ViewModifier {
         // -scrollend (CI): open at the end, as the other sheet pages do
         let anchored = content.defaultScrollAnchor(model.config.scrollEnd ? .bottom : nil)
         if #available(iOS 18.0, *), let scroll {
-            anchored.onScrollGeometryChange(for: Bool.self, of: { g in g.contentOffset.y + g.contentInsets.top > 1 }) { _, v in
-                if scroll.scrolled != v { scroll.scrolled = v }
-            }
+            anchored
+                .onScrollGeometryChange(for: Bool.self, of: { g in g.contentOffset.y + g.contentInsets.top > 1 }) { _, v in
+                    if scroll.scrolled != v { scroll.scrolled = v }
+                }
+                .onScrollGeometryChange(for: CGFloat.self, of: { g in SheetScroll.clampedOffset(g) }) { _, y in
+                    scroll.offset(y)
+                }
         } else {
             anchored
         }
