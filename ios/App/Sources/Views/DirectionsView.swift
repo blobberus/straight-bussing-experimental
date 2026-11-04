@@ -1,10 +1,10 @@
 import SwiftUI
 import StraightBussingKit
 
-/// Directions' typed text, focused field and suggestions (owner spec 2026-10-12: the Start / Destination fields sit
-/// in a card at the top of the screen, where the search bar was, and the suggestions and trip options in the sheet
-/// below). Owned by RootView and shared by both through the environment. Keystrokes never touch AppModel, so the map
-/// and the rest of the UI don't redraw while typing.
+/// Directions' typed text, focused field and suggestions (the Start / Destination card at the top of the sheet, the
+/// suggestions and trip options under it, DESIGN-SPEC-GLASS 9.2). Owned by RootView and shared through the
+/// environment (the search circle focuses Destination). Keystrokes never touch AppModel, so the map and the rest of
+/// the UI don't redraw while typing.
 @MainActor @Observable
 final class DirectionsUI {
     enum Field: Hashable { case from, to }
@@ -42,10 +42,11 @@ extension String {
     }
 }
 
-/// The Directions field card (spec 10.2): it takes the search bar's place (and turns back into it when Directions
-/// closes; RootView). A 20 pt card of system material, two 44 pt fields on `fill`, a hollow `tint` ring for Start and a
-/// `dangerFill` dot for Destination (the map's destination pin), the swap button between them. Collapsing the sheet
-/// drops the keyboard and leaves the card in place, so the map shows between the card and the collapsed sheet.
+/// The Directions field card (spec 10.2, DESIGN-SPEC-GLASS 9.2, Apple Maps' search field at the top of the card): the
+/// first element of the Directions sheet, pinned while the results scroll. Solid `bgCard` (it is content now, not
+/// glass), 20 pt corners, two 44 pt fields on `fill` (radius 10, concentric), a hollow `tint` ring for Start and a
+/// `dangerFill` dot for Destination (the map's destination pin), the swap button beside them. Collapsing the sheet
+/// drops the keyboard; the collapsed card shows the best option and the map shows the route.
 struct DirectionsCard: View {
     @Environment(AppModel.self) private var model
     @Environment(DirectionsUI.self) private var ui
@@ -53,7 +54,7 @@ struct DirectionsCard: View {
 
     var body: some View {
         @Bindable var ui = ui
-        let shape = RoundedRectangle(cornerRadius: Radius.sheet, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
         HStack(spacing: Space.s1) {
             VStack(spacing: Space.s2) {
                 field(.from, text: $ui.fromText, placeholder: "Start")
@@ -69,10 +70,9 @@ struct DirectionsCard: View {
             .accessibilityLabel("Swap start and destination")
         }
         .padding(10)
-        .background(.regularMaterial, in: shape)
-        .elevation(.floating, in: shape)
-        // map chrome: grows with text size, but not so far that it hides the map
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .background(Palette.bgCard, in: shape)
+        // the fields stay usable at the largest sizes; past AX3 the results would have no room under them
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("directionsCard")
         .onAppear {
@@ -96,7 +96,7 @@ struct DirectionsCard: View {
             }
         }
         .onChange(of: ui.focus) { _, f in if focus != f { focus = f } }
-        // collapsing the sheet drops the keyboard; the card stays where it is
+        // collapsing the sheet drops the keyboard
         .onChange(of: model.detent) { _, d in if d == .peek { setFocus(nil) } }
     }
 
@@ -154,15 +154,22 @@ struct DirectionsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Space.s3) {
-                if let f = ui.focus { suggestions(for: f) } else { results }
+        VStack(spacing: 0) {
+            // the Start / Destination card heads the sheet and stays put while the results scroll under the header
+            DirectionsCard()
+                .padding(.horizontal, Space.insetContent)
+                .padding(.top, Space.s1)
+                .padding(.bottom, Space.s2)
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.s3) {
+                    if let f = ui.focus { suggestions(for: f) } else { results }
+                }
+                .padding(.horizontal, Space.insetContent)
+                .padding(.top, Space.s1)
+                .padding(.bottom, Space.s6)
             }
-            .padding(.horizontal, Space.insetContent)
-            .padding(.top, Space.s1)
-            .padding(.bottom, Space.s6)
+            .reportsSheetScroll()
         }
-        .reportsSheetScroll()
         .task(id: SuggestionKey(field: ui.focus, text: ui.query, exact: ui.places.exact)) { await loadSuggestions() }
     }
 
