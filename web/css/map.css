@@ -168,6 +168,12 @@
 .sb-bus.is-focus .sb-bus-hd::before{left:-5px;top:calc(-1 * var(--sb-hr,13px) - 8px);border-width:0 5px 8px}
 .sb-busicon{overflow:visible}
 .sb-bus.is-stale{opacity:.5}
+/* a bus on a faded route (core/visibility.js busFaded, owner 2026-11-04): it steps back like its line (smaller and
+   see-through, under the other buses) and takes no tap, so taps reach the stops and lines in focus. Its label, heading
+   and number stay: only its prominence changes. A stale faded bus is fainter still. */
+.leaflet-marker-icon.sb-busicon.is-faded{pointer-events:none}
+.sb-bus.is-faded{opacity:.42;transform:translateX(-50%) scale(.8);box-shadow:none}
+.sb-bus.is-faded.is-stale{opacity:.3}
 /* the bus picked on its route page: a 3 pt tint outline at a 3 pt offset */
 .sb-bus.is-picked{outline:3px solid var(--sb-tint);outline-offset:3px}
 /* buses move by script along their route line (map/layers.js createBusLayer, map/track.js): no CSS glide on the

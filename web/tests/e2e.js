@@ -473,6 +473,12 @@ test("directions: place + station, stubbed sidewalk walking, option drawn on the
     const inner = ll.slice(1, -1), onShape = inner.filter((p) => shapePts.some((s) => Math.abs(s[0] - p.lat) < 1e-6 && Math.abs(s[1] - p.lng) < 1e-6));
     ok(inner.length >= 3 && onShape.length >= inner.length - 2, `bus leg along the road shape: ${onShape.length}/${inner.length} inner points are shape vertices`);
   }
+  // the plan drawn: every line dims and the buses of the routes it does not ride fade with them (owner 2026-11-04)
+  const busIcons = () => $$("#map .sb-busicon"), fadedIcons = () => $$("#map .sb-busicon.is-faded");
+  await waitFor(() => busIcons().length === T.routes.length || null, "every stub bus drawn");
+  const fullBefore = busIcons().length - fadedIcons().length;
+  ok(fullBefore >= 1 && fadedIcons().length >= 1, `preview: the plan's buses full (${fullBefore}), the others faded (${fadedIcons().length})`);
+  ok(fadedIcons().every((e) => W.getComputedStyle(e).pointerEvents === "none"), "a faded bus takes no tap");
   // Start switches the sheet to Current trip with the trip in progress first (owner, 2026-10-12; iOS parity)
   click(await waitFor(() => $('#content .v-opt.is-on [data-action="dir:start"]'), "Start on the selected option"), "Start");
   const tt = await waitFor(() => state().view === "nearby" && $("#content .tp-title"), "Current trip with the trip in progress");
@@ -484,9 +490,22 @@ test("directions: place + station, stubbed sidewalk walking, option drawn on the
   ok($("#content [data-region='nearby-trip'] .tp-title"), "the trip in progress leads, above the next bus");
   await waitFor(() => D.activeElement === tt, "focus on the trip title");
   ok($$("#map .sb-plan-casing").length > 0, "the trip stays on the map");
+  // on a trip only the trip's lines and their buses are drawn (owner 2026-11-04); they all come back when it ends
+  const drawnLines = () => { let n = 0; SB.map.eachLayer((l) => { if (l instanceof W.L.Polyline && l.options.className === "sb-route") n++; }); return n; };
+  const linesOf = (rids) => rids.reduce((n, rid) => n + (state().shapes[rid] || []).filter((p) => p && p.length >= 2).length, 0);
+  const tripRids = state().journey.rids.slice();
+  ok(tripRids.length >= 1, "a bus trip");
+  await waitFor(() => drawnLines() === linesOf(tripRids) || null, `only the trip's lines drawn (${drawnLines()} of ${linesOf(Object.keys(state().shapes))})`);
+  const tripBuses = T.routes.filter((r) => tripRids.includes(r.rid)).length;
+  await waitFor(() => busIcons().length === tripBuses || null, "only the trip's buses drawn");
+  eq(busIcons().length, fullBefore, "the same buses the preview kept at full strength");
+  eq(fadedIcons().length, 0, "and none faded");
   click($('#content [data-action="journey:end"]'), "End trip");
   await waitFor(() => !state().journey && !$("#content .tp-title"), "trip ended");
   await waitFor(() => $$("#map .sb-plan-casing").length === 0, "plan cleared from the map");
+  const shown = Object.keys(state().shapes).filter((rid) => !(state().hiddenRoutes || []).includes(String(rid)));
+  await waitFor(() => drawnLines() === linesOf(shown) || null, "every line back after the trip");
+  await waitFor(() => busIcons().length === T.routes.length && fadedIcons().length === 0 || null, "every bus back, none faded");
 });
 
 test("theme: About's Auto / Light / Dark updates the page and the map", async () => {
