@@ -67,6 +67,26 @@ test("layout: map chrome text stops growing at 1.35 x, sheet text does not (spec
   } finally { f.remove(); }
 });
 
+test("layout: the place summary shows the whole name at accessibility sizes, two lines otherwise (spec 13.6, as on iOS)", async () => {
+  const f = document.createElement("iframe");
+  f.style.cssText = "position:absolute;left:-10000px;top:0;width:393px;height:852px;border:0";
+  const css = ["tokens", "components", "views", "journey"].map((n) => `<link rel="stylesheet" href="../css/${n}.css">`).join("");
+  const name = "Ellis Garage &amp; Ratner Athletic Center (East), Max Palevsky Residential Commons";
+  f.srcdoc = `<!doctype html><html><head>${css}</head><body style="width:393px"><div class="j-place"><span class="j-placeic"></span>`
+    + `<div><p class="j-placename">${name}</p><p class="v-sec">Shuttle stop</p></div></div></body></html>`;
+  await new Promise((res) => { f.onload = res; document.body.appendChild(f); });
+  try {
+    const d = f.contentDocument, el = d.querySelector(".j-placename");
+    const lines = () => Math.round(el.getBoundingClientRect().height / parseFloat(f.contentWindow.getComputedStyle(el).lineHeight));
+    d.documentElement.style.fontSize = "34px";   // 200% text: the name needs more than two lines
+    ok(el.scrollHeight > el.clientHeight + 4, "default layout: clamped to two lines (" + lines() + ")");
+    eq(lines(), 2, "two lines at the default class");
+    d.documentElement.dataset.text = "ax";
+    ok(el.scrollHeight <= el.clientHeight + 1, "ax: nothing cut");
+    ok(lines() > 2, "ax: the whole name, " + lines() + " lines");
+  } finally { f.remove(); }
+});
+
 for (const [name, w, h] of [["phone", 393, 852], ["desktop frame", 1000, 900]]) {
   test(`layout (${name}): the context chip never moves or resizes the sheet, at any detent`, async () => {
     const t = await frame(w, h);
