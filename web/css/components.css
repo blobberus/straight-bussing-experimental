@@ -116,10 +116,10 @@ html[data-text="ax"] :is(.row, .v-row) + :is(.row, .v-row)::before { left: var(-
 }
 .est-live { background: none; color: var(--label-2); }
 
-/* ---------- buttons (10.11): one primary per screen ---------- */
+/* ---------- buttons (10.11): one primary per screen; capsules (glass spec 6, 8.11: iOS 26 bordered buttons) ---------- */
 .v-btn, .cta {
   position: relative; display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2);
-  min-height: var(--tap); padding: 0 var(--s-4); border: 0; border-radius: var(--r-control);
+  min-height: var(--tap); padding: 0 var(--s-4); border: 0; border-radius: var(--r-capsule);
   font: var(--t-button); text-align: center; text-decoration: none; cursor: pointer;
   transition: opacity var(--m-press) var(--ease-out), transform var(--m-press) var(--ease-out), background-color var(--m-press) var(--ease-out);
 }
@@ -151,12 +151,12 @@ html[data-text="ax"] .v-actions .v-btn { white-space: normal; min-height: 50px; 
 }
 .iconbtn:active { opacity: .6; }
 
-/* ---------- segmented control (10.12): track fill, 36 tall; thumb bgCard radius 10 ---------- */
+/* ---------- segmented control (10.12, glass spec 8.11): a capsule track in fill, 36 tall; a capsule thumb in bgCard ---------- */
 .seg, .themeseg, .v-seg {
-  display: flex; gap: 2px; padding: 2px; border-radius: var(--r-control); background: var(--fill);
+  display: flex; gap: 2px; padding: 2px; border-radius: var(--r-capsule); background: var(--fill);
 }
 .seg button, .themeseg button, .v-segbtn {
-  position: relative; flex: 1; min-height: 32px; padding: 0 var(--s-2); border: 0; border-radius: var(--r-nested);
+  position: relative; flex: 1; min-height: 32px; padding: 0 var(--s-2); border: 0; border-radius: var(--r-capsule);
   background: none; color: var(--label); font: var(--t-section); cursor: pointer;
   transition: background-color var(--m-quick) var(--ease-out), box-shadow var(--m-quick) var(--ease-out);
 }

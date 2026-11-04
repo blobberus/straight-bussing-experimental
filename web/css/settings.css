@@ -57,6 +57,10 @@
 .st-knob::after { content: ""; position: absolute; left: 2px; top: 2px; width: 27px; height: 27px; border-radius: 50%; background: var(--bg-card); box-shadow: var(--e-knob); transition: transform var(--m-quick) var(--ease-out); }
 .st-sw input:checked + .st-knob { background: var(--tint-fill); }
 .st-sw input:checked + .st-knob::after { transform: translateX(20px); }
+/* glass spec 8.11: while pressed the knob stretches (iOS 26 turns it to glass); off under reduced motion */
+.st-knob::after { transform-origin: 13.5px 50%; }
+.st-sw:active input:not(:checked) + .st-knob::after { transform: scaleX(1.15); }
+.st-sw:active input:checked + .st-knob::after { transform: translateX(16px) scaleX(1.15); }
 .st-sw input:focus-visible + .st-knob { outline: 2px solid var(--tint); outline-offset: 2px; }
 .st-sw input:checked + .st-knob::before { content: ""; position: absolute; left: 12px; top: 10px; width: 2px; height: 11px; border-radius: 1px; background: var(--on-fill); }
 
