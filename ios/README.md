@@ -16,7 +16,11 @@ style per role), `Shared/Metrics.swift` (`Space`, `Radius`, `IconSize`, `Motion`
 `App/Sources/Views/Styles.swift` (button styles, equal-width button rows, flow layout, SF Symbol names) plus
 `App/Sources/Views/Components.swift` (route badge, ETA notation, rows, cards, section titles, banners, skeletons, empty
 states). How the app follows the spec and every deviation: `docs/redesign/NOTES-ios.md`; final screenshots:
-`docs/redesign/after/ios/`. The earlier rules (`docs/DESIGN.md` "1b", `ios/DESIGN-AUDIT-2026-10-10.md`) are kept for
+`docs/redesign/after/ios/`. **Second redesign (glass, 2026-11-04):** `docs/DESIGN-SPEC-GLASS.md` (a delta on
+DESIGN-SPEC.md, from `docs/APPLE-MAPS-STUDY.md`) moves the controls to Apple Maps' places in Liquid Glass; the glass
+helpers are `sbGlass` / `sbGlassContainer` / `sbGlassID` and `GlassCircleStyle` / `FillCapsuleStyle` in `Styles.swift`
+(real glass on iOS 26, the system material with a thin edge on iOS 17 to 25); notes and deviations:
+`docs/redesign/NOTES-glass-ios.md`, screenshots `docs/redesign/glass/ios/`. The earlier rules (`docs/DESIGN.md` "1b", `ios/DESIGN-AUDIT-2026-10-10.md`) are kept for
 history. **Privacy policy / support:** https://blobberus.github.io/straight-bussing/privacy.html and `/support.html`
 (`web/privacy.html`, `web/support.html`), linked from About and Settings.
 
@@ -244,9 +248,22 @@ gallery "28-livestates", "29-livestates-end") draws the card in all four states 
   when the route color is too close to it, widths by zoom, focused and network states, stop circles in their route's
   color from zoom 14, bus markers with the number inside ("AP/DX | 2"), walking dots, "Board here" / "Get off"
   callouts, lighter Semibold building names.
-- Google-Maps-style layout: floating "Search for a destination" bar with the Settings gear, the status banner (web
-wording), the map context bar ("Only showing routes for: …" / "My route: …"), a custom bottom sheet resting on a
-  bottom tab bar: Current trip / Routes / My Routes. Short confirmations appear as a banner and are read out. The
+- Glass layout (2026-11-04, docs/DESIGN-SPEC-GLASS.md, the Apple Maps structure; replaces the top search bar of the
+  layout below): top rows = the status banner (Row A, opaque, Retry in its fixed leading slot), the demo chip and the
+  Settings glass circle (Row B), the trip / filter chip (Row C, a glass capsule with a fill-capsule Show all / Clear);
+  the sheet is an inset glass card (12 pt from the sides, 28 pt corners) when collapsed and the opaque full-width sheet
+  when expanded, turning opaque by a third of the way; Lines by Time over Locate ride above the card's trailing corner
+  in one 44 x 88 glass capsule (the compass above them while the map is rotated) and fade out as it expands; the bottom
+  row floats over everything: a 56 pt glass tab bar with a sliding fill selection capsule and the 56 pt search circle
+  (id `searchBar`, "Search for a destination"), which opens Directions with the Start / Destination card at the top of
+  the expanded sheet. The tab bar shrinks to a circle while the expanded content scrolls down (iOS 18+, never with
+  VoiceOver). Buttons are capsules, cards 20 pt, Back a fill circle, Settings' Done a checkmark and Lines by Time's
+  Cancel an xmark on iOS 26; Settings and Lines by Time zoom out of their buttons (iOS 18+). Text on glass is only
+  `label` / `labelGlass2`, never green or tint text (the `onGlass` environment value in the sheet header).
+- Google-Maps-style layout (before the glass layout): floating "Search for a destination" bar with the Settings gear,
+  the status banner (web wording), the map context bar ("Only showing routes for: …" / "My route: …"), a custom bottom
+  sheet resting on a bottom tab bar: Current trip / Routes / My Routes. Short confirmations appear as a banner and are
+  read out. The
   sheet (owner spec 2026-10-12, "like Google Maps on an iPhone") has two resting states: collapsed (grab bar + the
   title line, whose right side keeps the one-line summary, e.g. the next bus) and expanded. The whole header strip
   drags it (from just above the sheet's edge through the grab bar and the title line; a drag that starts on Back
