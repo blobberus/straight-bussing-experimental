@@ -61,6 +61,30 @@ then note that)" and "the current map should make green spaces like parks actual
   text should be re-checked. The web map is being restyled toward Apple Maps at the same time (web/js/map/style.js),
   so the two stay close.
 
+## Owner request noted while paused: faded buses, trip-only lines (2026-11-04)
+Owner: "The buses on faded routes should also be faded. If on a trip, only the lines on the particular trip should be
+displayed." Same day: "Remove the outlines on each line." / "Make the bus lines slightly thinner from the zoomed out
+view to not overclutter the map." and, for this build, "Remove the outlines for the lines but make the lines themselves
+thinner. All these changes should go onto the experimental build." Done on the live app (straight-bussing commit
+d0e20d0e on branch `fade-buses`, landed on its main in smaller commits; its iOS CI is the reference) and on this repo's web.
+Port to this iPhone app when iOS resumes (copy by hand, never merge):
+- **Kit** `RouteState.swift` `RouteVisibility`: add `tripRoutes`, `mapHidden`, `busFaded`; `mapFocus` returns nil during
+  a trip (`journey.kind == .plan`) unless the route page is open; `mapVisibility().hidden = mapHidden`. Tests: the live
+  `VisibilityCustomTests` (`testTripShowsOnlyItsLines`, `testBusFaded`).
+- **AppModel** `buildLayers`: draw a focused route even when hidden; dim every line while a plan is drawn (`planDim`,
+  from a new `mapPlanRids`: the drawn option's bus-leg routes, [] for the walk-only line, nil when nothing is drawn); no
+  chevrons while a plan is drawn. **Remove the casings**: the `-c` casing `MapLine`s (`casingDefault` / `casingContrast`,
+  `MapLine.casing`, the skip in `lineHit`) and the bus-leg under-stroke in MapScreen (`Palette.busRing`, `legW + 3`).
+  Keep the line tap as wide as before (measure it from the old width plus the old casing).
+- **Line widths** (this build, as the web here): `AppModel.lineWidth(zoom)` from z13 2, z14 2.25, z15 3, z16 4, z17 5,
+  z18 6 (was the spec 11.3 widths); focused lines keep their +2. (The live app's Kit `RouteLineWidth.scale(zoom:)` only
+  thins zoomed out.)
+- **MapScreen buses**: draw a hidden route's bus only when its route is in focus; a bus with
+  `RouteVisibility.busFaded(rid, focus:, plan: mapPlanRids)` (never the one you ride) gets `BusMarker(faded: true)`:
+  scale 0.8, opacity 0.42 (0.3 when stale), not a Button (no tap), drawn before the others so it sits under them.
+- The paused glass branch (`redesign-ios`) needs the same when it resumes; the web version on this repo's test site is
+  the parity reference.
+
 ## How to resume
 1. `git fetch origin && git checkout -B glass origin/redesign-ios`, then `git rebase origin/main` (the web side keeps
    changing docs and web/; resolve docs conflicts by keeping both).
