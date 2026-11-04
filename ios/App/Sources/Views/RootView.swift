@@ -167,7 +167,19 @@ struct SheetScrollReporter: ViewModifier {
     @Environment(SheetScroll.self) private var scroll
     @Environment(AppModel.self) private var model
     func body(content: Content) -> some View {
-        reporting(content.defaultScrollAnchor(model.config.scrollEnd ? .bottom : nil))
+        reporting(anchored(content))
+    }
+
+    /// `-scrollend` (CI): open at the end, and stay there while the page fills in (live data arrives after the first
+    /// layout; iOS 18 can keep the anchor through size changes, iOS 17 only sets the first offset).
+    @ViewBuilder func anchored(_ content: Content) -> some View {
+        if !model.config.scrollEnd {
+            content
+        } else if #available(iOS 18.0, *) {
+            content.defaultScrollAnchor(.bottom).defaultScrollAnchor(.bottom, for: .sizeChanges)
+        } else {
+            content.defaultScrollAnchor(.bottom)
+        }
     }
 
     @ViewBuilder func reporting(_ content: some View) -> some View {
