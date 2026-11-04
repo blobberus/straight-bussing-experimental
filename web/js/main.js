@@ -46,6 +46,7 @@ const el = {
   sheet: $("sheet"), head: $("sheetHead"), grab: $("grab"), content: $("content"), title: $("title"), sub: $("subtitle"),
   right: $("titleRight"), back: $("back"), tabs: $("tabs"), ctxbar: $("ctxbar"), gear: $("settingsBtn"), topbar: $("topbar"), app: $("app"),
   pill: $("pill"), pillText: $("pillText"), pillRetry: $("pillRetry"), dlg: $("dlg"), toast: $("toast"), locate: $("locateBtn"),
+  bottomrow: $("bottomrow"), mapctl: $("mapctl"),
 };
 const bootS = nowS();
 let map = null, sheet = null, live = null, ctx = null, notifier = null, tripMap = null;
@@ -227,7 +228,10 @@ function renderHeader(s, id, def) {
     if (el.right.textContent !== right || el.right.children.length) el.right.textContent = right;
   }
   const tab = activeTab(s);
-  for (const b of el.tabs.querySelectorAll("button[data-tab]")) {
+  const tabBtns = [...el.tabs.querySelectorAll("button[data-tab]")], ti = tabBtns.findIndex((b) => b.dataset.tab === tab);
+  // the selection capsule (glass spec 8.6) slides to the selected item: transform only (css/base.css .tab-pill)
+  if (ti >= 0 && el.tabs.style.getPropertyValue("--tab-i") !== String(ti)) el.tabs.style.setProperty("--tab-i", String(ti));
+  for (const b of tabBtns) {
     const on = b.dataset.tab === tab;
     if (on === (b.getAttribute("aria-current") === "page") && on === b.classList.contains("on")) continue;
     if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
@@ -351,7 +355,7 @@ function wireUI() {
   el.back.addEventListener("click", () => back());
   el.tabs.addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) navigate(b.dataset.tab); });
   el.locate.addEventListener("click", onLocateFab);
-  for (const root of [el.content, el.pill, el.dlg, el.ctxbar, el.topbar || el.gear, el.right]) bindActions(root, () => ctx);
+  for (const root of [el.content, el.pill, el.dlg, el.ctxbar, el.topbar || el.gear, el.right, el.bottomrow, el.mapctl]) if (root) bindActions(root, () => ctx);
   el.dlg.addEventListener("click", (e) => { if (e.target === el.dlg) closeDlg(); });
   el.content.addEventListener("focusout", () => setTimeout(() => { if (dirty && !inputFocused()) render(); }, 0));
   document.addEventListener("keydown", (e) => {
@@ -407,8 +411,8 @@ async function boot() {
     setTimeout(() => toast("Couldn't load the map. Lists and times still work."), 0);
   }
   mapCall("setTheme", isDark());
-  // the map is visible above the sheet AND the bottom navigation bar under it (phone layouts only)
-  bus.on("sheet:inset", (p) => mapCall("setBottomInset", ((p && p.px) || 0) + (p && p.px && !sheet?.isPanel?.() ? el.tabs.offsetHeight || 0 : 0)));
+  // the map is visible above the collapsed card (its px already counts the floating bottom row, glass spec 3)
+  bus.on("sheet:inset", (p) => mapCall("setBottomInset", (p && p.px) || 0));
   bus.on("toast", (p) => toast(p && p.text));
   bus.on("sheet:header", () => refreshHeader());
   bus.on("settings:toggle", () => syncHistory());   // Settings overlay opened / closed (ui/settings-overlay.js)

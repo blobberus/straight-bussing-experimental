@@ -128,6 +128,7 @@ test("trip chip CSS: only the label truncates, badges and the action keep their 
   await new Promise((r) => { f.onload = r; document.body.appendChild(f); });
   await new Promise((r) => setTimeout(r, 50));
   const d = f.contentDocument, w = f.contentWindow, bar = d.getElementById("ctxbar"), txt = bar.querySelector(".ctx-text"), btn = bar.querySelector(".ctx-btn");
+  for (const a of bar.getAnimations()) a.finish();   // the chip materializes (glass spec 7: scale .85 + fade); measure it at rest
   try {
     ok(w.getComputedStyle(txt).textOverflow === "ellipsis" && txt.scrollWidth > txt.clientWidth, "the long label ends in an ellipsis");
     const br = btn.getBoundingClientRect(), rr = bar.getBoundingClientRect();

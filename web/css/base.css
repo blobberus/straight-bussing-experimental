@@ -1,5 +1,6 @@
-/* Reset, root type, floating chrome (search bar, locate button, status chip / banner, trip chip, toast), bottom bar and
-   the desktop phone frame. docs/DESIGN-SPEC.md sections 2.2, 7, 10.1 to 10.7 and 10.19. Values come from tokens.css. */
+/* Reset, root type, the glass control layer (top rows: status banner, simulated-buses chip, Settings, trip chip; the
+   floating bottom row: tab bar and search circle), toast and the desktop phone frame. docs/DESIGN-SPEC.md 2.2, 10.3,
+   10.5, 10.19 and docs/DESIGN-SPEC-GLASS.md 3 to 8 (the delta that moved and restyled them). Values from tokens.css. */
 *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 /* root = body size (spec 2.2): 17 px at the browser default, follows the browser's text size and zoom; every role is
    relative to it. Fixes the 15 px root of the audit (REDESIGN-AUDIT.md defect 1). */
@@ -40,134 +41,59 @@ h1:focus, [tabindex="-1"]:focus { outline: none; }
 /* the map fills the app behind everything; its land color is the first paint (spec 13.1: no spinner) */
 #map { position: fixed; inset: 0; z-index: var(--z-map); background: var(--map-land); }
 
-/* ---------- floating chrome (spec 7: translucency only here, at most four blurred elements, never one that moves
-   every frame; contain: paint; solid without backdrop-filter, under reduced transparency and Increase Contrast) ---------- */
-.searchbar, .dirbar, .fab, .ctxbar, .statuspill[data-form="chip"] {
-  background: var(--bg-chrome);
-  -webkit-backdrop-filter: var(--blur-chrome); backdrop-filter: var(--blur-chrome);
-  box-shadow: var(--e-1);
+/* ---------- glass (docs/DESIGN-SPEC-GLASS.md 5): the control layer floating over the map, and only there. Regular
+   glass: an 80% frosted fill (legible over any backdrop with no blur, 5.3), blur 14 px + saturate 1.4, a static rim and
+   edge painted once, a soft shadow. Never on content, never glass on glass (controls on glass use fills). It turns
+   solid while the element moves (#app.is-moving, 12.1 rule 2), under Increase Contrast and Reduce Transparency,
+   without backdrop-filter and in html.glass-lite (tokens.css). At most 6 blurred surfaces at rest (12.1 rule 1). ---------- */
+.glass {
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
+  box-shadow: var(--glass-rim), var(--glass-edge), var(--glass-shadow);
 }
-/* paint containment where no control reaches outside the box (the chips' 44 pt hit areas extend past their 32 / 36
-   pt capsules, and containment would clip them) */
-.searchbar, .dirbar, .fab { contain: paint; }
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .searchbar, .dirbar, .fab, .ctxbar, .statuspill[data-form="chip"] { background: var(--bg-chrome-solid); }
-}
+#app.is-moving .glass--moves { background: var(--glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* paint containment where no hit area reaches outside the box (12.1 rule 6; the chips keep their 44 pt hit areas) */
+.gcircle, .searchcircle, .mapctl { contain: paint; isolation: isolate; }
+/* press (mGlassPress): the control swells to 1.06 and back; reduced motion: opacity only (end of this file) */
+.gpress { transition: transform var(--m-glass-press) var(--ease-out), opacity var(--m-press) var(--ease-out); }
+.gpress:active { transform: scale(1.06); }
 
-/* search bar (10.1): capsule 48, 12 from both edges, 8 below the safe area; search icon 16 from the edge; Lines by Time
-   and Settings as 44 pt icon buttons at its end. Its text stops growing at 1.35 x (2.2). */
+/* ---------- top rows (glass spec 3, 8.1 to 8.3). Row A: the status banner, topmost, opaque, Retry slot on the leading
+   side (owner 2026-11-03). Row B: the simulated-buses chip (leading) and the Settings circle (trailing). The trip chip
+   sits in Row B's leading place, or in Row C under the simulated-buses chip. --pill-h = the banner's measured height
+   (ui/pill.js); during a Retry hold it is locked, so Rows B and C never move under a tapping finger. ---------- */
+#app {
+  --banner-h: 0px;
+  --row-b-top: calc(var(--search-top) + var(--banner-h));
+  --ctx-top: calc(var(--row-b-top) + (var(--chrome-btn) - 36px) / 2);
+  /* the collapsed card's visible height from the screen's bottom: card + 8 + the floating bottom row (ui/sheet.js measures it) */
+  --v-peek-vis: calc(var(--nav-h) + var(--gap-chrome) + var(--v-peek));
+}
+#app:has(#pill:not([hidden]):not([data-form="chip"])) { --banner-h: calc(var(--pill-h, 44px) + var(--gap-chrome)); }
+#app:has(#pill[data-form="chip"]:not([hidden])) { --ctx-top: calc(var(--row-b-top) + var(--chrome-btn) + var(--gap-chrome)); }
+
+/* Settings (8.2): a 44 glass circle, top right */
 .topbar {
   position: fixed; z-index: var(--z-search);
-  top: var(--search-top); left: calc(var(--safe-l) + var(--inset-chrome)); right: calc(var(--safe-r) + var(--inset-chrome));
+  top: var(--row-b-top); right: calc(var(--safe-r) + var(--inset-chrome));
 }
-.searchbar {
-  position: relative; display: flex; align-items: center; min-height: var(--search-h); padding: 0 2px 0 4px;
-  border-radius: var(--r-capsule); transform-origin: 0 0;
-}
-.searchbar-btn {
-  position: relative; flex: 1; min-width: 0; min-height: var(--tap); display: flex; align-items: center; gap: var(--s-3);
-  padding: 0 var(--s-2) 0 var(--s-3); border-radius: var(--r-capsule); color: var(--label-2); text-align: left;
-  font: var(--t-body); font-size: min(var(--size-body), var(--cap-body)); line-height: 1.3;
-}
-.searchbar-btn .ic { color: var(--label-2); }
-.searchbar-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.searchbar-text .sb-short { display: none; }
-html[data-text="ax"] .searchbar-text .sb-long { display: none; }
-html[data-text="ax"] .searchbar-text .sb-short { display: inline; }
-.searchbar-gear {
-  position: relative; flex: none; width: var(--tap); height: var(--tap); display: grid; place-items: center;
-  border-radius: 50%; color: var(--label);
-}
-/* press: the capsule (or the round button) takes the pressed fill over its material */
-.searchbar::before, .searchbar-gear::before {
-  content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--fill-pressed);
-  opacity: 0; transition: opacity var(--m-press) var(--ease-out); pointer-events: none;
-}
-.searchbar:has(.searchbar-btn:active)::before, .searchbar-gear:active::before { opacity: 1; }
-.searchbar-gear:active::before { inset: 2px; }
-
-/* Directions field card (10.2): takes the search bar's place; the sheet's top and the chips move below it (--dirbar-h) */
-.dirbar { padding: 10px; border-radius: var(--r-sheet); transform-origin: 0 0; }
-.dirbar[hidden] { display: none; }
-.dirbar .v-dirbox { margin: 0; }
-/* map chrome: the fields grow with the text size only up to 1.35 x, like the search bar they replace (spec 2.2 chrome
-   caps; the iPhone app's DirectionsCard stops at xxxLarge), so at 200% text the card does not cover half the map. In the
-   landscape panel the fields sit in the sheet and keep growing. */
-.dirbar .v-dfield input { font-size: min(var(--size-body), var(--cap-body)); }
-#app[data-view="directions"] .searchbar { display: none; }
-#app[data-view="directions"] {
-  --chip-top: calc(var(--search-top) + var(--dirbar-h, 108px) + var(--gap-chrome));
-  --v-max: calc(var(--app-h) - var(--nav-h) - var(--chip-top));
-  --v-full: var(--v-max);
-}
-@media (min-width: 768px) and (max-height: 559px) {
-  #app[data-view="directions"] .topbar { display: none; }   /* landscape panel: the fields stay in the panel */
+.gcircle {
+  position: relative; width: var(--chrome-btn); height: var(--chrome-btn); border-radius: 50%;
+  display: grid; place-items: center; color: var(--label);
 }
 
-/* bottom bar (10.7): three equal columns, icon 24 over the tab label; selected = filled glyph + tint, no capsule
-   indicator (a Material pattern); opaque, reads as the sheet's base; hairline on top */
-.bottomnav {
-  position: fixed; z-index: var(--z-nav); left: 0; right: 0; bottom: 0; height: var(--nav-h);
-  display: grid; grid-template-columns: repeat(3, 1fr); align-items: stretch;
-  padding: 0 var(--safe-r) var(--safe-b) var(--safe-l);
-  background: var(--bg-sheet); box-shadow: inset 0 .5px 0 var(--separator);
-}
-.bottomnav button {
-  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px;
-  min-height: var(--tab-h); padding-top: 6px; color: var(--label-2); font: var(--t-tab);
-  transition: opacity var(--m-press) var(--ease-out);
-}
-.bottomnav button:active { opacity: .6; }
-.bottomnav .bn-ic { display: grid; place-items: center; width: var(--i-tab); height: var(--i-tab); }
-.bottomnav .bn-ic > .ic { grid-area: 1 / 1; }
-.bottomnav .bn-label { max-width: 100%; padding: 0 var(--s-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bottomnav .ic-on { display: none; }
-.bottomnav button[aria-current="page"] { color: var(--tint); }
-.bottomnav button[aria-current="page"] .ic-on { display: block; }
-.bottomnav button[aria-current="page"] .ic-off { display: none; }
-.bottomnav button:focus-visible { outline-offset: -4px; border-radius: var(--r-control); }
-
-/* locate button (10.4): 44 circle, top trailing under the search bar; under a status banner while one shows */
-.fab {
-  position: fixed; z-index: var(--z-float);
-  top: var(--chip-top); right: calc(var(--safe-r) + var(--inset-chrome));
-  width: var(--tap); height: var(--tap); border-radius: 50%;
-  display: grid; place-items: center; color: var(--tint);
-  transition: opacity var(--m-standard) var(--ease-standard), transform var(--m-press) var(--ease-out);
-}
-.fab::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--fill-pressed); opacity: 0; transition: opacity var(--m-press) var(--ease-out); }
-.fab:active::before { opacity: 1; }
-.fab:focus-visible { outline-offset: 3px; }
-.fab[aria-busy="true"] .ic { opacity: .45; }
-.fab .ic-on { display: none; }
-.fab.is-on .ic-on { display: block; }
-.fab.is-on .ic-off { display: none; }
-#app:has(#pill:not([data-form="chip"]):not([hidden])) .fab { top: calc(var(--chip-top) + var(--pill-h, 44px) + var(--gap-chrome)); }
-
-/* expanded sheet (bottom-sheet layouts only): the sheet covers the map, so the map-only chrome steps aside until it comes
-   down again: the locate button and the trip chip (it explains the map, which is hidden now). The status banner always
-   stays (rider safety). */
-#ctxbar { transition: opacity var(--m-standard) var(--ease-standard), visibility 0s linear 0s; }
-@media not all and (min-width: 768px) and (max-height: 559px) {
-  #app:has(.sheet[data-detent="full"]) #locateBtn,
-  #app:has(.sheet[data-detent="full"]) #ctxbar {
-    visibility: hidden; opacity: 0; pointer-events: none;
-    transition: opacity var(--m-exit) var(--ease-exit), visibility 0s linear var(--m-exit);
-  }
-}
-
-/* status chip and status banner (10.3): the same words, icons and actions as before, two forms by severity. Never color
-   alone: an icon and words every time. ui/pill.js sets data-form="chip" (simulated buses) or "banner" (everything else).
-   The banner is the default form: full width, opaque status background (a state reads the same over any map), at most
-   2 lines at the default size. */
+/* status banner and simulated-buses chip (8.1, DESIGN-SPEC 10.3): the same words, icons and actions, two forms.
+   Never color alone: an icon and words every time. ui/pill.js sets data-form="chip" or "banner" (the default). */
 .statuspill {
   position: fixed; z-index: var(--z-float);
-  top: var(--chip-top); left: calc(var(--safe-l) + var(--inset-chrome)); right: calc(var(--safe-r) + var(--inset-chrome));
+  top: var(--search-top); left: calc(var(--safe-l) + var(--inset-chrome)); right: calc(var(--safe-r) + var(--inset-chrome));
   display: flex; align-items: center; gap: var(--s-2);
   min-height: var(--tap); padding: var(--s-2) var(--s-1) var(--s-2) var(--s-3); border-radius: var(--r-card);
-  background: var(--warn-bg); box-shadow: var(--e-1);
+  background: var(--warn-bg); box-shadow: var(--glass-shadow), var(--glass-edge);
   color: var(--label); font: var(--t-row-detail); font-size: min(var(--size-row-detail), var(--cap-row-detail)); line-height: 1.34;
+  animation: sb-banner-in var(--m-banner) var(--ease-standard);
 }
+@keyframes sb-banner-in { from { opacity: 0; transform: translateY(-8px); } }
 .statuspill .pilltext { flex: 1; min-width: 0; padding: 2px 0; }
 .statuspill .pilltext b { font-weight: var(--w-semibold); }
 .statuspill .pillicon { flex: none; display: grid; place-items: center; color: var(--warn); }
@@ -176,14 +102,14 @@ html[data-text="ax"] .searchbar-text .sb-short { display: inline; }
 .statuspill.err .pillicon { color: var(--danger); }
 .statuspill .pillbtn {
   position: relative; flex: none; min-width: var(--tap); min-height: var(--tap); padding: 0 var(--s-2);
-  border-radius: var(--r-control); color: var(--tint); font-weight: var(--w-semibold);
+  border-radius: var(--r-capsule); color: var(--tint); font-weight: var(--w-semibold);
   transition: opacity var(--m-press) var(--ease-out);
 }
 .statuspill .pillbtn:active { opacity: .6; }
-/* the banner's action slot (owner 2026-11-03, spec 10.3): Retry or See alert on the LEADING edge in a fixed 84 x 44 bgCard
-   capsule at the banner's top-leading corner, so a text change, another line or a repeated tap never moves it (the banner's
-   own top is fixed under the search bar). Trip-ending controls (End trip, the trip chip's Show all) sit on the trailing
-   side, away from it; after a Retry tap the banner keeps its height (ui/pill.js RETRY_HOLD_MS). */
+/* the banner's action slot (owner 2026-11-03, DESIGN-SPEC 10.3, glass spec 8.1): Retry or See alert on the LEADING edge
+   in a fixed 84 x 44 bgCard capsule at the banner's top-leading corner, so a text change, another line or a repeated tap
+   never moves it. Trip-ending controls (End trip, the trip chip's Show all) sit on the trailing side, away from it;
+   after a Retry tap the banner keeps its height (ui/pill.js RETRY_HOLD_MS). */
 .statuspill .pillslot {
   align-self: flex-start; width: 84px; min-width: 84px; height: var(--tap); min-height: var(--tap); margin: 0; padding: 0;
   border-radius: var(--r-capsule); background: var(--bg-card); box-shadow: inset 0 0 0 .5px var(--separator);
@@ -195,18 +121,24 @@ html[data-text="ax"] .searchbar-text .sb-short { display: inline; }
 /* the feed answered during the hold: "Live data is back." with a check mark (live data, so the live mark color) */
 .statuspill.is-back { background: var(--bg-card); }
 .statuspill.is-back .pillicon { color: var(--live-mark); }
-/* chip (simulated buses): capsule 32, sized to its content, leading-aligned; the whole chip is the button (44 hit area) */
+/* simulated-buses chip (8.3): a 32 glass capsule in Row B, sized to its content, leading; the whole chip is the button
+   (44 hit area); text and the info glyph in label (tint is not allowed as text on glass, 5.3) */
 .statuspill[data-form="chip"] {
-  right: auto; max-width: calc(var(--app-w) - 2 * var(--inset-chrome) - var(--tap) - var(--gap-chrome));
+  top: calc(var(--row-b-top) + (var(--chrome-btn) - 32px) / 2); right: auto;
+  max-width: calc(var(--app-w) - 2 * var(--inset-chrome) - var(--chrome-btn) - var(--gap-chrome));
   min-height: 32px; padding: 0 var(--s-1) 0 var(--s-3); border-radius: var(--r-capsule); font-weight: var(--w-semibold);
   font-size: min(var(--size-footnote), var(--cap-footnote));
+  background: var(--glass-fill); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
+  box-shadow: var(--glass-rim), var(--glass-edge), var(--glass-shadow);
+  animation: sb-materialize var(--m-materialize) var(--ease-standard);
 }
-.statuspill[data-form="chip"] .pilltext { padding: 0; }
+/* both chips at once (a trip in demo mode): the simulated-buses chip is solid, so at most 6 surfaces blur (12.1) */
+#app:has(#ctxbar:not([hidden])) .statuspill[data-form="chip"] { background: var(--glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.statuspill[data-form="chip"] .pilltext { padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .statuspill[data-form="chip"] .pillicon { color: var(--label); }
-.statuspill[data-form="chip"] .pilltext { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .statuspill .pilltap {
   flex: none; display: grid; place-items: center; width: 28px; height: 32px; margin-left: auto; padding: 0;
-  border: 0; background: none; color: var(--tint); cursor: pointer;
+  border: 0; background: none; color: var(--label); cursor: pointer;
 }
 .statuspill .pilltap::after { content: ""; position: absolute; inset: -6px 0; border-radius: var(--r-capsule); }   /* the whole chip, 44 tall */
 .statuspill[data-form="chip"]:has(.pilltap:not([hidden])) { transition: opacity var(--m-press) var(--ease-out); }
@@ -214,44 +146,112 @@ html[data-text="ax"] .searchbar-text .sb-short { display: inline; }
 .statuspill .pilltap:focus-visible { outline: none; }
 .statuspill:has(.pilltap:focus-visible) { outline: 2px solid var(--tint); outline-offset: 2px; }
 
-/* trip and filter chip (10.5): capsule 36 under the search bar (and under a status banner or the demo chip); route
-   badges, the label, Show all / Clear as a 44 pt text button. Only the label truncates: badges and the action never clip. */
+/* trip and filter chip (8.3, DESIGN-SPEC 10.5): a 36 glass capsule, leading, beside Settings (or under the
+   simulated-buses chip); route badges, the label, then Show all / Clear as a fill capsule with label text (not tint text
+   on glass, 5.3; not prominent, because Show all ends a trip). Only the label truncates. */
 .ctxbar {
   position: fixed; z-index: var(--z-chip);
-  top: var(--chip-top); left: calc(var(--safe-l) + var(--inset-chrome));
-  max-width: calc(var(--app-w) - 2 * var(--inset-chrome) - var(--tap) - var(--gap-chrome) - var(--safe-l) - var(--safe-r));
+  top: var(--ctx-top); left: calc(var(--safe-l) + var(--inset-chrome));
+  max-width: calc(var(--app-w) - 2 * var(--inset-chrome) - var(--chrome-btn) - var(--gap-chrome) - var(--safe-l) - var(--safe-r));
   display: flex; align-items: center; gap: var(--s-2); flex-wrap: nowrap;
-  min-height: 36px; padding: 0 var(--s-1) 0 var(--s-3); border-radius: var(--r-capsule);
+  min-height: 36px; padding: 0 4px 0 var(--s-3); border-radius: var(--r-capsule);
   color: var(--label); font: var(--t-footnote); font-size: min(var(--size-footnote), var(--cap-footnote)); font-weight: var(--w-semibold);
+  animation: sb-materialize var(--m-materialize) var(--ease-standard);
 }
-.statuspill:not([hidden]) ~ .ctxbar { top: calc(var(--chip-top) + var(--pill-h, 44px) + var(--gap-chrome)); }   /* --pill-h: ui/pill.js */
 .ctxbar[hidden] { display: none; }
 .ctxbar .ctx-chips { display: flex; flex: none; flex-wrap: nowrap; gap: var(--s-1); align-items: center; }
-.ctxbar .ctx-more { color: var(--label-2); }
+.ctxbar .ctx-more { color: var(--label-glass-2); }
 .ctxbar .ctx-text { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ctxbar .ctx-btn {
-  position: relative; flex: none; min-height: 36px; padding: 0 var(--s-2); border-radius: var(--r-capsule);
-  color: var(--tint); font-weight: var(--w-semibold); transition: opacity var(--m-press) var(--ease-out);
+  position: relative; flex: none; min-height: 28px; padding: 0 var(--s-3); border-radius: var(--r-capsule);
+  background: var(--fill); color: var(--label); font-weight: var(--w-semibold); transition: opacity var(--m-press) var(--ease-out);
 }
-.ctxbar .ctx-btn::after { content: ""; position: absolute; inset: -4px -2px; }   /* 44 pt hit area */
+.ctxbar .ctx-btn::after { content: ""; position: absolute; inset: -8px -4px; }   /* 44 pt hit area */
 .ctxbar .ctx-btn:active { opacity: .6; }
+@keyframes sb-materialize { from { opacity: 0; transform: scale(.85); } }
 
-/* toast (10.19): capsule, inverse colors, centered 12 above the collapsed sheet's top edge (12 above the bottom bar when
-   the sheet is expanded); never over the search bar, the sheet title or Settings (audit defect 3) */
+/* expanded sheet (bottom-sheet layouts only): the sheet covers the map, so the map-only chrome steps aside until it comes
+   down again: the trip chip (it explains the map, which is hidden now) and the lower-right group (sheet.css). The
+   status banner, the simulated-buses chip and Settings always stay. */
+#ctxbar { transition: opacity var(--m-standard) var(--ease-standard), visibility 0s linear 0s; }
+@media not all and (min-width: 768px) and (max-height: 559px) {
+  #app:has(.sheet[data-detent="full"]) #ctxbar {
+    visibility: hidden; opacity: 0; pointer-events: none;
+    transition: opacity var(--m-exit) var(--ease-exit), visibility 0s linear var(--m-exit);
+  }
+}
+
+/* ---------- bottom row (glass spec 8.6, 8.7): the three sections as a floating glass capsule with a selection capsule
+   behind the selected item, and the search circle at its trailing end. 12 from the sides, its bottom edge
+   --bottom-inset above the screen's. Hidden while the keyboard is up and under overlays. ---------- */
+.bottomrow {
+  position: fixed; z-index: var(--z-nav);
+  left: calc(var(--safe-l) + var(--inset-chrome)); right: calc(var(--safe-r) + var(--inset-chrome)); bottom: var(--bottom-inset);
+  height: var(--row-h); display: flex; gap: var(--gap-chrome); pointer-events: none;
+  transition: opacity var(--m-materialize) var(--ease-standard), transform var(--m-materialize) var(--ease-standard), visibility 0s linear 0s;
+}
+.bottomrow > * { pointer-events: auto; }
+.tabcap {
+  position: relative; flex: 1; min-width: 0; height: var(--row-h); padding: 4px;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-radius: var(--r-glass);
+}
+/* the selection capsule (mTabPill): 4 inside the 56 bar, radius 24 (concentric), moved by transform only */
+.tab-pill {
+  position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / 3);
+  border-radius: 24px; background: var(--fill); pointer-events: none;
+  transform: translateX(calc(var(--tab-i, 0) * 100%));
+  transition: transform var(--m-tab-pill) var(--ease-tab-pill);
+}
+.tabcap button {
+  position: relative; z-index: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  border-radius: 24px; color: var(--label-glass-2); font: var(--t-tab);
+  transition: opacity var(--m-press) var(--ease-out);
+}
+.tabcap button:active { opacity: .6; }
+.tabcap .bn-ic { display: grid; place-items: center; width: var(--i-tab); height: var(--i-tab); }
+.tabcap .bn-ic > .ic { grid-area: 1 / 1; }
+.tabcap .bn-label { max-width: 100%; padding: 0 var(--s-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tabcap .ic-on { display: none; }
+/* selected: the capsule, the filled glyph in tint (an icon, 3:1 on glass), the label in label; never tint alone */
+.tabcap button[aria-current="page"] { color: var(--label); }
+.tabcap button[aria-current="page"] .bn-ic { color: var(--tint); }
+.tabcap button[aria-current="page"] .ic-on { display: block; }
+.tabcap button[aria-current="page"] .ic-off { display: none; }
+.tabcap button:focus-visible { outline-offset: -2px; }
+/* accessibility sizes, or a narrow screen with large text: icons only, the names stay in the accessible names (10) */
+html[data-text="ax"] .tabcap .bn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (max-width: 359px) { html[data-text="large"] .tabcap .bn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } }
+.searchcircle {
+  position: relative; flex: none; width: var(--search-btn); height: var(--search-btn); border-radius: 50%;
+  display: grid; place-items: center; color: var(--label);
+}
+.searchcircle .ic { width: 22px; height: 22px; }
+/* the keyboard is up (a text field in the sheet has focus on a touch screen) or an overlay is open: the row steps away */
+@media (pointer: coarse) {
+  #app:has(.sheet input:is([type="text"], [type="search"], :not([type])):focus) .bottomrow {
+    opacity: 0; visibility: hidden; transform: scale(.85);
+    transition: opacity var(--m-materialize-exit) var(--ease-exit), transform var(--m-materialize-exit) var(--ease-exit), visibility 0s linear var(--m-materialize-exit);
+  }
+}
+#app:has(.sto:not([data-state="closed"])) .bottomrow { visibility: hidden; }
+
+/* toast (glass spec 8.13): collapsed, leading 12 and 12 above the card, narrow enough to leave the lower-right group
+   free; expanded, centered 12 above the bottom row. Never over Row A, never over Settings or Lines by Time. */
 .toast {
-  position: fixed; z-index: var(--z-toast); left: 50%;
-  bottom: calc(var(--nav-h) + var(--v-peek) + var(--s-3));
-  width: max-content; max-width: min(calc(var(--app-w) - 2 * var(--inset-content)), 360px); min-height: var(--tap);
+  position: fixed; z-index: var(--z-toast); left: calc(var(--safe-l) + var(--inset-chrome));
+  bottom: calc(var(--v-peek-vis) + var(--s-3));
+  width: max-content; max-width: min(calc(var(--app-w) - 2 * var(--inset-chrome) - var(--chrome-btn) - var(--gap-chrome)), 360px); min-height: var(--tap);
   padding: var(--s-3) var(--s-5); border-radius: var(--r-capsule);
   background: var(--bg-inverse); color: var(--label-inverse); box-shadow: var(--e-3);
   font: var(--t-row-detail); font-weight: var(--w-semibold); text-align: center;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
-  transform: translate(-50%, 0); opacity: 1;
+  transform: translate(0, 0); opacity: 1;
   transition: opacity var(--m-standard) var(--ease-standard), transform var(--m-standard) var(--ease-standard);
   pointer-events: none;
 }
-#app:has(.sheet[data-detent="full"]) .toast { bottom: calc(var(--nav-h) + var(--s-3)); }
-.toast.hide { opacity: 0; transform: translate(-50%, 8px); transition-duration: var(--m-exit); transition-timing-function: var(--ease-exit); }
+#app:has(.sheet[data-detent="full"]) .toast { left: 50%; bottom: calc(var(--nav-h) + var(--s-3)); transform: translate(-50%, 0); max-width: min(calc(var(--app-w) - 2 * var(--inset-content)), 360px); }
+.toast.hide { opacity: 0; transform: translate(0, 8px); transition-duration: var(--m-exit); transition-timing-function: var(--ease-exit); }
+#app:has(.sheet[data-detent="full"]) .toast.hide { transform: translate(-50%, 8px); }
 #app:has(.sto:not([data-state="closed"])) .toast { opacity: 0; visibility: hidden; }   /* never over Settings or Lines by Time */
 
 /* Leaflet chrome adjustments (map.css owns the rest, incl. the map credit) */
@@ -260,33 +260,36 @@ html[data-text="ax"] .searchbar-text .sb-short { display: inline; }
 /* boot fallback when Leaflet/CDN failed */
 .nomap #map { background: var(--map-land); }
 
+/* wide + short screens (phone landscape): the sheet is a floating leading panel; the bottom row sits at the bottom of
+   the panel column, the top rows over the map to its right (glass spec 3) */
 @media (min-width: 768px) and (max-height: 559px) {
   .statuspill, .ctxbar { left: calc(var(--panel-w) + 24px); right: calc(var(--safe-r) + 68px); max-width: 520px; }
-  .topbar { left: calc(var(--panel-w) + 24px); max-width: 560px; }
-  .bottomnav {
-    left: calc(var(--safe-l) + 12px); right: auto; bottom: 12px; width: var(--panel-w); height: 58px;
-    padding: 0 var(--s-2); border-radius: 0 0 var(--r-sheet) var(--r-sheet); box-shadow: inset 0 .5px 0 var(--separator), var(--e-1);
-  }
-  .toast { left: calc(var(--panel-w) + 24px + (var(--app-w) - var(--panel-w) - 24px) / 2); bottom: 24px; }
+  .statuspill[data-form="chip"] { right: auto; }
+  .bottomrow { right: auto; width: var(--panel-w); left: calc(var(--safe-l) + 12px); bottom: 12px; }
+  .toast, #app:has(.sheet[data-detent="full"]) .toast { left: calc(var(--panel-w) + 24px + (var(--app-w) - var(--panel-w) - 24px) / 2); bottom: 24px; transform: translate(-50%, 0); }
 }
 
 @media (forced-colors: active) {
-  .fab, .statuspill, .ctxbar, .toast { border: 1px solid CanvasText; }
-  .searchbar, .bottomnav { border: 1px solid CanvasText; }
-  .bottomnav button[aria-current="page"] { outline: 2px solid Highlight; }
+  .glass, .statuspill, .ctxbar, .toast { border: 1px solid CanvasText; }
+  .tabcap button[aria-current="page"] { outline: 2px solid Highlight; }
   .statuspill .pillbtn, .ctxbar .ctx-btn { border: 1px solid ButtonText; }
 }
 @media (prefers-contrast: more) {
   .statuspill, .toast { outline: 1px solid var(--label); }
 }
 
-/* reduced motion (spec 9): no slides or springs, 150 ms crossfades; press feedback is opacity only */
+/* reduced motion (spec 9, glass spec 7): no slides, springs, swells or overshoot; 150 ms crossfades; press feedback is
+   opacity only */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .001ms !important; animation-iteration-count: 1 !important;
     transition-duration: var(--m-quick) !important; scroll-behavior: auto !important;
   }
-  .toast, .toast.hide { transform: translate(-50%, 0); }
+  .gpress:active { transform: none; opacity: .6; }
+  .tab-pill { transition: none !important; }
+  .toast, .toast.hide { transform: translate(0, 0); }
+  #app:has(.sheet[data-detent="full"]) .toast, #app:has(.sheet[data-detent="full"]) .toast.hide { transform: translate(-50%, 0); }
+  .bottomrow { transform: none !important; }
 }
 
 /* ---- desktop / tablet: the whole app inside an iPhone-sized frame (393 x 852 CSS px) ----

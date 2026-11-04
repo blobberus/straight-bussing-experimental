@@ -202,11 +202,14 @@ test("routes: eye toggle hides a route (persisted) and shows it again", async ()
   await waitFor(() => !state().hiddenRoutes.includes(rid) && !$(`.v-routerow.is-off .v-eye[data-id="${rid}"]`), "route shown");
 });
 
-test("layout: search bar on top opens Directions; bottom navigation; Edit map order first on Routes", async () => {
-  const sb = $("#searchBar"), nav = $("#tabs");
-  ok(sb && sb.dataset.action === "dir:open" && sb.dataset.focus === "to" && /destination/i.test(sb.getAttribute("aria-label")), "search bar");
-  ok(nav.getBoundingClientRect().bottom >= W.innerHeight - 1 && !$("#sheetHead #tabs"), "navigation at the bottom, not in the sheet");
-  ok(sb.getBoundingClientRect().bottom <= $("#sheet").getBoundingClientRect().top, "search bar above the sheet");
+test("layout: the search circle beside the tab bar opens Directions; floating tab bar; Edit map order first on Routes", async () => {
+  // glass spec 3, 8.6, 8.7: the tab bar and the search circle float at the bottom, the collapsed card above them
+  const sb = $("#searchBar"), nav = $("#tabs"), frameK = parseFloat(W.getComputedStyle(D.documentElement).getPropertyValue("--frame-k")) || 1;
+  ok(sb && sb.dataset.action === "dir:open" && sb.dataset.focus === "to" && /destination/i.test(sb.getAttribute("aria-label")), "search circle");
+  const nb = nav.getBoundingClientRect(), sbr = sb.getBoundingClientRect(), app = $("#app").getBoundingClientRect(), bottom = app.height > 100 ? app.bottom : W.innerHeight;
+  ok(!$("#sheetHead #tabs") && nb.bottom <= bottom && nb.bottom >= bottom - 40 * frameK, "tab bar floats at the bottom, not in the sheet");
+  ok(Math.abs(sbr.top - nb.top) < 1 && sbr.left > nb.right && Math.abs(sbr.width - sbr.height) < 1, "search circle at the tab bar's trailing end");
+  ok(sbr.top >= $("#sheet").getBoundingClientRect().top + 30 * frameK, "the collapsed card sits above the bottom row");
   tab("routes");
   await waitFor(() => $('#content [data-region="routes-top"]'), "routes top region");
   // DESIGN-SPEC 10.6: Edit map order is the header's trailing action, before every list control
@@ -215,7 +218,7 @@ test("layout: search bar on top opens Directions; bottom navigation; Edit map or
   ok(!$('#content [data-action="pick:open"]') && !$('#content [data-action="dir:open"]'), "no Routes to station / Directions on Routes");
   tab("nearby");
   await waitFor(() => title() === "Current trip" && $("#content .pt-hint") && !$("#content .pt-notrip"), "Current trip view with the quiet no-trip hint (no card)");
-  eq($$('#content [data-action="dir:open"]').length, 0, "destination search lives in the top bar");
+  eq($$('#content [data-action="dir:open"]').length, 0, "destination search lives in the search circle");
   eq($$('#content [data-action="pick:open"]').length, 1, "one Routes to station entry");
 });
 
@@ -318,39 +321,28 @@ test("sheet: the grab bar is never covered, and a drag from it that leaves the h
 
 test("directions: place + station, stubbed sidewalk walking, option drawn on the map", async () => {
   tab("nearby");
-  // like Google Maps (owner 2026-10-12): the search bar itself turns into the Start / Destination card at the top
-  const bar = $("#topbar .searchbar").getBoundingClientRect();
-  const near = (a, b) => Math.abs(a.left - b.left) < 2 && Math.abs(a.top - b.top) < 2 && Math.abs(a.width - b.width) < 2;
-  const r4 = (r) => [r.left, r.top, r.width, r.height].map(Math.round);
-  click($("#searchBar"), "search bar");
-  const card = await waitFor(() => { const c = $("#dirbar"); return c && !c.hidden && c.querySelector('[data-input="dir-to"]') ? c : null; }, "the card with the fields");
-  const anims = card.getAnimations();
-  if (anims.length) {
-    anims.forEach((an) => { an.pause(); an.currentTime = 0; });
-    const g0 = card.getBoundingClientRect();
-    ok(near(g0, bar) && Math.abs(g0.height - bar.height) < 2, `starts as the bar: ${r4(g0)} vs ${r4(bar)}`);
-    anims.forEach((an) => an.finish());
-  }
-  const c1 = card.getBoundingClientRect();
-  ok(near(c1, bar), `the card sits where the bar was: ${r4(c1)} vs ${r4(bar)}`);
-  eq(W.getComputedStyle($("#topbar .searchbar")).display, "none", "the bar itself is gone");
-  ok(!$("#content .v-dirbox"), "the fields are not in the sheet");
+  // like Apple Maps (glass spec 2.2, 9.2): the search circle opens the expanded sheet with the Start / Destination card at
+  // its top, Destination focused; the bottom row steps aside while the keyboard is up (touch screens)
+  click($("#searchBar"), "search circle");
+  const card = await waitFor(() => { const c = $("#content .v-dirbox"); return c && c.querySelector('[data-input="dir-to"]') ? c : null; }, "the card with the fields in the sheet");
   await waitFor(() => D.activeElement === card.querySelector('[data-input="dir-to"]'), "keyboard on Destination");
-  eq($("#sheet").dataset.detent, "full", "the sheet holds the suggestions");
-  const sheetTopUp = () => { const sh = $("#sheet"), t = W.getComputedStyle(sh).transform; return sh.getBoundingClientRect().top - (t && t !== "none" ? new W.DOMMatrixReadOnly(t).m42 : 0); };
-  ok(sheetTopUp() >= c1.bottom - 1, `the sheet never rises over the card: ${Math.round(sheetTopUp())} vs ${Math.round(c1.bottom)}`);
-  // collapsing puts the keyboard away and leaves the map between the card and the collapsed sheet
+  eq($("#sheet").dataset.detent, "full", "the sheet expands with the fields and the suggestions");
+  ok(card === $("#content .v-dir").firstElementChild, "the card is the first thing in the sheet");
+  eq(W.getComputedStyle(card).position, "sticky", "pinned while the results scroll");
+  ok(!$("#dirbar"), "no card over the map any more");
+  // collapsing puts the keyboard away; the card is part of the sheet, so the collapsed card shows only the header
   $("#grab").dispatchEvent(new W.KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
   await waitFor(() => $("#sheet").dataset.detent === "peek" || null, "collapsed");
   ok(!/^(INPUT|TEXTAREA)$/.test(D.activeElement?.tagName || ""), "keyboard put away when collapsed");
-  ok(!card.hidden && near(card.getBoundingClientRect(), bar), "the card stays at the top");
-  const from = await waitFor(() => state().view === "directions" && $('#dirbar [data-input="dir-from"]'), "start field");
+  eq(title(), "Directions", "the collapsed card says Directions");
+  const from = await waitFor(() => state().view === "directions" && $('#content [data-input="dir-from"]'), "start field");
+  $("#grab").dispatchEvent(new W.KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+  await waitFor(() => $("#sheet").dataset.detent === "full" || null, "expanded again");
   from.focus();
-  await waitFor(() => $("#sheet").dataset.detent === "full" || null, "focusing a field expands the sheet");
   type(from, "e2e start", "start field");
   const placeSug = await waitFor(() => $$('#content [data-action="dir:sug"]').find((b) => /E2E Start Place/.test(txt(b))), "place suggestion");
   click(placeSug, "place suggestion");
-  const to = $('#dirbar [data-input="dir-to"]');
+  const to = $('#content [data-input="dir-to"]');
   to.focus();
   type(to, stopName(T.Dst), "destination field");
   const stopSug = await waitFor(() => $$('#content [data-action="dir:sug"]').find((b) => txt(b).startsWith(stopName(T.Dst))), "stop suggestion");
@@ -383,9 +375,7 @@ test("directions: place + station, stubbed sidewalk walking, option drawn on the
   eq(title(), "Current trip", "sheet title, expanded (the next-step card says the step; collapsed: trip-arriving.js)");
   eq($('#tabs button[data-tab="nearby"]').getAttribute("aria-current"), "page", "Current trip tab selected");
   eq($("#sheet").dataset.detent, "full", "expanded: the trip progress");
-  ok($("#dirbar").hidden && W.getComputedStyle($("#topbar .searchbar")).display !== "none", "leaving Directions: the card turns back into the bar");
-  for (const an of $("#topbar .searchbar").getAnimations()) an.finish();
-  ok(near($("#topbar .searchbar").getBoundingClientRect(), bar), "the bar is back in the same place");
+  ok(!$("#content .v-dirbox"), "leaving Directions: the card goes with its view");
   ok($("#content [data-region='nearby-trip'] .tp-title"), "the trip in progress leads, above the next bus");
   await waitFor(() => D.activeElement === tt, "focus on the trip title");
   ok($$("#map .sb-plan-casing").length > 0, "the trip stays on the map");
@@ -490,13 +480,20 @@ test("status pill: an empty feed while a route is scheduled says no bus reports 
   await waitFor(() => $("#pill").hidden && state().buses.length, "live buses back, pill hidden");
 });
 
-test("settings gear: top-right, labeled, 44px target, clear of the locate button", async () => {
-  const g = $("#settingsBtn"), loc = $("#locateBtn");
+/** Collapse the sheet (the lower-right group rides on the collapsed card and hides when it is expanded). */
+async function collapseSheet() {
+  $("#grab").dispatchEvent(new W.KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
+  await waitFor(() => $("#sheet").dataset.detent === "peek" || null, "sheet collapsed");
+}
+
+test("settings gear: a glass circle top right (Row B), labeled, 44px target, clear of the lower-right group", async () => {
+  await collapseSheet();
+  const g = $("#settingsBtn"), loc = $("#locateBtn"), k = parseFloat(W.getComputedStyle(D.documentElement).getPropertyValue("--frame-k")) || 1;
   ok(g && g.getAttribute("aria-label") === "Settings" && g.dataset.action === "settings:open", "gear button");
-  const r = g.getBoundingClientRect(), l = loc.getBoundingClientRect();
-  ok(r.width >= 44 && r.height >= 44, "44px target: " + r.width + "x" + r.height);
-  ok(r.bottom <= l.top, "gear sits above the locate button");
-  ok(W.innerWidth - r.right <= 16, "right edge");
+  const r = g.getBoundingClientRect(), l = loc.getBoundingClientRect(), app = $("#app").getBoundingClientRect(), right = app.width > 100 ? app.right : W.innerWidth;
+  ok(r.width >= 44 * k - 0.5 && r.height >= 44 * k - 0.5, "44px target: " + r.width + "x" + r.height);
+  ok(r.bottom <= l.top, "Settings at the top, Locate low on the right (glass spec 4)");
+  ok(right - r.right <= 16 * k, "right edge");
   click(g, "gear");
   const o = await waitFor(() => { const x = $("#settingsOverlay"); return x && !x.hidden && x.dataset.state === "open" ? x : null; }, "Settings overlay opened from the gear");
   eq([o.getAttribute("role"), o.getAttribute("aria-modal")], ["dialog", "true"], "modal dialog");
@@ -515,12 +512,14 @@ test("settings gear: top-right, labeled, 44px target, clear of the locate button
   await waitFor(() => o.dataset.state === "closed", "Done closes Settings");
 });
 
-test("lines by time: the clock next to the gear opens the menu; Set time shows only those lines; deselecting one drops the name", async () => {
-  const c = $("#timeBtn"), g = $("#settingsBtn");
+test("lines by time: the clock over Locate in the lower-right group opens the menu; Set time shows only those lines; deselecting one drops the name", async () => {
+  await collapseSheet();
+  const c = $("#timeBtn"), l = $("#locateBtn"), k = parseFloat(W.getComputedStyle(D.documentElement).getPropertyValue("--frame-k")) || 1;
   ok(c && c.getAttribute("aria-label") === "Lines by Time" && c.dataset.action === "time:open", "clock button");
-  const r = c.getBoundingClientRect(), gr = g.getBoundingClientRect();
-  ok(r.width >= 44 && r.height >= 44, "44px target: " + r.width + "x" + r.height);
-  ok(Math.abs(r.top - gr.top) < 2 && r.right <= gr.left + 1 && gr.left - r.right < 12, "right next to the gear, same row");
+  const r = c.getBoundingClientRect(), lr = l.getBoundingClientRect();
+  ok(r.width >= 44 * k - 0.5 && r.height >= 44 * k - 0.5, "44px target: " + r.width + "x" + r.height);
+  ok(c.closest("#mapctl") && Math.abs(r.left - lr.left) < 1 && r.bottom <= lr.top + 1, "the top slot of the lower-right group, Locate under it (Map Modes' place in Apple Maps)");
+  ok(r.bottom <= $("#sheet").getBoundingClientRect().top, "riding above the collapsed card");
   click(c, "clock");
   const o = await waitFor(() => { const x = $("#settingsOverlay"); return x && !x.hidden && x.dataset.state === "open" && x.dataset.kind === "time" ? x : null; }, "Lines by Time open");
   eq(txt($("#stoTitle")), "Lines by Time");

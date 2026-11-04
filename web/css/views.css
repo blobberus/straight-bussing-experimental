@@ -154,7 +154,13 @@
 /* ---------- Directions field card (10.2): two 44 fields in fill (radius 10, concentric with the 20 card and its
    10 inset), a hollow tint ring for Start and a dangerFill dot for Destination, the swap button at the trailing edge
    centered between the fields, a clear button in a focused field ---------- */
-.v-dirbox { position: relative; display: flex; flex-direction: column; gap: var(--s-2); margin: 0 0 var(--s-3); padding-right: 48px; }
+/* glass spec 9.2: the card is the first thing in the expanded sheet (content layer, solid bgCard, not glass), pinned at
+   the top while the suggestions and options scroll under it; a strip of the sheet color covers what scrolls above it */
+.v-dirbox {
+  position: sticky; top: 0; z-index: 2; display: flex; flex-direction: column; gap: var(--s-2);
+  margin: 0 0 var(--s-3); padding: 10px 56px 10px 10px; border-radius: var(--r-card); background: var(--bg-card);
+  box-shadow: 0 calc(-1 * var(--s-1)) 0 var(--s-1) var(--bg-sheet);
+}
 .v-dfield { position: relative; }
 .v-dfield input { border-radius: var(--r-nested); padding-right: 40px; }
 .v-pin { position: absolute; left: 14px; top: 50%; width: 10px; height: 10px; margin-top: -5px; box-sizing: border-box; border-radius: 50%; }
@@ -163,7 +169,7 @@
 .v-si .v-pin { position: static; display: inline-block; margin: 0; }
 .v-dclear { position: absolute; right: 0; top: 0; display: none; place-items: center; width: var(--tap); height: var(--tap); border: 0; background: none; color: var(--label-3); cursor: pointer; }
 .v-dfield:focus-within input:not(:placeholder-shown) ~ .v-dclear { display: grid; }
-.v-dswap { position: absolute; right: 0; top: 50%; width: var(--tap); height: var(--tap); margin-top: -22px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--tint); cursor: pointer; transition: opacity var(--m-press) var(--ease-out); }
+.v-dswap { position: absolute; right: 6px; top: 50%; width: var(--tap); height: var(--tap); margin-top: -22px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--tint); cursor: pointer; transition: opacity var(--m-press) var(--ease-out); }
 .v-dswap:active { opacity: .6; }
 .v-sugs { margin-top: 0; }
 .v-sugs .v-row { min-height: 56px; }

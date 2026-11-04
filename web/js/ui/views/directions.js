@@ -12,11 +12,10 @@
  * that trip's routes, the plan stays drawn (also after leaving the view), and the sheet switches to Current trip
  * with the trip in progress first. Back here, a trip bar with "End trip" (journey:end, registered by the shell)
  * heads the results. Picking another option updates the journey; changing an endpoint ends it. Opened from the
- * search bar (dir:open, data-focus="to"); parent view 'nearby' (Current trip). Like Google Maps (owner 2026-10-12):
- * the search bar itself turns into a card with the Start / Destination fields at the top of the screen (#dirbar,
- * in the bar's place; FLIP from the bar's rect), the sheet below holds the suggestions and options; collapsing
- * the sheet puts the keyboard away and leaves the map visible under the card; leaving Directions shrinks the card
- * back into the bar. Focusing a field expands the sheet. In the landscape panel the fields stay in the panel.
+ * search circle (dir:open, data-focus="to"); parent view 'nearby' (Current trip). Like Apple Maps (glass spec 2.2, 9.2):
+ * the Start / Destination card is the first thing in the expanded sheet, pinned while the results scroll, Destination
+ * focused; collapsing the sheet puts the keyboard away and shows the selected option on the map (the card shows
+ * again when the sheet expands). Focusing a field expands the sheet.
  * Walking is always visible: card + step markup in ./tripinfo.js.
  */
 import { registerView } from "../router.js";
@@ -33,7 +32,6 @@ import { walkRoute } from "../../core/walk.js";
 import { createThrottle } from "../../core/throttle.js";
 import { predict } from "../../core/predict.js";
 import { routeChip, emptyState, skeleton, OFFICIAL_PHONE } from "../components.js";
-import { PANEL_MEDIA } from "../sheet.js";
 import { matchStations, ICONS } from "./pick.js";
 import { noBusHelpHTML } from "./alerts.js";   // the operator's own words + who to call when no bus reports (rider safety)
 import { createPlaceSearch, assumeNoteHTML, setHTMLKeepFocus, focusNote } from "./placesearch.js";
@@ -238,7 +236,7 @@ function field(key) {
  * @returns {string}
  */
 export function renderDirections(state, now = nowS()) {
-  return `<div class="v-dir">${useBar() ? "" : dirboxHTML()}<div data-region="dir-sug">${sugHTML()}</div><div data-region="dir-res">${resHTML(state, now)}</div></div>`;
+  return `<div class="v-dir">${dirboxHTML()}<div data-region="dir-sug">${sugHTML()}</div><div data-region="dir-res">${resHTML(state, now)}</div></div>`;
 }
 /** The Start / Destination fields with the swap button (in the top card, or in the panel). */
 function dirboxHTML() {
@@ -418,8 +416,6 @@ export function mountDirections(root, ctx) {
   unmountDirections();
   offPlanWatch?.(); offPlanWatch = null;
   rootRef = root; ctxRef = ctx; lastHtml["dir-sug"] = lastHtml["dir-res"] = undefined; liveReplan.reset();
-  const from = D.morphFrom; D.morphFrom = null;
-  if (useBar()) showBar(from);
   const state = cur();
   if (!D.from && !D.fromText && state.user) { D.from = me(state.user); setInput("from"); }
   lastUser = state.user;
@@ -463,87 +459,11 @@ export function onSheetRest(p) {
 }
 
 /** Unmount: clear the plan from the map (kept while a trip is on, until it ends), stop async updates (endpoints are kept). */
-/**
- * The search bar's bubble and label rects, read before the view switch hides the bar; null when no morph should
- * run (no bar, Reduce Motion, panel layout, no Web Animations).
- * @returns {{bubble:DOMRect, label:DOMRect|null, html:string}|null}
- */
-export function barRects() {
-  if (typeof document === "undefined") return null;
-  const bar = document.querySelector("#topbar .searchbar"), btn = document.getElementById("searchBar");
-  if (!bar || typeof bar.animate !== "function") return null;
-  if (matchMedia?.("(prefers-reduced-motion: reduce)").matches || matchMedia?.(PANEL_MEDIA).matches) return null;
-  const bubble = bar.getBoundingClientRect();
-  if (!(bubble.width > 0 && bubble.height > 0)) return null;
-  return { bubble, label: btn ? btn.getBoundingClientRect() : null, html: btn ? btn.innerHTML : "" };
-}
-
-/* ---------- the top card (owner 2026-10-12, like Google Maps): Start / Destination live where the search bar is ---------- */
-let barEl = null, barObs = null;
-const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-/** The fields go to the top card (#dirbar) on phones and in the phone frame; in the landscape panel they stay in it. */
-export function useBar() {
-  return typeof document !== "undefined" && !!document.getElementById("dirbar") && !(typeof matchMedia === "function" && matchMedia(PANEL_MEDIA).matches);
-}
-/** Look a selector up in the top card first, then in the sheet. */
-const fq = (sel) => barEl?.querySelector?.(sel) || rootRef?.querySelector?.(sel) || null;
-const inFields = (el) => !!el && (!!barEl?.contains?.(el) || !!rootRef?.contains?.(el));
-function timing() {
-  const css = getComputedStyle(document.documentElement);
-  // mMorph (DESIGN-SPEC 9): 300 ms on the standard curve, search bar into the Directions card and back
-  return { dur: parseFloat(css.getPropertyValue("--m-morph")) || 300, ease: css.getPropertyValue("--ease-standard").trim() || "cubic-bezier(.2, 0, 0, 1)" };
-}
-/** FLIP: animate `el` from rect `from` to where it is now, its children fading in over the second part. */
-function flipFrom(el, from, round) {
-  if (!el || !from || typeof el.animate !== "function" || reduced()) return false;
-  const r = el.getBoundingClientRect();
-  if (!(r.width > 0 && r.height > 0 && from.width > 0 && from.height > 0)) return false;
-  const { dur, ease } = timing(), sx = from.width / r.width, sy = from.height / r.height;
-  const end = getComputedStyle(el).borderRadius || "20px", rad = round != null ? round : from.height / 2;
-  el.animate([
-    { transform: `translate(${from.left - r.left}px, ${from.top - r.top}px) scale(${sx}, ${sy})`, borderRadius: `${rad / sx}px / ${rad / sy}px` },
-    { transform: "none", borderRadius: end },
-  ], { duration: dur, easing: ease });
-  for (const kid of el.children) kid.animate([{ opacity: 0 }, { opacity: 0, offset: 0.35 }, { opacity: 1 }], { duration: dur });
-  return true;
-}
-function showBar(from) {
-  barEl = document.getElementById("dirbar");
-  if (!barEl) return;
-  barEl.innerHTML = dirboxHTML();
-  barEl.hidden = false;
-  barEl.addEventListener("focusin", onFocus);
-  barEl.addEventListener("input", onInput);
-  barEl.addEventListener("keydown", onKey);
-  const app = document.getElementById("app");
-  const fit = () => app?.style?.setProperty("--dirbar-h", barEl.offsetHeight + "px");   // the sheet's top stops below it
-  fit();
-  barObs?.disconnect();
-  if (typeof ResizeObserver === "function") { barObs = new ResizeObserver(fit); barObs.observe(barEl); }
-  flipFrom(barEl, from?.bubble);              // the bar itself grows into the card, in the same place
-}
-function hideBar() {
-  if (!barEl) return;
-  const el = barEl;
-  barEl = null;
-  barObs?.disconnect(); barObs = null;
-  el.removeEventListener("focusin", onFocus);
-  el.removeEventListener("input", onInput);
-  el.removeEventListener("keydown", onKey);
-  const card = el.hidden ? null : el.getBoundingClientRect();
-  if (el.contains(document.activeElement)) document.activeElement.blur?.();
-  el.hidden = true;
-  el.innerHTML = "";
-  document.getElementById("app")?.style?.removeProperty("--dirbar-h");
-  const app = document.getElementById("app");
-  if (card && app?.dataset?.view !== "directions") {   // leaving Directions: the card shrinks back into the bar
-    const bar = document.querySelector("#topbar .searchbar");
-    flipFrom(bar, card, 20);
-  }
-}
+/** Look a selector up in the view (the Start / Destination card is part of it). */
+const fq = (sel) => rootRef?.querySelector?.(sel) || null;
+const inFields = (el) => !!el && !!rootRef?.contains?.(el);
 
 export function unmountDirections() {
-  hideBar();
   if (rootRef) { rootRef.removeEventListener("focusin", onFocus); rootRef.removeEventListener("input", onInput); rootRef.removeEventListener("keydown", onKey); }
   offStore?.(); offStore = null; offInset?.(); offInset = null; photon.cancel(); liveReplan.reset(); D.token++; D.active = null; D.sugs = [];
   const st = ctxRef?.store, keep = !!st && isPlanJourney(st.get());
@@ -589,10 +509,7 @@ registerView("directions", {
 
 /** dir:open from Plan Trip's "Where to?" (data-focus="to") focuses the destination field on mount. */
 registerAction("dir:open", (ds, ev, ctx) => {
-  if (ds?.focus === "to") {
-    D.focusTo = true;
-    try { D.morphFrom = barRects(); } catch (e) { D.morphFrom = null; }   // before the switch hides the bar
-  }
+  if (ds?.focus === "to") D.focusTo = true;
   ctx.navigate("directions");
 });
 const endTrip = (ctx, yes) => { if (yes && isPlanJourney(ctx.store.get())) ctx.store.set({ journey: null }); };   // a stop's new endpoints end a started trip, never re-target it (iOS parity)

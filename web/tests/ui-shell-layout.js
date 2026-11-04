@@ -1,20 +1,22 @@
-// Layout tests for the floating chrome vs the bottom sheet (SHELL): the real tokens.css / base.css /
-// sheet.css in an iframe with the index.html chrome, as a phone (393x852) and as the desktop phone frame.
-// The sheet must not move, resize or change its content padding when the context chip (#ctxbar)
-// appears / disappears, at any detent; the chip hides at the full detent; the status pill always shows
-// and the full detent stops below it; a status pill change never moves the sheet at peek / half.
+// Layout tests for the glass control layer vs the bottom sheet (SHELL, docs/DESIGN-SPEC-GLASS.md 3): the real
+// tokens.css / base.css / sheet.css in an iframe with the index.html chrome, as a phone (393x852) and as the desktop
+// phone frame. The sheet must not move, resize or change its content padding when the trip chip (#ctxbar) appears or
+// goes, at any detent; the chip hides at the full detent; the status banner always shows and the full detent stops
+// below the top rows; a banner change never moves the collapsed card. Plus the glass geometry: the floating bottom row,
+// the inset collapsed card, the Settings circle and the lower-right group riding on the card.
 import { test, eq, ok, near } from "./lib.js";
 import { createSheet } from "../js/ui/sheet.js";
 
 const PHONE = "(min-width: 99999px)"; // force detent mode for createSheet whatever the test window is
 const CHROME = `<div id="app" class="app"><div id="map"></div>
-<div id="topbar" class="topbar"><div class="searchbar"><button id="searchBar" class="searchbar-btn" type="button">Search</button><button id="settingsBtn" class="searchbar-gear" type="button" aria-label="Settings">G</button></div></div>
-<button id="locateBtn" class="fab" type="button" aria-label="Show my location">L</button>
 <div id="pill" class="statuspill" role="status" hidden><span id="pillText" class="pilltext">No shuttles running right now</span></div>
+<div id="topbar" class="topbar"><button id="settingsBtn" class="glass gcircle" type="button" aria-label="Settings">G</button></div>
 <div id="ctxbar" class="ctxbar" role="status" hidden><span class="ctx-text"><span class="ctx-v">My commute</span></span><button type="button" class="ctx-btn">Clear</button></div>
-<section id="sheet" class="sheet" data-detent="half"><header id="sheetHead" class="sheet-head"><button id="grab" class="grab" type="button"></button><div class="titleline"><h1 id="title" class="sheet-title">My Routes</h1></div></header>
-<div id="content" class="sheet-content"><div style="height:1400px">rows</div></div></section>
-<nav id="tabs" class="bottomnav"><button type="button">A</button><button type="button">B</button><button type="button">C</button></nav>
+<section id="sheet" class="sheet" data-detent="half"><div class="sheet-bg"><div id="cardGlass" class="sheet-glass glass"></div><div id="cardSolid" class="sheet-solid"></div></div>
+<header id="sheetHead" class="sheet-head"><button id="grab" class="grab" type="button"></button><div class="titleline"><h1 id="title" class="sheet-title">My Routes</h1></div></header>
+<div id="content" class="sheet-content"><div style="height:1400px">rows</div></div>
+<div id="mapctl" class="mapctl glass"><button id="timeBtn" class="mapctl-btn" type="button">T</button><span class="mapctl-sep"></span><button id="locateBtn" class="mapctl-btn" type="button" aria-label="Show my location">L</button></div></section>
+<div id="bottomrow" class="bottomrow"><nav id="tabs" class="tabcap glass"><span class="tab-pill" id="tabPill"></span><button type="button">A</button><button type="button">B</button><button type="button">C</button></nav><button id="searchBar" class="glass searchcircle" type="button">S</button></div>
 <div id="toast" class="toast hide"></div></div>`;
 
 /** Load the chrome with the real CSS into an iframe of the given size; transitions off so reads are final. */
@@ -42,28 +44,25 @@ async function frame(w, h) {
   };
 }
 
-test("layout: map chrome text stops growing at 1.35 x, sheet text does not (spec 2.2; the Directions fields too, as on iOS)", async () => {
+test("layout: map chrome text stops growing at 1.35 x, sheet text does not (spec 2.2; the Directions card is sheet content now)", async () => {
   const f = document.createElement("iframe");
   f.style.cssText = "position:absolute;left:-10000px;top:0;width:393px;height:852px;border:0";
   const css = ["tokens", "base", "sheet", "components", "views"].map((n) => `<link rel="stylesheet" href="../css/${n}.css">`).join("");
   // 34 px root = 200% browser text (2 x 17)
   f.srcdoc = `<!doctype html><html style="font-size:34px"><head>${css}</head><body><div id="app" class="app">`
-    + '<div class="searchbar"><button class="searchbar-btn" type="button"><span class="searchbar-text">Search for a destination</span></button></div>'
-    + '<div class="dirbar"><div class="v-dirbox"><div class="v-dfield"><input type="text" value="My location"></div></div></div>'
     + '<div id="pill" class="statuspill" data-form="banner"><span class="pilltext">Live data delayed.</span></div>'
     + '<div id="ctxbar" class="ctxbar"><span class="ctx-text"><span class="ctx-v">Trip to X</span></span></div>'
-    + '<nav class="bottomnav"><button type="button"><span class="bn-label">Routes</span></button></nav>'
+    + '<div class="bottomrow"><nav class="tabcap"><button type="button"><span class="bn-label">Routes</span></button></nav></div>'
     + '<section id="sheet" class="sheet"><div class="sheet-content"><label class="v-search"><input type="text" value="Search stations"></label>'
     + '<div class="v-dirbox"><div class="v-dfield"><input id="panelField" type="text" value="My location"></div></div></div></section></div></body></html>';
   await new Promise((res) => { f.onload = res; document.body.appendChild(f); });
   try {
     const d = f.contentDocument, px = (sel) => parseFloat(f.contentWindow.getComputedStyle(d.querySelector(sel)).fontSize);
-    near(px(".searchbar-btn"), 22.95, 0.1, "search bar: body capped at 17 x 1.35");
-    near(px(".dirbar .v-dfield input"), 22.95, 0.1, "Directions fields over the map: the same cap");
     near(px("#pill"), 20.25, 0.1, "status banner: rowDetail capped at 15 x 1.35");
-    near(px(".bottomnav button"), 14.85, 0.1, "tab labels: 11 x 1.35");
+    near(px(".tabcap button"), 14.85, 0.1, "tab labels: 11 x 1.35");
+    near(px("#ctxbar"), 17.55, 0.1, "trip chip: footnote capped at 13 x 1.35");
     near(px(".v-search input"), 34, 0.1, "sheet content never caps");
-    near(px("#panelField"), 34, 0.1, "the same fields in the sheet (landscape panel) keep growing");
+    near(px("#panelField"), 34, 0.1, "the Start / Destination card is sheet content (glass spec 9.2): it keeps growing");
   } finally { f.remove(); }
 });
 
@@ -138,7 +137,7 @@ for (const [name, w, h] of [["phone", 393, 852], ["desktop frame", 1000, 900]]) 
         t.set({ detent: "full", pill, chip: true });
         ok(!t.visible("ctxbar"), "chip hidden at full");
         eq(t.f.contentWindow.getComputedStyle(t.$("ctxbar")).pointerEvents, "none", "hidden chip takes no taps");
-        ok(!t.visible("locateBtn"), "locate button hidden at full");
+        ok(!t.visible("locateBtn") && !t.visible("timeBtn"), "the lower-right group hidden at full");
       }
     } finally { t.done(); }
   });
@@ -154,31 +153,32 @@ for (const [name, w, h] of [["phone", 393, 852], ["desktop frame", 1000, 900]]) 
       }
       t.set({ detent: "full", pill: true, chip: true });
       ok(t.visible("pill"), "pill visible at full");
-      near(t.rect("sheet").top, t.rect("pill").bottom + 8, 1, "full sheet starts 8px below the pill");
+      near(t.rect("settingsBtn").top, t.rect("pill").bottom + 8, 1, "Row B (Settings) 8 below the banner (Row A)");
+      near(t.rect("sheet").top, t.rect("settingsBtn").bottom + 8, 1, "full sheet starts 8 below the lowest top row");
       const withPill = t.geo();
       t.set({ pill: false });
       const noPill = t.geo();
       eq(noPill.h, withPill.h, "sheet element height constant (--v-max)");
       ok(noPill.top < withPill.top, "without the pill the full detent is taller");
-      near(noPill.top, t.rect("searchBar").bottom + 10, 3, "full sheet tucks 8px under the search bar");
+      near(noPill.top, t.rect("settingsBtn").bottom + 8, 1, "no banner: the full sheet starts 8 below the Settings row");
       // a two-line pill (main.js sets --pill-h from its real height): chip and full detent follow
       t.$("app").style.setProperty("--pill-h", "62px");
       t.set({ detent: "half", pill: true, chip: true });
-      near(t.rect("ctxbar").top, t.rect("pill").top + 62 + 8, 1, "chip below a 62px pill");
+      near(t.rect("ctxbar").top, t.rect("pill").top + 62 + 8 + 4, 1, "trip chip in Row B (centered beside Settings) below a 62px banner");
       t.set({ detent: "full" });
-      near(t.rect("sheet").top, t.rect("pill").top + 62 + 8, 1, "full detent below a 62px pill");
+      near(t.rect("sheet").top, t.rect("pill").top + 62 + 8 + 44 + 8, 1, "full detent below Row B under a 62px banner");
     } finally { t.done(); }
   });
 }
 
-test("layout: content padding keeps the last row reachable (padding = sheet part hidden below)", async () => {
+test("layout: content padding keeps the last row reachable (padding = sheet part hidden below + the floating row + 20)", async () => {
   const t = await frame(393, 852);
   try {
     for (const pill of [false, true]) {
       for (const detent of ["peek", "half", "full"]) {
         t.set({ detent, pill });
-        const hidden = t.rect("sheet").bottom - t.rect("tabs").top;   // sheet px behind the bottom navigation
-        near(parseFloat(t.geo().pad), hidden + 16, 1, `${detent} pill ${pill}`);
+        const hidden = t.rect("sheet").bottom - t.rect("bottomrow").top;   // below the screen + behind the floating row
+        near(parseFloat(t.geo().pad), hidden + 20, 1, `${detent} pill ${pill}`);
       }
     }
   } finally { t.done(); }
@@ -206,8 +206,56 @@ test("sheet: probes carry data-sheet-probe (read by the Settings overlay) and me
     t.set({ pill: true });
     eq(full.offsetHeight, t.$("sheet").offsetHeight - 52, "pill: full detent 52px shorter");
     sh.setDetent("full");
-    near(t.rect("sheet").top, t.rect("pill").bottom + 8, 1);
+    near(t.rect("sheet").top, t.rect("settingsBtn").bottom + 8, 1, "below the top rows");
     sh.destroy();
     eq(t.d.querySelectorAll("[data-sheet-probe]").length, 0, "destroy removes probes");
+  } finally { t.done(); }
+});
+
+for (const [name, w, h, safeB, safeT] of [["phone", 393, 852, 0, 0], ["desktop frame", 1000, 900, 34, 54]]) {
+  test(`layout (${name}): the glass geometry (glass spec 3): floating bottom row, inset card, Settings circle, the group on the card`, async () => {
+    const t = await frame(w, h);
+    try {
+      t.set({ detent: "peek", pill: false, chip: false });
+      // the phone's #app is a plain wrapper (0 tall): the viewport is the screen; in the frame #app is the phone
+      const app = name === "phone" ? { left: 0, top: 0, right: w, bottom: h } : t.rect("app"), r = (id) => t.rect(id), inset = Math.max(12, safeB - 12);
+      near(r("bottomrow").bottom, app.bottom - inset, 1, "bottom row: max(12, safe bottom - 12) above the screen's bottom");
+      near(r("tabs").height, 56, 0.5, "tab bar 56 tall");
+      near(r("searchBar").width, 56, 0.5, "search circle 56 wide");
+      near(r("searchBar").right, app.right - 12, 1, "search circle 12 from the right");
+      near(r("tabs").left, app.left + 12, 1, "tab bar 12 from the left");
+      near(r("searchBar").left - r("tabs").right, 8, 1, "8 between the tab bar and the search circle");
+      near(r("cardGlass").left, app.left + 12, 1, "card inset 12 (left)");
+      near(r("cardGlass").right, app.right - 12, 1, "card inset 12 (right)");
+      near(r("cardGlass").bottom, r("bottomrow").top - 8, 1, "card 8 above the bottom row");
+      near(r("cardGlass").top, r("sheet").top, 1, "the card is the sheet's visible top");
+      eq(t.f.contentWindow.getComputedStyle(t.$("cardSolid")).opacity, "0", "collapsed: the opaque layer is invisible");
+      near(r("settingsBtn").width, 44, 0.5, "Settings: a 44 circle");
+      near(r("settingsBtn").right, app.right - 12, 1, "Settings 12 from the right");
+      near(r("settingsBtn").top, app.top + safeT + 8, 1, "Settings 8 below the safe area (Row B, no banner)");
+      near(r("mapctl").height, 88.5, 1, "the group: 44 x 88 (plus the hairline)");
+      near(r("mapctl").right, app.right - 12, 1, "the group 12 from the right");
+      near(r("mapctl").bottom, r("cardGlass").top - 8, 1, "the group rides 8 above the card");
+      t.set({ chip: true });
+      near(r("ctxbar").top, r("settingsBtn").top + 4, 1, "no simulated-buses chip: the trip chip sits beside Settings");
+      ok(r("ctxbar").right <= r("settingsBtn").left - 8 + 0.5, "and never under it");
+      t.set({ detent: "full" });
+      eq(t.f.contentWindow.getComputedStyle(t.$("cardSolid")).opacity, "1", "expanded: opaque");
+      near(r("cardSolid").left, app.left, 1, "expanded: full width");
+      ok(r("sheet").bottom >= app.bottom - 0.5, "expanded: the sheet reaches the screen's bottom, the row floats over it");
+    } finally { t.done(); }
+  });
+}
+
+test("layout: the selection capsule slides by transform to the selected tab", async () => {
+  const t = await frame(393, 852);
+  try {
+    const pill = t.$("tabPill"), btns = t.$("tabs").querySelectorAll("button");
+    pill.style.transition = "none";
+    near(pill.getBoundingClientRect().left, btns[0].getBoundingClientRect().left, 1, "first tab");
+    t.$("tabs").style.setProperty("--tab-i", "2");
+    near(pill.getBoundingClientRect().left, btns[2].getBoundingClientRect().left, 1, "third tab");
+    near(pill.getBoundingClientRect().width, btns[2].getBoundingClientRect().width, 1, "one item wide");
+    ok(t.f.contentWindow.getComputedStyle(pill).transform.startsWith("matrix"), "moved by transform");
   } finally { t.done(); }
 });

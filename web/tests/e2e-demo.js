@@ -29,7 +29,9 @@ const tab = (id) => $(`#tabs button[data-tab="${id}"]`).click();
 /** The demo chip (DESIGN-SPEC 10.3: a 32 pt capsule sized to its words) is visible with its words, and it (not the map)
  * takes a tap at its middle and in a 44 pt band around it. */
 function pillOn(where) {
-  const p = $("#pill"), r = p.getBoundingClientRect();
+  const p = $("#pill");
+  for (const a of p.getAnimations()) a.finish();   // the chip materializes (glass spec 7); measure it at rest
+  const r = p.getBoundingClientRect();
   ok(!p.hidden && r.height >= 32 && r.width > 120 && W.getComputedStyle(p).visibility === "visible", where + ": pill visible");
   eq(p.dataset.form, "chip", where + ": the small chip form, not a banner");
   eq(txt($("#pillText")), "Simulated buses", where + ": pill words");
@@ -60,7 +62,7 @@ async function boot() {
 test("demo: no banner; the status pill says 'Simulated buses' (the one indicator) on Current trip", async () => {
   ok(!$("#demobar") && !$(".demobar"), "no demo banner");
   ok(!D.documentElement.classList.contains("is-demo"), "no layout offset class");
-  ok($("#topbar").getBoundingClientRect().top < 30, "search bar at the top, not pushed down");
+  ok($("#topbar").getBoundingClientRect().top < 30, "Settings (Row B) at the top, not pushed down");
   await waitFor(() => !$("#pill").hidden, "pill shown");
   pillOn("Current trip");
   ok(!/Demo mode/.test(txt($("#topbar")) + txt($("#pill"))), "no banner words in the chrome");

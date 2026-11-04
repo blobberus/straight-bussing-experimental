@@ -187,15 +187,17 @@
   --bottom-inset: max(12px, calc(var(--safe-b) - 12px));
   --nav-h: calc(var(--bottom-inset) + var(--row-h));
   --search-top: calc(var(--safe-t) + 8px);                     /* the top rows start 8 below the safe area */
-  --top-clear: calc(var(--search-top) + var(--search-h) + var(--gap-chrome));   /* below the search bar */
-  --chip-top: var(--top-clear);                                /* status chip / banner, trip chip, locate button */
-  /* sheet heights are measured from the top of the bottom bar. The sheet element is always --v-max tall (a chip or
-     banner appearing never changes its layout); --v-full is shorter while a status banner shows (sheet.css), which only
-     changes the expanded state's translateY. --v-peek = the header's measured height (ui/sheet.js sets it on #app:
-     the collapsed header grows with text and never cuts the title); 72 = 16 grab zone + the 56 header row. */
+  --top-clear: calc(var(--search-top) + var(--search-h) + var(--gap-chrome));   /* 8 below Row B (the Settings row) */
+  --chip-top: var(--top-clear);                                /* old name */
+  /* sheet heights are measured from the screen's bottom (glass spec 3: the expanded sheet reaches it, the bottom row
+     floats over it). The sheet element is always --v-max tall, from 8 below Row B to the bottom (a chip or banner
+     appearing never changes its layout); --v-full is shorter while a status banner shows (sheet.css), which only changes
+     the expanded state's translateY. --v-peek = the header's measured height (ui/sheet.js sets it on #app: the
+     collapsed card grows with text and never cuts the title); 72 = 16 grab zone + the 56 header row. The collapsed
+     visible height is --v-peek-vis (base.css: card + 8 + the bottom row). */
   --v-peek: 72px;
   --v-half: calc(var(--app-h) * .42);
-  --v-max: calc(var(--app-h) - var(--nav-h) - var(--chip-top));
+  --v-max: calc(var(--app-h) - var(--top-clear));
   --v-full: var(--v-max);
   --panel-w: 380px;
 
