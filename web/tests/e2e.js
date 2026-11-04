@@ -488,38 +488,43 @@ async function collapseSheet() {
 
 test("settings gear: a glass circle top right (Row B), labeled, 44px target, clear of the lower-right group", async () => {
   await collapseSheet();
+  $("#sheet").style.transition = "none";   // headless test frames do not run CSS transitions: read the settled card
   const g = $("#settingsBtn"), loc = $("#locateBtn"), k = parseFloat(W.getComputedStyle(D.documentElement).getPropertyValue("--frame-k")) || 1;
   ok(g && g.getAttribute("aria-label") === "Settings" && g.dataset.action === "settings:open", "gear button");
   const r = g.getBoundingClientRect(), l = loc.getBoundingClientRect(), app = $("#app").getBoundingClientRect(), right = app.width > 100 ? app.right : W.innerWidth;
   ok(r.width >= 44 * k - 0.5 && r.height >= 44 * k - 0.5, "44px target: " + r.width + "x" + r.height);
   ok(r.bottom <= l.top, "Settings at the top, Locate low on the right (glass spec 4)");
   ok(right - r.right <= 16 * k, "right edge");
+  $("#sheet").style.removeProperty("transition");
   click(g, "gear");
   const o = await waitFor(() => { const x = $("#settingsOverlay"); return x && !x.hidden && x.dataset.state === "open" ? x : null; }, "Settings overlay opened from the gear");
   eq([o.getAttribute("role"), o.getAttribute("aria-modal")], ["dialog", "true"], "modal dialog");
   ok(o.contains(D.activeElement), "focus moved into Settings");
-  // layout boxes, not transforms: headless test frames do not run CSS transitions, so the sheet may sit mid-slide.
-  // The overlay's top edge must be where the sheet's top settles at the full detent (rect top minus its translateY).
-  const ot = () => parseFloat(W.getComputedStyle(o).top);
-  const sheetTopFull = () => { const sh = $("#sheet"), t = W.getComputedStyle(sh).transform; return sh.getBoundingClientRect().top - (t && t !== "none" ? new W.DOMMatrixReadOnly(t).m42 : 0); };
-  await waitFor(() => $("#sheet").dataset.detent === "full" && Math.abs(ot() - sheetTopFull()) <= 1 || null, "overlay placed over the full sheet");
-  ok(ot() <= $("#title").getBoundingClientRect().top - (W.getComputedStyle($("#sheet")).transform !== "none" ? new W.DOMMatrixReadOnly(W.getComputedStyle($("#sheet")).transform).m42 : 0), "overlay covers the sheet title");
-  ok($("#sheetHead").inert && $("#tabs").inert && !$(".sto-scrim").hidden, "covered header and navigation inert, background dimmed");
-  eq(W.getComputedStyle(o).bottom, "0px", "overlay reaches the screen bottom, covering the bottom navigation");
+  // glass spec 9.8: an iOS sheet of its own from 10 below the safe area to the bottom, over a scrim; the app's sheet keeps
+  // its state; it zooms out of the gear (transform-origin at the gear's center)
+  const safeT = parseFloat(W.getComputedStyle(D.documentElement).getPropertyValue("--safe-t")) || 0;
+  near(parseFloat(W.getComputedStyle(o).top), safeT + 10, 1, "top edge 10 below the safe area");
+  eq(W.getComputedStyle(o).bottom, "0px", "reaches the screen bottom, covering the bottom row");
+  eq($("#sheet").dataset.detent, "peek", "the app's own sheet is left as it was");
+  ok(o.style.transformOrigin && o.style.transformOrigin !== "50% 50%", "zooms out of the gear: " + o.style.transformOrigin);
+  ok($("#sheetHead").inert && $("#tabs").inert && $("#bottomrow").inert && $("#mapctl").inert && !$(".sto-scrim").hidden, "the app behind inert, dimmed");
   const done = o.querySelector(".sto-done"), dr = done.getBoundingClientRect(), orr = o.getBoundingClientRect();
-  ok(/Done/.test(txt(done)) && dr.right > orr.left + orr.width * 0.7 && dr.top < orr.top + 60, "Done button in the top-right corner");
+  eq(done.getAttribute("aria-label"), "Done", "Done is a checkmark named Done (iOS 26)");
+  ok(done.querySelector("svg") && Math.abs(dr.width - dr.height) < 1 && dr.right > orr.left + orr.width * 0.7 && dr.top < orr.top + 70, "a round button in the top-right corner");
   click(done, "Done");
   await waitFor(() => o.dataset.state === "closed", "Done closes Settings");
 });
 
 test("lines by time: the clock over Locate in the lower-right group opens the menu; Set time shows only those lines; deselecting one drops the name", async () => {
   await collapseSheet();
+  $("#sheet").style.transition = "none";
   const c = $("#timeBtn"), l = $("#locateBtn"), k = parseFloat(W.getComputedStyle(D.documentElement).getPropertyValue("--frame-k")) || 1;
   ok(c && c.getAttribute("aria-label") === "Lines by Time" && c.dataset.action === "time:open", "clock button");
   const r = c.getBoundingClientRect(), lr = l.getBoundingClientRect();
   ok(r.width >= 44 * k - 0.5 && r.height >= 44 * k - 0.5, "44px target: " + r.width + "x" + r.height);
   ok(c.closest("#mapctl") && Math.abs(r.left - lr.left) < 1 && r.bottom <= lr.top + 1, "the top slot of the lower-right group, Locate under it (Map Modes' place in Apple Maps)");
   ok(r.bottom <= $("#sheet").getBoundingClientRect().top, "riding above the collapsed card");
+  $("#sheet").style.removeProperty("transition");
   click(c, "clock");
   const o = await waitFor(() => { const x = $("#settingsOverlay"); return x && !x.hidden && x.dataset.state === "open" && x.dataset.kind === "time" ? x : null; }, "Lines by Time open");
   eq(txt($("#stoTitle")), "Lines by Time");
@@ -554,8 +559,15 @@ test("tap outside the sheet: empty map collapses it to peek; stops and buses sti
   await waitFor(() => title() === "Current trip", "Current trip");
   const sh = $("#sheet");
   const det = () => sh.dataset.detent;
-  // drive the Leaflet map the way a real tap does: a click on the map pane, not on a layer
-  const tapMap = () => { const mp = $("#map .leaflet-map-pane") || $("#map"); mp.dispatchEvent(new W.MouseEvent("click", { bubbles: true, cancelable: true, clientX: 200, clientY: 200 })); };
+  // drive the Leaflet map the way a real tap does: a click on the map pane, not on a layer, at a spot 40 px clear of every
+  // route line (a tap on a line opens that route, owner 2026-10-27; where the lines fall depends on the camera)
+  const emptySpot = () => {
+    const lm0 = SB.map, segs = Object.values(state().shapes || {}).flat().map((ln) => ln.map((q) => lm0.latLngToContainerPoint([q[0], q[1]])));
+    const d = (x, y, a, b) => { const vx = b.x - a.x, vy = b.y - a.y, L = vx * vx + vy * vy || 1, k = Math.max(0, Math.min(1, ((x - a.x) * vx + (y - a.y) * vy) / L)); return Math.hypot(x - a.x - k * vx, y - a.y - k * vy); };
+    for (let y = 140; y < 520; y += 30) for (let x = 40; x < 360; x += 30) if (segs.every((pts) => pts.every((q, i) => i === 0 || d(x, y, pts[i - 1], q) > 40))) return [x, y];
+    return [200, 200];
+  };
+  const tapMap = () => { const [x, y] = emptySpot(), mp = $("#map .leaflet-map-pane") || $("#map"); mp.dispatchEvent(new W.MouseEvent("click", { bubbles: true, cancelable: true, clientX: x, clientY: y })); };
   click($("#grab"), "grab");                                  // open it up first if it was low
   await sleep(50);
   if (det() === "peek") { $("#grab").dispatchEvent(new W.KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })); await sleep(50); }
