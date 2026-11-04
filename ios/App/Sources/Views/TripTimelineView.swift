@@ -272,8 +272,9 @@ struct TripBusLeg: View {
                     let raw = lead != nil ? (v.idx < 0 ? 0 : v.pos + 1) : v.pos
                     let vpos = (raw * 5).rounded() / 5
                     let y = CGFloat(min(max(vpos, -0.4), n - 0.6) + 0.5) * rowH
+                    // centered on the rail whatever its width, so it never reaches the stop names (text starts at 52)
                     BusChip(label: v.label, color: color, textColor: Color.badgeText(hex: r?.color), stale: v.stale)
-                        .offset(x: Space.insetContent + Self.railW / 2 - BusChip.w / 2, y: y - BusChip.h / 2)
+                        .position(x: Space.insetContent + Self.railW / 2, y: y)
                         .animation(reduceMotion ? nil : .easeInOut(duration: 0.8), value: y)
                         .accessibilityHidden(true)   // the head line and the row labels say where the bus is
                 }
@@ -412,18 +413,20 @@ struct RoleTag: View {
 
 /// The followed bus on the rail: a route-colored chip, 20 pt tall.
 struct BusChip: View {
-    static let w: CGFloat = 54
     static let h: CGFloat = 20
     let label: String
     let color: Color
     let textColor: Color
     let stale: Bool
     var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "bus.fill").font(.system(size: 10, weight: .bold))
-            Text(label.count > 5 ? String(label.suffix(5)) : (label.isEmpty ? "Bus" : label)).font(Typo.badgeSmall).monospacedDigit()
+        HStack(spacing: 2) {
+            Image(systemName: "bus.fill").font(.system(size: 9, weight: .bold))
+            Text(label.count > 4 ? String(label.suffix(4)) : (label.isEmpty ? "Bus" : label))
+                .font(.system(size: 10, weight: .bold)).monospacedDigit()
         }
-        .frame(width: Self.w, height: Self.h)
+        .padding(.horizontal, 5)
+        .frame(height: Self.h)
+        .fixedSize()
         .foregroundStyle(textColor)
         .background(color, in: RoundedRectangle(cornerRadius: Radius.tag, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.tag, style: .continuous).strokeBorder(Palette.bgCard, lineWidth: 2))
@@ -462,11 +465,13 @@ struct BusRailMarker: View {
     let route: Route?
     let label: String?
     var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "bus.fill").font(.system(size: 10, weight: .bold))
-            if let label { Text(label).font(Typo.badgeSmall).monospacedDigit() }
+        // "Bus 2" shows as the bus and "2": narrow enough to stay on the 24 pt rail, clear of the stop names
+        let short = label.map { $0.hasPrefix("Bus ") ? String($0.dropFirst(4)) : $0 }
+        HStack(spacing: 2) {
+            Image(systemName: "bus.fill").font(.system(size: 9, weight: .bold))
+            if let short { Text(short.count > 4 ? String(short.suffix(4)) : short).font(.system(size: 10, weight: .bold)).monospacedDigit() }
         }
-        .padding(.horizontal, 6).frame(height: 20)
+        .padding(.horizontal, 5).frame(height: 20)
         .foregroundStyle(Color.badgeText(hex: route?.color))
         .background(Color(hex: route?.color), in: RoundedRectangle(cornerRadius: Radius.tag, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.tag, style: .continuous).strokeBorder(Palette.bgCard, lineWidth: 2))
