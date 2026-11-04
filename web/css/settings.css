@@ -65,43 +65,51 @@
 .st-status .v-grow > span { display: block; }
 .st-ok { display: inline-block; vertical-align: -3px; color: var(--tint); }
 
-/* Settings overlay (ui/settings-overlay.js): a card stacked exactly over the expanded sheet (title and bottom bar
-   covered), a scrim dims what is still visible behind it. JS sets top / left / width / bottom in #app layout px.
-   Opaque bgSheet (spec 7), rSheet top corners, e3. */
+/* Settings and Lines by Time (ui/settings-overlay.js; docs/DESIGN-SPEC-GLASS.md 9.8, 9.9): an iOS sheet from 10 below
+   the safe area to the screen's bottom, top corners 28, opaque bgSheet (content layer, never glass), e3, over a scrim
+   that dims the whole app. It zooms out of the button that opened it (mZoomSheet: scale .6 to 1 with the button's
+   center as transform-origin, set by JS) and shrinks back into it; reduced motion: a short fade. A grab bar on top says
+   it can be swiped down. Head: the title centered; Done = a 44 tintFill circle with a white checkmark (named "Done");
+   Cancel = a 44 fill circle with a cross (named "Cancel"); Set time = a tintFill capsule with its words. */
 .sto-scrim {
   position: fixed; inset: 0; z-index: var(--z-overlay-scrim);
   background: var(--scrim); opacity: 0;
-  transition: opacity var(--m-sheet) var(--ease-exit);
+  transition: opacity var(--m-zoom-sheet) var(--ease-exit);
 }
 .sto-scrim.is-in { opacity: 1; }
 .sto-scrim[hidden] { display: none; }
 .sto {
-  position: fixed; z-index: var(--z-overlay); left: 0; right: 0; bottom: 0; top: 30%;
+  position: fixed; z-index: var(--z-overlay); left: 0; right: 0; bottom: 0; top: calc(var(--safe-t) + 10px);
   display: flex; flex-direction: column;
   background: var(--bg-sheet); color: var(--label);
-  border-radius: var(--r-sheet) var(--r-sheet) 0 0;
+  border-radius: var(--r-glass) var(--r-glass) 0 0;
   box-shadow: var(--e-3);
   overflow: hidden;
-  /* --sto-from (set by JS): how far below its place it starts, = the distance the sheet travels */
-  transform: translate3d(0, var(--sto-from, 100%), 0);
-  transition: transform var(--m-sheet) var(--ease-sheet), opacity var(--m-sheet) var(--ease-exit);
-  will-change: transform;
+  transform: scale(.6); opacity: 0;
+  transition: transform var(--m-zoom-sheet) var(--ease-zoom-sheet), opacity var(--m-zoom-sheet) var(--ease-zoom-sheet);
 }
-.sto.is-in { transform: none; }
-.sto[data-state="closed"] { opacity: 0; }
-.sto--float { border-radius: var(--r-sheet); }
+.sto.is-in { transform: none; opacity: 1; }
+.sto.is-dragging { transition: none; }
 .sto-head {
   position: relative; flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
-  min-height: var(--sheet-header-min); padding: var(--s-1) var(--s-2) 0 var(--s-4);
+  min-height: calc(var(--sheet-header-min) + 8px); padding: 14px var(--s-3) 6px; touch-action: none;
 }
 .sto-head::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: .5px; background: var(--separator); }
+.sto-grab {   /* the 36 x 5 grab bar, 6 from the top: a swipe down closes */
+  position: absolute; left: 50%; top: 6px; width: 36px; height: 5px; margin-left: -18px;
+  border-radius: var(--r-capsule); background: var(--label-3); opacity: .6; pointer-events: none;
+}
 .sto-side { display: flex; min-width: 0; }
 .sto-side--end { justify-content: flex-end; }
 .sto-title { margin: 0; font: var(--t-row-title); text-align: center; white-space: nowrap; }
 .sto-done {
-  min-width: var(--tap); min-height: var(--tap); padding: 0 var(--s-2); border-radius: var(--r-control);
-  color: var(--tint); font: var(--t-button); transition: opacity var(--m-press) var(--ease-out);
+  position: relative; min-width: var(--tap); min-height: var(--tap); padding: 0 var(--s-4); border-radius: var(--r-capsule);
+  display: inline-grid; place-items: center;
+  background: var(--tint-fill); color: var(--on-fill); font: var(--t-button); white-space: nowrap;
+  transition: opacity var(--m-press) var(--ease-out);
 }
+.sto-done.is-check, .sto-start { width: var(--tap); height: var(--tap); min-height: var(--tap); padding: 0; border-radius: 50%; }
+.sto-start { background: var(--fill); color: var(--label); }
 .sto-done:active { opacity: .6; }
 .sto-body {
   flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
@@ -112,16 +120,16 @@
 
 @media (prefers-reduced-motion: reduce) {
   .st-knob, .st-knob::after, .st-credchev .ic { transition: none; }
-  /* no slide: a short fade only */
-  .sto { transform: none; opacity: 0; transition: opacity var(--m-quick) linear; will-change: auto; }
+  /* no zoom: a short fade only */
+  .sto, .sto.is-in { transform: none; }
+  .sto { transition: opacity var(--m-quick) linear; }
   .sto-scrim { transition: none; }
-  .sto.is-in { opacity: 1; }
 }
 @media (prefers-contrast: more) {
   .st-knob { outline: 1px solid currentColor; }
   .sto { border-top: 2px solid var(--label); }
   .sto-head::after { background: var(--label); }
-  .sto-done { text-decoration: underline; text-underline-offset: 3px; }
+  .sto-done { outline: 1px solid var(--label); outline-offset: 1px; }
 }
 @media (forced-colors: active) {
   .sto { border: 1px solid CanvasText; }
@@ -175,8 +183,7 @@
 /* Lines by Time (views/timepick.js, owner 2026-10-18): the Settings card with Cancel / Set time in its head, a date and
    a time on wheel columns like the iPhone alarm clock (ui/wheel.js: 40 px rows, 5 in view, the chosen one in the band:
    fill, radius 10; rows body, the chosen one rowTitle Semibold). */
-.sto[data-kind="time"] .sto-head { padding-left: var(--s-2); }
-.sto-start { font-weight: var(--w-regular); }
+
 .tp { padding-bottom: var(--s-2); }
 .tp-h { margin-top: var(--s-4); }
 .wh {
