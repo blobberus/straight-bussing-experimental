@@ -41,6 +41,24 @@ struct RouteBadge: View {
     }
 }
 
+// MARK: Text on glass (docs/DESIGN-SPEC-GLASS.md 5.3)
+
+private struct OnGlassKey: EnvironmentKey { static let defaultValue = false }
+
+extension EnvironmentValues {
+    /// These views sit on glass (the sheet header, which is the collapsed glass card): secondary text in
+    /// `labelGlass2` (`label2` is too light on glass), no green or tint text ("Now" in `label`, the live dot ringed).
+    var onGlass: Bool {
+        get { self[OnGlassKey.self] }
+        set { self[OnGlassKey.self] = newValue }
+    }
+}
+
+extension Palette {
+    /// Secondary text where it may sit on glass.
+    static func secondary(onGlass: Bool) -> Color { onGlass ? labelGlass2 : label2 }
+}
+
 // MARK: ETA notation (spec 10.10)
 
 /// One ETA: numeral + " min" on its baseline ("4 min"); "Now" in `live` under a minute; a clock time at 60 minutes or
@@ -54,8 +72,11 @@ struct EtaView: View {
     /// An estimate (not a live prediction): "est." follows and "Now" is never claimed.
     var estimate = false
 
+    @Environment(\.onGlass) private var onGlass
+
     var body: some View {
         let m = TimeFmt.minsUntil(t, from: now)
+        let second = Palette.secondary(onGlass: onGlass)
         let numFont = size == .hero ? Typo.etaHero : Typo.etaRow
         let unitFont = size == .hero ? Typo.etaUnitHero : Typo.etaUnitRow
         let dim = stale || estimate
@@ -65,16 +86,17 @@ struct EtaView: View {
             : "\(n) minute\(n == 1 ? "" : "s")" + (dim ? ", estimate" : "")
         Group {
             if m < 1 && !estimate {
+                // on glass "Now" is never green text (the live dot beside it says live)
                 Text(stale ? "~Now" : "Now")
                     .font(size == .hero ? Typo.etaHero : Typo.etaRow)
-                    .foregroundStyle(stale ? Palette.label2 : Palette.live)
+                    .foregroundStyle(stale ? second : onGlass ? Palette.label : Palette.live)
             } else if m >= 60 {
                 Text(TimeFmt.clock(t)).font(size == .hero ? Typo.heroTitle : Typo.rowTitle).monospacedDigit()
-                    .foregroundStyle(dim ? Palette.label2 : Palette.label)
+                    .foregroundStyle(dim ? second : Palette.label)
             } else {
-                Text((dim ? "~" : "") + "\(max(1, m))").font(numFont).foregroundStyle(dim ? Palette.label2 : Palette.label)
-                    + Text(" min").font(unitFont).fontWeight(size == .hero ? .semibold : .regular).foregroundStyle(Palette.label2)
-                    + Text(estimate ? " est." : "").font(Typo.footnote).foregroundStyle(Palette.label2)
+                Text((dim ? "~" : "") + "\(max(1, m))").font(numFont).foregroundStyle(dim ? second : Palette.label)
+                    + Text(" min").font(unitFont).fontWeight(size == .hero ? .semibold : .regular).foregroundStyle(second)
+                    + Text(estimate ? " est." : "").font(Typo.footnote).foregroundStyle(second)
             }
         }
         .lineLimit(1)
@@ -89,15 +111,20 @@ struct EtaView: View {
 /// words next to it carry the state; the dot is decorative.
 struct LiveDot: View {
     var level: StaleLevel = .fresh
+    @Environment(\.onGlass) private var onGlass
+    var filled: Bool { level == .fresh || level == .late }
     var body: some View {
         Group {
             switch level {
             case .fresh: Circle().fill(Palette.liveMark)
             case .late: Circle().fill(Palette.warn)
-            default: Circle().strokeBorder(Palette.label2, lineWidth: 1.5)
+            default: Circle().strokeBorder(onGlass ? Palette.label.opacity(0.6) : Palette.label2, lineWidth: 1.5)
             }
         }
         .frame(width: 8, height: 8)
+        // on glass a filled dot gets a 1.5 pt solid ring, so the green never meets the glass (spec 5.3)
+        .padding(onGlass && filled ? 1.5 : 0)
+        .background { if onGlass && filled { Circle().fill(Palette.glassSolid) } }
         .accessibilityHidden(true)
     }
 }
