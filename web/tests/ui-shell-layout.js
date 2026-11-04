@@ -124,7 +124,7 @@ for (const [name, w, h] of [["phone", 393, 852], ["desktop frame", 1000, 900]]) 
     } finally { t.done(); }
   });
 
-  test(`layout (${name}): chip shows over the map, hides at the full detent; never over the grab handle`, async () => {
+  test(`layout (${name}): chip shows over the map at every detent, like Settings; never over the grab handle or the title`, async () => {
     const t = await frame(w, h);
     try {
       for (const pill of [false, true]) {
@@ -135,8 +135,9 @@ for (const [name, w, h] of [["phone", 393, 852], ["desktop frame", 1000, 900]]) 
           if (pill) ok(t.rect("ctxbar").top >= t.rect("pill").bottom, "chip below the pill");
         }
         t.set({ detent: "full", pill, chip: true });
-        ok(!t.visible("ctxbar"), "chip hidden at full");
-        eq(t.f.contentWindow.getComputedStyle(t.$("ctxbar")).pointerEvents, "none", "hidden chip takes no taps");
+        ok(t.visible("ctxbar"), "chip still shown at full (owner 2026-11-04: like the Settings button)");
+        ok(t.f.contentWindow.getComputedStyle(t.$("ctxbar")).pointerEvents !== "none", "and it takes taps");
+        ok(t.rect("ctxbar").bottom <= t.rect("sheet").top - 8 && t.rect("ctxbar").bottom <= t.rect("title").top, `chip clear of the grab area and title at full (pill ${pill})`);
         ok(!t.visible("locateBtn") && !t.visible("timeBtn"), "the lower-right group hidden at full");
       }
     } finally { t.done(); }
@@ -257,5 +258,25 @@ test("layout: the selection capsule slides by transform to the selected tab", as
     near(pill.getBoundingClientRect().left, btns[2].getBoundingClientRect().left, 1, "third tab");
     near(pill.getBoundingClientRect().width, btns[2].getBoundingClientRect().width, 1, "one item wide");
     ok(t.f.contentWindow.getComputedStyle(pill).transform.startsWith("matrix"), "moved by transform");
+  } finally { t.done(); }
+});
+
+test("layout: simulated-buses chip + trip chip (demo): the trip chip in Row C stays shown at full and the expanded sheet starts 8 below it", async () => {
+  const t = await frame(393, 852);
+  try {
+    t.$("pill").dataset.form = "chip";
+    t.set({ pill: true, chip: false, detent: "full" });
+    const alone = t.rect("sheet").top;
+    t.set({ chip: true });
+    ok(t.visible("ctxbar"), "trip chip shown");
+    ok(t.rect("ctxbar").top >= t.rect("pill").bottom, "under the simulated-buses chip (Row C)");
+    near(t.rect("sheet").top, t.rect("ctxbar").bottom + 8, 1.5, "the expanded sheet starts 8 below the trip chip");
+    ok(t.rect("sheet").top > alone, "only the full detent moves for it");
+    for (const d of ["peek", "half"]) {
+      t.set({ detent: d, chip: false });
+      const a = t.geo();
+      t.set({ chip: true });
+      eq(t.geo(), a, `${d}: the collapsed card never moves for the chip`);
+    }
   } finally { t.done(); }
 });

@@ -118,9 +118,12 @@ html[data-text="ax"] .titleline:has(.back:not([hidden])) .titleright { padding-l
 html[data-text="ax"] .titleright .v-btn--quiet { margin-left: calc(var(--s-2) * -1); }
 
 /* expanded state stops below the status banner (always visible for safety; ui/pill.js keeps --pill-h = its measured
-   height), so the banner never covers the grab bar. The trip chip and the simulated-buses chip do NOT change it (the
-   chip shares Row B with Settings; the trip chip hides when expanded). */
+   height), so the banner never covers the grab bar. The simulated-buses chip alone does NOT change it (it shares Row B
+   with Settings), nor does the trip chip beside Settings; both chips together do (below). */
 #app:has(#pill:not([hidden]):not([data-form="chip"])) { --v-full: calc(var(--v-max) - var(--pill-h, 44px) - var(--gap-chrome)); }
+/* the trip chip stays visible when expanded (owner 2026-11-04, glass spec 18 D5): beside Settings it needs no room; in Row
+   C, under the simulated-buses chip (demo mode), the expanded sheet starts 8 below it */
+#app:has(#pill[data-form="chip"]:not([hidden])):has(#ctxbar:not([hidden])) { --v-full: calc(var(--v-max) - 36px - var(--gap-chrome)); }
 
 /* scrolling content: invisible on the collapsed card (it fades in with the opaque layer), bottom padding = the part of
    the sheet hidden below the screen + the floating bottom row + 20, so the last row scrolls clear of the bar; 16

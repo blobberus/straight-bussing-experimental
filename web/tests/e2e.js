@@ -501,6 +501,20 @@ test("directions: place + station, stubbed sidewalk walking, option drawn on the
   await waitFor(() => busIcons().length === tripBuses || null, "only the trip's buses drawn");
   eq(busIcons().length, fullBefore, "the same buses the preview kept at full strength");
   eq(fadedIcons().length, 0, "and none faded");
+  // owner 2026-11-04: "When the sliding menu is lifted the current trip progress still disappears. Fix this so that the
+  // current trip progress still shows." With a real trip in progress and the sheet expanded, the trip chip stays shown
+  // and tappable above the sheet, on Current trip and on the other tabs (the Settings circle's rule)
+  for (const tb of ["nearby", "routes", "myroutes", "nearby"]) {
+    if (state().view !== tb) tab(tb);
+    if ($("#sheet").dataset.detent !== "full") $("#grab").dispatchEvent(new W.KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+    await waitFor(() => $("#sheet").dataset.detent === "full" && $("#tabs button[aria-current=\"page\"]")?.dataset.tab === tb && !$("#ctxbar").hidden || null, "expanded " + tb + " with the trip chip");
+    for (const a of $("#ctxbar").getAnimations()) a.finish();
+    const chip = $("#ctxbar"), c = chip.getBoundingClientRect(), sh = $("#sheet").getBoundingClientRect();
+    eq(W.getComputedStyle(chip).visibility, "visible", tb + ": the trip chip shows over the expanded sheet");
+    ok(/Trip to /.test(txt(chip)) && c.bottom <= sh.top - 4, `${tb}: the trip's name, above the sheet (chip ${Math.round(c.bottom)} / sheet ${Math.round(sh.top)})`);
+    const btn = chip.querySelector('[data-action="journey:end"]'), b = btn.getBoundingClientRect(), hit = D.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    ok(hit && hit.closest('[data-action="journey:end"]') === btn, `${tb}: its Show all takes the tap (${hit && (hit.id || hit.className)})`);
+  }
   click($('#content [data-action="journey:end"]'), "End trip");
   await waitFor(() => !state().journey && !$("#content .tp-title"), "trip ended");
   await waitFor(() => $$("#map .sb-plan-bus").length === 0, "plan cleared from the map");
