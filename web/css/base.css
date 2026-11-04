@@ -93,7 +93,9 @@ h1:focus, [tabindex="-1"]:focus { outline: none; }
   color: var(--label); font: var(--t-row-detail); font-size: min(var(--size-row-detail), var(--cap-row-detail)); line-height: 1.34;
   animation: sb-banner-in var(--m-banner) var(--ease-standard);
 }
-@keyframes sb-banner-in { from { opacity: 0; transform: translateY(-8px); } }
+/* mBanner without its 8 px slide: the Retry slot must not move even while the banner arrives (owner 2026-11-03 wins
+   over motion polish; NOTES-glass-web) */
+@keyframes sb-banner-in { from { opacity: 0; } }
 .statuspill .pilltext { flex: 1; min-width: 0; padding: 2px 0; }
 .statuspill .pilltext b { font-weight: var(--w-semibold); }
 .statuspill .pillicon { flex: none; display: grid; place-items: center; color: var(--warn); }
