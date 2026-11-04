@@ -114,17 +114,29 @@ The redesign uses the system stack with three weights (400 / 600 / 700, spec 2.1
 system font is always resident, so this is not expected there (not measured on a device). Both builds stay far under the
 2 s budget.
 
-## Verified (headless Edge, `tmp/redesign-web/cdp.py` scenarios, 393 x 852 DPR 2 unless noted)
+## Verified (headless Edge, 393 x 852 at DPR 2 with emulated safe areas, unless noted)
 
-Light and dark: Current trip collapsed and expanded, search and results, Directions with the place card and options,
-selected option with steps, trip in progress (expanded, collapsed with the trip map), route detail, stop detail,
-Routes, My Routes, Settings, Lines by Time, Alerts. Light: no location, blocked location, feed unreachable, live data
-delayed and out of date, no live locations, loading (450 ms), long names (results, options, stop), beta welcome popup,
-Routes to station, About, 320 x 640 phone, 200% text (32 px browser default: Current trip collapsed / expanded,
-Directions, route page). The browser suite (748 tests) passes.
+The curated set is `docs/redesign/after/web/` (97 PNGs, file names as in `before/web/`). Looked at, light and dark:
+Current trip collapsed / expanded / scrolled, search open, results, no matches, place card with options, selected option
+with steps, trip in progress (expanded, scrolled, collapsed with the trip map), route detail (collapsed and expanded),
+stop detail (expanded and collapsed), Routes, My Routes (with routes and empty), the custom route editor, saved toast,
+detail and delete confirmation, Settings (top, scrolled, Credits open), Lines by Time (menu, applied, Routes bar),
+Alerts, About, Routes to station, the beta welcome popup. States: no location, blocked location (card and Settings help),
+feed unreachable (collapsed and expanded), live data delayed and out of date, no live locations with the operator's
+alert, loading, long names (results, options, stop), the missed-bus card (rendered from the trip fixtures in
+`tests/trip.test.html`: demo buses could not be staged into that state), a toast, the desktop phone frame (1280 x 800).
+200% browser text (32 px default): Current trip collapsed / expanded, options, route, trip in progress, stop, Routes,
+Settings, feed unreachable. 320 x 640: Current trip, trip in progress, Routes, route, Settings, options, feed unreachable.
+Fixed from these screens during the run: route badges clipped at 200% text, the trip header squeezed beside End trip at
+accessibility sizes, the Directions field card growing past the chrome cap, a blank list when nothing matched.
+The browser suite: 741 tests before the redesign, 756 now, all passing.
 
 ## Not verified
 
 Real iPhone Safari (SF Pro rendering, Dynamic Type at AX5 through `-apple-system-body`, safe areas, the sheet's touch
 feel, momentum and rubber band), VoiceOver and Increase Contrast on a device, keyboard-up states, the landscape panel,
-the missed-bus banner on a live trip (rendered in the unit tests only), Reduce Transparency.
+Reduce Transparency, the missed-bus banner inside the running app (unit-tested and rendered from fixtures only), the
+experimental test site on a phone.
+
+Known wording shared with iOS, left for the owner: the Routes list says "Only showing routes for To Trader Joe's" (both
+apps put the journey label "To X" after "for"; the trip chip already says "Trip to X").

@@ -797,4 +797,4 @@ resting states, back stack, Settings and Lines by Time overlays); what changed i
   callback (the location dot). `css/map.css` reads `--sb-accent` (tintFill) and `--sb-tint` (tint).
 - Performance rules kept: the sheet's `--drag` stays non-inherited, `will-change` only while dragging, content insets
   change after a settle, bus markers update in place on requestAnimationFrame; at most four blurred elements.
-Deviations from the spec: `docs/redesign/NOTES-web.md`. sw `sb-v2-82`.
+Deviations from the spec: `docs/redesign/NOTES-web.md`; screens: `docs/redesign/after/web/`. sw `sb-v2-85`.
