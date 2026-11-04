@@ -73,6 +73,61 @@ export function initTextSize(root = document.documentElement) {
   return () => { removeEventListener("resize", apply); document.removeEventListener("visibilitychange", vis); ro?.disconnect(); probe?.remove(); };
 }
 
+/** glass-lite (docs/DESIGN-SPEC-GLASS.md 12.4): watch this long after the first touch of the map or the sheet (ms)... */
+export const LITE_WATCH_MS = 10000;
+/** ...and switch to solid glass when more than this share of the frames took longer than LITE_SLOW_MS. */
+export const LITE_SHARE = 0.2;
+export const LITE_SLOW_MS = 24;
+
+/**
+ * Is this device too slow for blurred glass? True when at least 30 frames were seen and more than 20% of them took
+ * longer than 24 ms (pure; unit-tested).
+ * @param {number[]} deltas frame-to-frame times (ms)
+ * @returns {boolean}
+ */
+export function tooSlowForGlass(deltas) {
+  const d = (deltas || []).filter((x) => Number.isFinite(x) && x > 0 && x < 1000);   // a background pause is no frame
+  if (d.length < 30) return false;
+  return d.filter((x) => x > LITE_SLOW_MS).length / d.length > LITE_SHARE;
+}
+
+/**
+ * The safety valve of glass spec 12.4: from the first touch of the map or the sheet, measure frame times for 10 s;
+ * on a slow device set html.glass-lite for the session (every glass surface solid, no blur; same shapes and layout).
+ * Nothing is stored or sent. Safe to call once at boot.
+ * @param {{targets?:Element[], root?:HTMLElement, raf?:(fn:(t:number)=>void)=>number, now?:()=>number}} [o]
+ * @returns {() => void} stop
+ */
+export function initGlassLite(o = {}) {
+  const root = o.root || document.documentElement, raf = o.raf || ((fn) => requestAnimationFrame(fn));
+  const now = o.now || (() => performance.now()), targets = (o.targets || []).filter(Boolean);
+  let started = false, stopped = false;
+  const deltas = [];
+  const start = () => {
+    if (started || stopped) return;
+    started = true;
+    const t0 = now();
+    let last = t0;
+    const tick = () => {
+      if (stopped) return;
+      const t = now();
+      if (!document.hidden) deltas.push(t - last);
+      last = t;
+      if (t - t0 < LITE_WATCH_MS) { raf(tick); return; }
+      if (tooSlowForGlass(deltas)) root.classList.add("glass-lite");
+      stop();
+    };
+    raf(tick);
+  };
+  const types = ["pointerdown", "touchstart"];
+  for (const el of targets) for (const ty of types) el.addEventListener(ty, start, { passive: true, once: true });
+  function stop() {
+    stopped = true;
+    for (const el of targets) for (const ty of types) el.removeEventListener(ty, start);
+  }
+  return stop;
+}
+
 /**
  * Keep --frame-k current on resize. Safe to call once at boot.
  * @param {HTMLElement} [root] element that gets the variable (default <html>)

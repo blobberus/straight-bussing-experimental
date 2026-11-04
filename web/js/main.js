@@ -25,7 +25,7 @@ import { initTheme, isDark, onChange as onThemeChange } from "./ui/theme.js";
 import { emptyState } from "./ui/components.js";
 import { createPill } from "./ui/pill.js";
 import { registerContextActions, mountContextBar } from "./ui/contextbar.js";
-import { initFrame, initTextSize } from "./ui/frame.js";
+import { initFrame, initTextSize, initGlassLite } from "./ui/frame.js";
 import { isSettingsOpen, closeSettingsOverlay } from "./ui/settings-overlay.js";
 import { startTripMap } from "./ui/tripmap.js";
 import { createCompass, mayAskCompass } from "./ui/compass.js";
@@ -401,6 +401,7 @@ async function boot() {
   initTheme(store);
   initFrame();
   initTextSize();
+  initGlassLite({ targets: [document.getElementById("map"), el.head] });   // glass spec 12.4: solid glass on a slow device
   try {
     if (!window.L) throw new Error("Leaflet not loaded");
     map = createMap("map");

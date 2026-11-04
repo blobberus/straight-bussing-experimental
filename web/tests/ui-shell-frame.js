@@ -1,6 +1,6 @@
 // Tests for ui/frame.js (desktop phone frame scale) and ui/sheet.js drag math under a scaled frame (SHELL).
 import { test, eq, ok, near } from "./lib.js";
-import { frameScale, FRAME_W, FRAME_H, FRAME_MEDIA, FRAME_MARGIN, textClass, initTextSize } from "../js/ui/frame.js";
+import { frameScale, FRAME_W, FRAME_H, FRAME_MEDIA, FRAME_MARGIN, textClass, initTextSize, tooSlowForGlass, initGlassLite, LITE_WATCH_MS } from "../js/ui/frame.js";
 import { createSheet, PANEL_MEDIA } from "../js/ui/sheet.js";
 
 const NEVER = "(min-width: 100000px)";
@@ -59,4 +59,27 @@ test("sheet: drag distance is measured in the frame's CSS px when the frame is s
   eq(sh.getDetent(), "peek", "cancel keeps the state ('half' is no resting state any more)");
   sh.destroy();
   wrap.remove();
+});
+
+test("glass-lite (glass spec 12.4): more than 20% of at least 30 frames over 24 ms means solid glass", () => {
+  eq(tooSlowForGlass(Array(29).fill(40)), false, "too few frames to judge");
+  eq(tooSlowForGlass(Array(100).fill(16.7)), false, "a smooth device");
+  eq(tooSlowForGlass([...Array(80).fill(16.7), ...Array(20).fill(30)]), false, "exactly 20% slow: still glass");
+  eq(tooSlowForGlass([...Array(79).fill(16.7), ...Array(21).fill(30)]), true, "21% slow: solid glass");
+  eq(tooSlowForGlass([...Array(40).fill(16.7), 5000, 5000]), false, "a background pause is not a slow frame");
+});
+
+test("glass-lite: watches 10 s from the first touch of a target, then sets html.glass-lite only on a slow device", () => {
+  for (const [frame, want] of [[16.7, false], [33, true]]) {
+    const root = document.createElement("div"), target = document.createElement("div"), q = [];
+    let t = 0;
+    const stop = initGlassLite({ root, targets: [target], raf: (fn) => q.push(fn), now: () => t });
+    eq(q.length, 0, "nothing runs before a touch");
+    target.dispatchEvent(new Event("pointerdown"));
+    while (q.length) { t += frame; q.shift()(); if (t > LITE_WATCH_MS + 1000) break; }
+    eq(root.classList.contains("glass-lite"), want, `${frame} ms frames`);
+    target.dispatchEvent(new Event("pointerdown"));
+    eq(q.length, 0, "measured once per session");
+    stop();
+  }
 });
