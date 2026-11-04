@@ -19,7 +19,8 @@
  * events followed on the whole window while pressed. The content drags the sheet when it is scrolled to the top.
  * Grabber = an adjustable control for screen readers and the keyboard (role="slider" "Resize panel", value
  * Collapsed / Expanded): arrows / Page Up / Page Down / Home / End, Enter / Space and taps toggle.
- * Emits bus 'sheet:inset' {px} (visible sheet height over the map; 0 in panel mode) on every settle.
+ * Emits bus 'sheet:inset' {px, detent} (visible sheet height over the map, 0 in panel mode; the state it rests in) on
+ * every settle.
  *
  * Geometry lives in css/sheet.css (--v-peek/--v-full; the element itself is always --v-max tall, so at "full"
  * its translateY is --v-max - --v-full, not 0, while the status pill shows); this module measures it with hidden
@@ -153,7 +154,7 @@ export function createSheet({ sheetEl, contentEl, headEl, grabEl, initial, panel
   const measure = () => ({ peek: probes.peek.offsetHeight, full: probes.full.offsetHeight });
   const isPanel = () => panelMq.matches;
   const inset = () => (isPanel() ? 0 : measure()[detent] || 0);
-  const emitInset = () => bus.emit("sheet:inset", { px: inset() });
+  const emitInset = () => bus.emit("sheet:inset", { px: inset(), detent });
 
   if (grab) {   // adjustable control: slider semantics with two named values
     const a = { role: "slider", "aria-label": "Resize panel", "aria-orientation": "vertical", "aria-valuemin": "0", "aria-valuemax": "1" };

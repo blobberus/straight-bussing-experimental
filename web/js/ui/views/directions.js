@@ -59,7 +59,7 @@ export const D = { from: null, to: null, fromText: "", toText: "", active: null,
 export const DIR_REFRESH_S = 8;
 /** Injectable dependencies (tests replace them; wallMs / later = the re-plan throttle's clock and timer). */
 export const deps = { plan, refineWalking, walkRoute, predict, wallMs: () => Date.now(), later: (f, ms) => setTimeout(f, ms) };
-let rootRef = null, ctxRef = null, offStore = null, lastUser = null, offPlanWatch = null;
+let rootRef = null, ctxRef = null, offStore = null, lastUser = null, offPlanWatch = null, offInset = null, lastRest = null;
 const photon = createPlaceSearch(() => patchSug());
 /** Background re-plan on live updates: .poke() per change, at most every DIR_REFRESH_S (gate: nothing open / failing feed = skip, a new plan still refining = defer). */
 export const liveReplan = createThrottle(() => replan(), { everyMs: DIR_REFRESH_S * 1000, now: () => deps.wallMs(), later: (f, ms) => deps.later(f, ms),
@@ -423,6 +423,8 @@ export function mountDirections(root, ctx) {
   root.addEventListener("focusin", onFocus);
   root.addEventListener("input", onInput);
   root.addEventListener("keydown", onKey);
+  lastRest = "full";   // Directions opens expanded (detent: "full" below)
+  offInset = bus.on("sheet:inset", onSheetRest);
   offStore = ctx?.store?.subscribe?.((s, ch) => {
     if (ch.has("user") && s.user && D.from?.me && (!lastUser || hav(lastUser, s.user) > 50)) { D.from = me(s.user); lastUser = s.user; replan(); return; }
     if (ch.has("staticLoaded")) { replan({ fresh: true }); return; }
@@ -437,6 +439,24 @@ export function mountDirections(root, ctx) {
   Promise.resolve(deps.predict?.ready).then(() => { if (rootRef && D.from && D.to) replan(); }).catch(() => {});
   if (D.focusTo) { D.focusTo = false; focusField("to"); }
   else if (D.from && !D.to) focusField("to"); else if (!D.from && D.to) focusField("from");
+}
+
+/**
+ * The sheet came to rest (bus 'sheet:inset' {px, detent}): on the change to collapsed, frame the selected option again
+ * (spec J3, the iPhone app does the same). It was framed into the small strip of map above the expanded sheet, so after
+ * a collapse the plan sat near the top, behind the field card, its destination pin under the locate button. Only on
+ * that change (a taller header while collapsed never moves the map), never in the landscape panel (px 0) and never while
+ * a started trip owns the map.
+ * @param {{px?:number, detent?:string}} [p]
+ * @returns {boolean} whether it framed the option
+ */
+export function onSheetRest(p) {
+  const was = lastRest, d = p && p.detent;
+  if (d) lastRest = d;
+  if (d !== "peek" || was === "peek" || !(p && p.px > 0) || !rootRef || !D.from || !D.to || !D.result) return false;
+  if (isPlanJourney(cur())) return false;
+  drawSel(true);
+  return true;
 }
 
 /** Unmount: clear the plan from the map (kept while a trip is on, until it ends), stop async updates (endpoints are kept). */
@@ -522,7 +542,7 @@ function hideBar() {
 export function unmountDirections() {
   hideBar();
   if (rootRef) { rootRef.removeEventListener("focusin", onFocus); rootRef.removeEventListener("input", onInput); rootRef.removeEventListener("keydown", onKey); }
-  offStore?.(); offStore = null; photon.cancel(); liveReplan.reset(); D.token++; D.active = null; D.sugs = [];
+  offStore?.(); offStore = null; offInset?.(); offInset = null; photon.cancel(); liveReplan.reset(); D.token++; D.active = null; D.sugs = [];
   const st = ctxRef?.store, keep = !!st && isPlanJourney(st.get());
   if (keep && rootRef) {
     offPlanWatch?.();
