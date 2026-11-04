@@ -129,7 +129,7 @@ html[data-text="ax"] .titleright .v-btn--quiet { margin-left: calc(var(--s-2) * 
   flex: 1; min-height: 0;
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
-  padding: var(--s-1) var(--inset-content) calc(var(--v-max) - var(--rest-vis) + var(--nav-h) + 20px);
+  padding: var(--s-1) var(--inset-content) calc(var(--v-max) - var(--rest-vis) + var(--nav-h) + 24px);
   touch-action: pan-y;
   outline: none;
   opacity: 0;
@@ -137,11 +137,14 @@ html[data-text="ax"] .titleright .v-btn--quiet { margin-left: calc(var(--s-2) * 
 }
 .sheet[data-detent="full"] .sheet-content { opacity: 1; }
 .sheet.dragging .sheet-content { overflow-y: hidden; will-change: opacity; }
-/* a soft scroll edge under the floating bar (no blur): bgSheet fading in over the last 24 px above the bottom row */
+/* a soft scroll edge behind the floating bar (no blur; glass spec 8.8, iOS scrollEdgeEffectStyle(.soft)): bgSheet
+   fading in over the 24 px above the bottom row, then at 90% behind it down to the screen's edge, so rows scrolling under
+   the bar never show through its gaps (between the capsule and the search circle, under it, around the minimized
+   circle). The content's bottom padding (+ 24) lets the last row end where the fade starts. */
 .sheet[data-rest="full"]::after {
-  content: ""; position: absolute; left: 0; right: 0; height: 24px; pointer-events: none;
-  bottom: calc(var(--v-max) - var(--v-full) + var(--nav-h));
-  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--bg-sheet) 90%, transparent));
+  content: ""; position: absolute; left: 0; right: 0; height: calc(var(--nav-h) + 24px); pointer-events: none;
+  bottom: calc(var(--v-max) - var(--v-full));
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--bg-sheet) 90%, transparent) 24px);
 }
 
 /* the lower-right group (glass spec 8.4): Lines by Time over Locate, a 44 x 88 glass capsule riding 8 above the card's

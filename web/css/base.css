@@ -271,6 +271,34 @@ h1:focus, [tabindex="-1"]:focus { outline: none; }
 .tabcap button[aria-current="page"] .ic-on { display: block; }
 .tabcap button[aria-current="page"] .ic-off { display: none; }
 .tabcap button:focus-visible { outline-offset: -2px; }
+/* tab bar minimize (glass spec 8.9, Q3; main.js setTabsMin): while the expanded sheet's list scrolls down, the capsule
+   gives way to a 56 glass circle at its leading end with the selected section's filled glyph (the selected button slides
+   there by transform, clipped to the circle; the others, the selection capsule and every label fade). Scrolling up, the
+   top, a tap on the circle, a new page, a collapse or keyboard focus bring the capsule back. mMinimize: transform and
+   opacity only; reduced motion: a crossfade. The search circle stays. */
+.tabcap::after {
+  content: ""; position: absolute; left: 0; top: 0; z-index: 0; width: var(--row-h); height: var(--row-h); border-radius: 50%;
+  background: var(--glass-fill); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
+  box-shadow: var(--glass-rim), var(--glass-edge), var(--glass-shadow); pointer-events: none;
+  opacity: 0; visibility: hidden; transition: opacity var(--m-minimize) var(--ease-standard), visibility 0s linear var(--m-minimize);
+}
+.tabcap { transition: background-color var(--m-minimize) var(--ease-standard), box-shadow var(--m-minimize) var(--ease-standard); }
+.tabcap button { transition: opacity var(--m-press) var(--ease-out), transform var(--m-minimize) var(--ease-standard), visibility 0s linear 0s; }
+.tabcap .tab-pill { transition: transform var(--m-tab-pill) var(--ease-tab-pill), opacity var(--m-minimize) var(--ease-standard); }
+#app.tabs-min .tabcap {
+  pointer-events: none; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none;
+}
+#app.tabs-min .tabcap::after { opacity: 1; visibility: visible; transition: opacity var(--m-minimize) var(--ease-standard), visibility 0s linear 0s; }
+#app.tabs-min .tab-pill { opacity: 0; }
+#app.tabs-min .tabcap button:not([aria-current="page"]) {
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity var(--m-minimize) var(--ease-standard), visibility 0s linear var(--m-minimize);
+}
+#app.tabs-min .tabcap button[aria-current="page"] {
+  pointer-events: auto; clip-path: circle(calc(var(--row-h) / 2) at 50% 50%);
+  transform: translateX(calc(var(--row-h) / 2 - 4px - (var(--tab-i, 0) + .5) * 100%));
+}
+#app.tabs-min .tabcap .bn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 /* accessibility sizes, or a narrow screen with large text: icons only, the names stay in the accessible names (10) */
 html[data-text="ax"] .tabcap .bn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 @media (max-width: 359px) { html[data-text="large"] .tabcap .bn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } }
@@ -342,7 +370,8 @@ html[data-text="ax"] .tabcap .bn-label { position: absolute; width: 1px; height:
   }
   .gpress:active { transform: none; opacity: .6; }
   .fbfab.is-ping .fbfab-dot, .fbfab.is-ping .fbfab-dot::after { animation: none !important; }
-  .tab-pill { transition: none !important; }
+  .tab-pill { transition: opacity var(--m-quick) linear !important; }
+  .tabcap button { transition-property: opacity, visibility !important; }   /* minimize: a crossfade, no slide */
   .toast, .toast.hide { transform: translate(0, 0); }
   #app:has(.sheet[data-detent="full"]) .toast, #app:has(.sheet[data-detent="full"]) .toast.hide { transform: translate(-50%, 0); }
   .bottomrow { transform: none !important; }

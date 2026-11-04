@@ -171,14 +171,14 @@ for (const [name, w, h] of [["phone", 393, 852], ["desktop frame", 1000, 900]]) 
   });
 }
 
-test("layout: content padding keeps the last row reachable (padding = sheet part hidden below + the floating row + 20)", async () => {
+test("layout: content padding keeps the last row reachable (padding = sheet part hidden below + the floating row + 24, where the soft scroll edge starts)", async () => {
   const t = await frame(393, 852);
   try {
     for (const pill of [false, true]) {
       for (const detent of ["peek", "half", "full"]) {
         t.set({ detent, pill });
         const hidden = t.rect("sheet").bottom - t.rect("bottomrow").top;   // below the screen + behind the floating row
-        near(parseFloat(t.geo().pad), hidden + 20, 1, `${detent} pill ${pill}`);
+        near(parseFloat(t.geo().pad), hidden + 24, 1, `${detent} pill ${pill}`);
       }
     }
   } finally { t.done(); }

@@ -169,6 +169,56 @@ test("tabs: Nearby / Routes / My Routes switch title and aria-current; no Alerts
   ok($("#back").hidden, "no Back button on a tab");
 });
 
+// Glass spec 8.9 (Q3, default yes; the iPhone app does the same): the tab bar shrinks to a circle while the expanded
+// list scrolls down, and comes back on scrolling up, at the top, on a tap on the circle, on a new page and on collapse.
+test("tab bar minimize: scrolling the expanded list down leaves a circle with the section's glyph; up, a tap on it, a new page or a collapse bring the bar back", async () => {
+  const finish = () => { for (const e of [$("#tabs"), ...$$("#tabs > *")]) for (const a of e.getAnimations({ subtree: true })) a.finish(); };
+  const min = () => $("#app").classList.contains("tabs-min");
+  const scrollTo = async (y) => { content().scrollTop = y; content().dispatchEvent(new W.Event("scroll")); await sleep(30); };
+  tab("routes");
+  await waitFor(() => title() === "Routes" && $$(".v-routerow").length > 3, "Routes view");
+  $("#grab").dispatchEvent(new W.KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+  await waitFor(() => $("#sheet").dataset.detent === "full" || null, "expanded");
+  ok(content().scrollHeight - content().clientHeight > 120, "a list long enough to scroll");
+  await scrollTo(0);
+  ok(!min(), "at the top: the full bar");
+  await scrollTo(20);
+  ok(!min(), "not before 24 px");
+  await scrollTo(90);
+  ok(min(), "scrolled down: minimized");
+  finish();
+  const tabs = $("#tabs").getBoundingClientRect(), sel = $('#tabs button[aria-current="page"]'), sr = sel.getBoundingClientRect();
+  const k = parseFloat(W.getComputedStyle(D.documentElement).getPropertyValue("--frame-k")) || 1;
+  near(sr.left + sr.width / 2, tabs.left + 28 * k, 1.5, "the selected glyph sits in the circle at the leading end");
+  ok($$('#tabs button[data-tab]:not([aria-current="page"])').every((b) => W.getComputedStyle(b).visibility === "hidden"), "the other sections fade out");
+  ok(/Routes, show all sections/.test(sel.getAttribute("aria-label")), "the circle says what it does: " + sel.getAttribute("aria-label"));
+  const search = $("#searchBar");
+  ok(W.getComputedStyle(search).visibility === "visible" && search.getBoundingClientRect().width >= 56 * k - 1, "the search circle stays");
+  const hit = D.elementFromPoint(tabs.left + tabs.width * 0.75, tabs.top + tabs.height / 2);
+  ok(!hit || !hit.closest("#tabs"), "the empty capsule area takes no taps");
+  await scrollTo(content().scrollTop - 30);
+  ok(!min(), "scrolling back up 16 px: the bar is back");
+  await scrollTo(content().scrollTop + 60);
+  ok(min(), "down again: minimized");
+  click(sel, "the circle");
+  await sleep(30);
+  ok(!min() && title() === "Routes" && $("#sheet").dataset.detent === "full", "a tap on the circle brings the bar back, same section, still expanded");
+  await scrollTo(content().scrollTop + 60);
+  ok(min(), "minimized once more");
+  $("#grab").dispatchEvent(new W.KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
+  await waitFor(() => !min() || null, "a collapse brings the bar back");
+  $("#grab").dispatchEvent(new W.KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+  await waitFor(() => $("#sheet").dataset.detent === "full" || null, "expanded again");
+  await scrollTo(content().scrollTop + 120);
+  ok(min(), "minimized");
+  tab("myroutes");   // a script (or assistive tech) tapping another section while minimized still switches
+  await waitFor(() => title() === "My Routes" || null, "My Routes");
+  ok(!min(), "a new page brings the bar back");
+  tab("nearby");
+  await waitFor(() => title() === "Current trip" || null, "Current trip");
+  $("#grab").dispatchEvent(new W.KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
+});
+
 test("alerts: Nearby banner shows the active alert and opens the Alerts sub view; back returns", async () => {
   const banner = await waitFor(() => $('#content [data-region="nearby-alert"] [data-action="alerts:open"]'), "alert banner");
   ok(/Service alert/.test(txt(banner)) && txt(banner).includes("E2E detour"), "banner text: " + txt(banner));
@@ -530,7 +580,7 @@ test("status banner: compact, one line; its details open and close under the lin
     click(more, "Details");
     const call = pill.querySelector(".pillcall");
     ok(!call.hidden && call.getAttribute("href") === "tel:+17737028181" && /773\.702\.8181/.test(txt(call)), "open: Call 773.702.8181");
-    await waitFor(() => pill.getBoundingClientRect().bottom <= $("#settingsBtn").getBoundingClientRect().top + 0.5 || null, "Row B moved down under the open banner (never covered)");
+    ok(pill.getBoundingClientRect().height > 80 * k && Math.round(more.getBoundingClientRect().top) === Math.round(m0.top), "open: the banner grows downward, the line stays (Row B follows --pill-h: tests/ui-shell-layout.js)");
     click(more, "Details");
   } finally {
     T.feedFail = false;

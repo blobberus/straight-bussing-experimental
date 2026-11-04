@@ -281,6 +281,7 @@ function switchView(id, def, key, s) {
   el.content.innerHTML = html;
   cur.html = html;
   el.content.scrollTop = 0;
+  setTabsMin(false);   // a new page starts at its top: the tab bar comes back (glass spec 8.9)
   if (typeof def.mount === "function") {
     try { def.mount(el.content, ctx); } catch (e) {
       console.error("mount " + id, e);
@@ -353,7 +354,18 @@ window.addEventListener("popstate", () => {
 /* ---------------- input wiring ---------------- */
 function wireUI() {
   el.back.addEventListener("click", () => back());
-  el.tabs.addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) navigate(b.dataset.tab); });
+  el.tabs.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-tab]");
+    if (!b) return;
+    if (el.app.classList.contains("tabs-min")) {   // minimized: the circle brings the capsule back (glass spec 8.9)
+      setTabsMin(false);
+      if (b.getAttribute("aria-current") === "page") return;
+    }
+    navigate(b.dataset.tab);
+  });
+  // a keyboard user who tabs into the bar gets every section back
+  el.tabs.addEventListener("focusin", (e) => { try { if (e.target.matches(":focus-visible")) setTabsMin(false); } catch (err) { /* old browser */ } });
+  el.content.addEventListener("scroll", onContentScroll, { passive: true });
   el.locate.addEventListener("click", onLocateFab);
   for (const root of [el.content, el.pill, el.dlg, el.ctxbar, el.topbar || el.gear, el.right, el.bottomrow, el.mapctl]) if (root) bindActions(root, () => ctx);
   el.dlg.addEventListener("click", (e) => { if (e.target === el.dlg) closeDlg(); });
@@ -367,6 +379,34 @@ function wireUI() {
     if (back() || sheet.stepDown()) e.preventDefault();
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) render(); });
+}
+/* ---------------- tab bar minimize (glass spec 8.9, Q3; the iPhone app's SheetScroll, same numbers) ----------------
+   While the expanded sheet's content scrolls down past 24 px, the tab capsule shrinks to a 56 glass circle with the
+   selected section's glyph at the leading side; scrolling back up 16 px, reaching the top, a tap on the circle, a new
+   page or tab, a collapse, or keyboard focus on the bar brings it back. The offset is clamped to the content's end, so
+   the bounce at the bottom is not a turn. css/base.css #app.tabs-min draws it (transform and opacity only). */
+let minTurn = 0;
+function onContentScroll() {
+  const c = el.content, end = Math.max(0, c.scrollHeight - c.clientHeight), y = Math.min(Math.max(0, c.scrollTop), end);
+  const on = el.app.classList.contains("tabs-min");
+  if (y <= 24 || !sheet || sheet.isPanel() || sheet.getDetent() !== "full") { minTurn = y; if (on) setTabsMin(false); return; }
+  if (on) {
+    minTurn = Math.max(minTurn, y);
+    if (y < minTurn - 16) { setTabsMin(false); minTurn = y; }
+  } else {
+    minTurn = Math.min(minTurn, y);
+    if (y > minTurn + 16) { setTabsMin(true); minTurn = y; }
+  }
+}
+/** The tab bar's minimized circle on or off; the names stay in the accessible names either way. */
+function setTabsMin(on) {
+  if (!el.app || el.app.classList.contains("tabs-min") === !!on) return;
+  el.app.classList.toggle("tabs-min", !!on);
+  for (const b of el.tabs.querySelectorAll("button[data-tab]")) {
+    const sel = b.getAttribute("aria-current") === "page";
+    if (on && sel) b.setAttribute("aria-label", (b.querySelector(".bn-label")?.textContent || "") + ", show all sections");
+    else b.removeAttribute("aria-label");
+  }
 }
 function closeDlg() {
   el.dlg.hidden = true;
@@ -422,6 +462,7 @@ async function boot() {
   // collapsing the sheet puts the keyboard away (owner 2026-10-12): blur a focused field in the app
   sheet.onChange((d) => {
     refreshHeader();
+    if (d !== "full") setTabsMin(false);   // a collapsed sheet has no scrolled list: the tab bar comes back
     const a = document.activeElement;
     if (d === "peek" && a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && el.app?.contains?.(a)) a.blur();
   });
