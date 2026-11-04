@@ -2,7 +2,7 @@
  * map/layers.js: route network (colored lines, no outline since 2026-11-04; stops with 44 px tap halos) and live bus
  * markers. Every redraw is gated by a cheap signature so 10 s polling never repaints static layers;
  * bus markers are updated in place (setLatLng + class toggles) and recreated only when a bus changes
- * route. The pure helpers (idOf, sig, networkSig, busSig, lineWeight, routeLabel, focusSet) do not touch
+ * route. The pure helpers (idOf, sig, networkSig, busSig, lineWeight, lineTapWidth, routeLabel, focusSet) do not touch
  * Leaflet, so this module can be imported without `L` for unit tests.
  * Lines stack by `order` (index 0 on top); focused routes always above unfocused ones. A bus is faded exactly when its
  * route is (core/visibility.js busFaded, owner 2026-11-04).
@@ -113,25 +113,45 @@ export function busHeading(feedBearing, prev, cur, last, distFn) {
   return Number.isFinite(last) ? last : NaN;
 }
 
-/** Route line width by map zoom (docs/DESIGN-SPEC.md 11.3): z13 3, z14 3.5, z15 4.5, z16 5.5, z17 6.5, z18 8. */
-export const LINE_WIDTHS = Object.freeze([[13, 3], [14, 3.5], [15, 4.5], [16, 5.5], [17, 6.5], [18, 8]]);
-
 /**
- * Route line weight in px for a zoom level: LINE_WIDTHS, linear between the stops, clamped at both ends. A focused line
- * adds FOCUS_EXTRA. No casing (owner 2026-11-04: "Remove the outlines on each line").
- * @param {number} z
- * @returns {number}
+ * Route line width by map zoom: z13 2, z14 2.25, z15 3, z16 4, z17 5, z18 6 (owner 2026-11-04: "Remove the outlines for the
+ * lines but make the lines themselves thinner": about a third thinner zoomed out, a quarter up close; DESIGN-SPEC 11.3
+ * had 3, 3.5, 4.5, 5.5, 6.5, 8).
  */
-export function lineWeight(z) {
-  const t = LINE_WIDTHS, n = Number.isFinite(z) ? z : 15;
+export const LINE_WIDTHS = Object.freeze([[13, 2], [14, 2.25], [15, 3], [16, 4], [17, 5], [18, 6]]);
+/** The widths before 2026-11-04 (spec 11.3): the line tap still measures from them, so a thinner line is as easy to tap. */
+const TAP_WIDTHS = Object.freeze([[13, 3], [14, 3.5], [15, 4.5], [16, 5.5], [17, 6.5], [18, 8]]);
+
+/** A width table at a zoom, linear between the stops, clamped at both ends. */
+function widthAt(t, z) {
+  const n = Number.isFinite(z) ? z : 15;
   if (n <= t[0][0]) return t[0][1];
   for (let i = 1; i < t.length; i++) {
     if (n <= t[i][0]) { const [z0, w0] = t[i - 1], [z1, w1] = t[i]; return Math.round((w0 + ((n - z0) / (z1 - z0)) * (w1 - w0)) * 100) / 100; }
   }
   return t[t.length - 1][1];
 }
-/** Focused lines are this much wider (spec 11.3). */
+
+/**
+ * Route line weight in px for a zoom level (LINE_WIDTHS). A focused line adds FOCUS_EXTRA. No casing (owner 2026-11-04).
+ * @param {number} z
+ * @returns {number}
+ */
+export function lineWeight(z) {
+  return widthAt(LINE_WIDTHS, z);
+}
+/** Focused lines are this much wider (spec 11.3): 5 against 3 at z15, plus full opacity while the rest dim to 0.2. */
 export const FOCUS_EXTRA = 2;
+
+/**
+ * Width (px) a tap on a route line is measured from (lineAt: LINE_TAP_PX beyond half of it): the widest line as drawn
+ * before 2026-11-04 (a focused one with its 3 px casing), so the thinner, edgeless lines keep the same finger-sized reach.
+ * @param {number} z
+ * @returns {number}
+ */
+export function lineTapWidth(z) {
+  return widthAt(TAP_WIDTHS, z) + 3 + FOCUS_EXTRA;
+}
 
 /**
  * Stop circle size by zoom (spec 11.4): hidden below z14, radius 4 / stroke 2 at z14 to 15, radius 5 / stroke 2.5 from z16.
@@ -236,8 +256,7 @@ export function createNetworkLayer(map, cb) {
    */
   function lineAt(p) {
     if (!hits.length || !p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
-    // the widest line as drawn before 2026-11-04 (a focused one with its 3 px casing): the tap reach stays as it was
-    const width = lineWeight(map.getZoom()) + 3 + FOCUS_EXTRA, reach = LINE_TAP_PX + width;
+    const width = lineTapWidth(map.getZoom()), reach = LINE_TAP_PX + width;   // the reach of a finger, not the thinner drawn line
     const near = L.latLngBounds(map.containerPointToLatLng([p.x - reach, p.y + reach]), map.containerPointToLatLng([p.x + reach, p.y - reach]));
     const toPx = (ll) => { const c = map.latLngToContainerPoint(ll); return [c.x, c.y]; };
     const lines = hits.filter((h) => h.bounds.intersects(near)).map((h) => ({ rid: h.rid, px: h.ll.map(toPx), width }));

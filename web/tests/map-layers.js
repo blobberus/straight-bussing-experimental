@@ -1,6 +1,6 @@
 /** Tests for map/layers.js signatures + in-place updates, and the MapApi in map/map.js (needs Leaflet). */
 import { test, eq, ok, near } from './lib.js';
-import { idOf, sig, focusSet, networkSig, busSig, lineWeight, routeLabel, createNetworkLayer, createBusLayer, notchRadius } from '../js/map/layers.js';
+import { idOf, sig, focusSet, networkSig, busSig, lineWeight, lineTapWidth, FOCUS_EXTRA, routeLabel, createNetworkLayer, createBusLayer, notchRadius } from '../js/map/layers.js';
 import { createMap } from '../js/map/map.js';
 import { P, squareLoop, stop } from './map-fixtures.js';
 
@@ -55,9 +55,12 @@ test('busSig / lineWeight / routeLabel', () => {
   ok(busSig('r1', 41.1001, -87.1, 90, false, 'CEN', '#FF9900') !== a, 'moved');
   ok(busSig('r1', 41.1, -87.1, 90, true, 'CEN', '#FF9900') !== a, 'stale');
   ok(busSig('r1', 41.1, -87.1, 90, false, 'CEN', '#FF9900', false, 0, false, true) !== a, 'faded');
-  // DESIGN-SPEC 11.3: z13 3, z14 3.5, z15 4.5, z16 5.5, z17 6.5, z18 8, linear between, clamped
-  eq([13, 14, 15, 16, 17, 18].map(lineWeight), [3, 3.5, 4.5, 5.5, 6.5, 8]);
-  eq(lineWeight(14.5), 4); eq(lineWeight(5), 3); eq(lineWeight(20), 8);
+  // owner 2026-11-04 "make the lines themselves thinner": z13 2, z14 2.25, z15 3, z16 4, z17 5, z18 6 (spec 11.3 had 3, 3.5,
+  // 4.5, 5.5, 6.5, 8: a third thinner zoomed out, a quarter up close), linear between, clamped
+  eq([13, 14, 15, 16, 17, 18].map(lineWeight), [2, 2.25, 3, 4, 5, 6]);
+  eq(lineWeight(14.5), 2.63); eq(lineWeight(5), 2); eq(lineWeight(20), 6);
+  eq(lineTapWidth(15), 4.5 + 3 + FOCUS_EXTRA, 'tap reach as before: a focused line with its old 3 px edge');
+  eq(lineTapWidth(17), 6.5 + 3 + FOCUS_EXTRA);
   eq(routeLabel('r1', routes), 'CEN'); eq(routeLabel('r2', routes), 'N'); eq(routeLabel('zz', routes), '?');
   eq(routeLabel('x', { x: { short: '', long: 'Friend Center/Metra' } }), 'F', 'like the iPhone app (Route.chipText)');
   eq(routeLabel('x', { x: { short: 'AP/DX', long: 'Apostolic/Drexel' } }), 'AP/DX', 'never truncated (audit defect 4)');
@@ -72,6 +75,7 @@ test('network layer: polling does not repaint; changes do', () => {
   const el = m.getContainer(), first = paths(el);
   eq(first.length, 3 + 8 * 2, 'one line per shape (no outline) and stop + halo per stop');
   eq(el.querySelectorAll('path.sb-casing').length, 0, 'no outlines (owner 2026-11-04)');
+  eq(paths(el).filter((p) => p.classList.contains('sb-route')).map((p) => p.getAttribute('stroke-width')), ['3', '3', '3'], 'thinner: 3 px at z15');
   eq(layer.draw(net({ hidden: [] })), false, 'same inputs -> no redraw');
   ok(paths(el).every((p, i) => p === first[i]), 'same DOM nodes');
   ok(layer.draw(net({ hidden: ['r2'] })), 'hidden change redraws');
@@ -81,6 +85,7 @@ test('network layer: polling does not repaint; changes do', () => {
   eq(dim.length, 2, 'two non-focus routes dimmed to 0.2 (spec 11.3)');
   const front = m.getPane('sbFocusLines').querySelectorAll('path.sb-route');
   eq(front.length, 1, 'focused route drawn in the top pane');
+  eq(front[0].getAttribute('stroke-width'), String(3 + FOCUS_EXTRA), 'the focused route stands out: 3 + FOCUS_EXTRA');
   const halo = el.querySelector('path.sb-halo');
   halo.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   eq(taps.length, 1, 'stop tap via 44 px halo');
