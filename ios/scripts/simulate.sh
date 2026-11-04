@@ -75,6 +75,12 @@ for mode in light dark; do
   shot 49-alert-row    "$mode" 9  -screen current -alert -detent full
   shot 50-stop-long    "$mode" 9  -screen stoplong
   shot 51-dir-long     "$mode" 10 -screen dirlong
+  # glass redesign: the collapsed card on every kind of page (header actions and Back on glass), the compass
+  shot 63-routes-peek   "$mode" 8  -screen routes -detent peek
+  shot 64-myroutes-peek "$mode" 8  -screen myroutes -detent peek
+  shot 65-route-peek    "$mode" 9  -screen route -detent peek
+  shot 66-stop-peek     "$mode" 8  -screen stop -detent peek
+  shot 67-compass       "$mode" 9  -screen rotated -detent peek
 done
 
 # Below the fold (-scrollend: the page opens scrolled to its end): footnotes, buttons, the official contact

@@ -1,4 +1,5 @@
 import Foundation
+import MapKit
 import SwiftUI
 import UIKit
 import StraightBussingKit
@@ -800,6 +801,8 @@ extension AppModel {
                 openSimulatedSetting()
             case "pick": pickMode = .loc; push(.pick)
             case "near": locate()   // "Show my location": the map closer in (CI map-label shots)
+            case "rotated":   // the map turned 40 degrees: the compass shows above the lower-right group (CI shot)
+                mapCamera.position = .camera(MapCamera(centerCoordinate: MapCameraModel.campus.center, distance: 4200, heading: 40))
             case "search":
                 openDirections()
                 demoQuery = "regnstien"
