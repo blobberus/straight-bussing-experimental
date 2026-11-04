@@ -99,6 +99,59 @@ test("boot: Nearby fills from the live feed, no status pill", async () => {
   ok(parseFloat(W.document.getElementById("app").style.getPropertyValue("--v-peek")) > 40, "collapsed height measured from the header after boot");
 });
 
+/** Blurred surfaces now (glass spec 12.1, 16): visible elements with a backdrop-filter, and the share of the screen they cover. */
+function blurBudget() {
+  const vw = W.innerWidth, vh = W.innerHeight, found = [];
+  for (const e of D.querySelectorAll("body *")) {
+    const cs = W.getComputedStyle(e), f = cs.backdropFilter || cs.webkitBackdropFilter;
+    if (!f || f === "none" || cs.visibility !== "visible" || parseFloat(cs.opacity) === 0 || !e.getClientRects().length) continue;
+    const r = e.getBoundingClientRect(), w = Math.max(0, Math.min(vw, r.right) - Math.max(0, r.left)), h = Math.max(0, Math.min(vh, r.bottom) - Math.max(0, r.top));
+    if (w * h > 0) found.push({ id: e.id || e.className, a: w * h });
+  }
+  return { n: found.length, share: found.reduce((x, y) => x + y.a, 0) / (vw * vh), names: found.map((x) => String(x.id).split(" ")[0]).join(", ") };
+}
+/** Text on glass (glass spec 5.3): only label or labelGlass2; route badges and controls with their own fill are exempt. */
+function glassTextOffenders() {
+  const root = W.getComputedStyle(D.documentElement), probe = D.createElement("span");
+  D.body.appendChild(probe);
+  const rgb = (v) => { probe.style.color = v; return W.getComputedStyle(probe).color; };
+  const allowed = new Set([rgb(root.getPropertyValue("--label")), rgb(root.getPropertyValue("--label-glass-2"))]);
+  probe.remove();
+  const bad = [], hosts = [...D.querySelectorAll(".glass")];
+  if ($("#sheet").dataset.rest === "peek") hosts.push($("#sheetHead"));
+  for (const host of hosts) {
+    if (W.getComputedStyle(host).visibility !== "visible") continue;
+    for (const e of host.querySelectorAll("*")) {
+      if (e.closest(".chip, .ctx-btn, .pillslot, svg") || ![...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+      const cs = W.getComputedStyle(e);
+      if (cs.visibility !== "visible" || !e.getClientRects().length || e.closest(".sr, .sr-only")) continue;
+      if (!allowed.has(cs.color)) bad.push(`${e.className || e.tagName}: "${e.textContent.trim().slice(0, 24)}" in ${cs.color}`);
+    }
+  }
+  return bad;
+}
+
+test("glass budget: at rest at most 6 blurred surfaces on at most 22% of the screen; text on glass is label or labelGlass2 only (glass spec 5.3, 12.1)", async () => {
+  tab("nearby");
+  $("#grab").dispatchEvent(new W.KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
+  // settled = the sheet rests collapsed and #app.is-moving (solid glass while it moves, 12.1 rule 2) is gone
+  await waitFor(() => $("#sheet").dataset.rest === "peek" && !$("#app").classList.contains("is-moving") || null, "collapsed and settled");
+  let b = blurBudget();
+  ok(b.n >= 4 && b.n <= 6 && b.share <= 0.22, `collapsed: ${b.n} blurred (${b.names}), ${(b.share * 100).toFixed(1)}% of the screen`);
+  eq(glassTextOffenders(), [], "collapsed: text on glass");
+  SB.store.set({ journey: { kind: "plan", rids: [T.R], label: "To E2E Place", to: "E2E Place", t0: Math.floor(Date.now() / 1000), legs: [] } });
+  await waitFor(() => !$("#ctxbar").hidden, "the trip chip");
+  for (const a of $("#ctxbar").getAnimations()) a.finish();
+  b = blurBudget();
+  ok(b.n <= 6 && b.share <= 0.22, `with the trip chip: ${b.n} blurred (${b.names}), ${(b.share * 100).toFixed(1)}%`);
+  eq(glassTextOffenders(), [], "with the trip chip: text on glass");
+  SB.store.set({ journey: null });
+  $("#grab").dispatchEvent(new W.KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+  await waitFor(() => $("#sheet").dataset.rest === "full" && !$("#app").classList.contains("is-moving") || null, "expanded and settled");
+  b = blurBudget();
+  ok(b.n <= 4, `expanded: the card's plate and the group stop blurring: ${b.n} (${b.names})`);
+});
+
 test("tabs: Nearby / Routes / My Routes switch title and aria-current; no Alerts tab", async () => {
   eq($$("#tabs button[data-tab]").map((b) => b.dataset.tab), ["nearby", "routes", "myroutes"]);
   ok(!$("#alertBadge") && !$('#tabs [data-tab="alerts"]'), "alerts tab and badge are gone");
