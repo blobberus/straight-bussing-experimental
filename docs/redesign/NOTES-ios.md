@@ -116,3 +116,32 @@ notification so if the user spams it while on a route, it doesn't shift and acci
 22. **Button rows inside lists.** Edit / Delete, Cancel / Save and the Routes filter are plain equal-split HStacks in
     their list rows (short labels); the measured equal-width layout is kept for ScrollView pages only, where it gave
     list rows an empty band in the first CI gallery.
+
+## What was verified, and how
+
+Simulator only (CI `ios.yml` on `macos-26`, iPhone 17 Pro, iOS 26, the `-demo` build with simulated buses), from the
+`ios-simulator-preview` artifact of each run, every screenshot looked at by eye. The curated set is in
+`docs/redesign/after/ios/` (402 px wide, 256 colors with the token colors kept exact).
+
+- Every view in light and dark: Current trip (collapsed map and expanded), search with place and station results and
+  the spelling fix, Directions (place summary, walk-first card, option cards with the step timeline, collapsed with the
+  option on the map), the trip in progress (expanded, scrolled to its end, collapsed over the map with the trip chip
+  and callouts), Routes (filter row, groups, map order), route detail (rail with buses, hours & service, buses by
+  hour), stop detail, My Routes (swipe actions, delete confirmation), custom route detail and editor, Routes to
+  station, Settings (beta feedback card first, appearance, location, alerts, demo, credits), Lines by Time, Alerts,
+  About, Live Activity preview, a toast.
+- Required states (spec 13): loading rows, feed unreachable (sheet and map), Retry during a trip and the held
+  "Live data is back." banner (UI test `testRepeatedRetryDuringATripKeepsTheTrip`), delayed (200 s) and out of date
+  (420 s, stale buses at 50%), no live locations with the operator's alert and calls, location denied, no location, a
+  service alert row, long names (stop title, Directions field and place summary).
+- Larger text: xxxLarge, AX3 and AX5 on Current trip, the trip, Directions, a stop and Routes (header stacking, rows
+  stacking, no overflow after the fixes), AX3 in dark, the map chrome capped at xxxLarge.
+- Unit and UI tests: the Kit suite (with `RetryHoldTests`), the smoke UI tests (tabs, swipe actions, delete
+  confirmation, the journey, the sheet drags, Next bus first, the stop's Directions ending a trip, simulated buses,
+  map names, repeated Retry, the toast), launch timings.
+
+Not verified: a real iPhone (sheet drag feel, haptics, the Dynamic Island and the Lock Screen, notifications, real GPS
+and the heading cone), VoiceOver read-through (labels were written and reviewed in code, not listened to), Increase
+Contrast and Reduce Transparency renders, Reduce Motion behavior in motion, Liquid Glass of the system sheets on a
+device, the missed-bus banner (needs a followed bus to leave while the rider is near the stop; the Kit words are
+unit-tested), the "No shuttles running" state outside scheduled service, the iPhone SE size.
