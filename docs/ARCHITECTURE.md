@@ -798,3 +798,35 @@ resting states, back stack, Settings and Lines by Time overlays); what changed i
 - Performance rules kept: the sheet's `--drag` stays non-inherited, `will-change` only while dragging, content insets
   change after a settle, bus markers update in place on requestAnimationFrame; at most four blurred elements.
 Deviations from the spec: `docs/redesign/NOTES-web.md`; screens: `docs/redesign/after/web/`. sw `sb-v2-85`.
+
+## Glass redesign: shell contracts (2026-11-04, docs/DESIGN-SPEC-GLASS.md, a delta on DESIGN-SPEC.md)
+Apple Maps' iOS 26 layout in Liquid Glass; functions, words and states unchanged. What moved and the contracts views
+and tests rely on:
+- **Glass** (`css/tokens.css` glass tokens, `.glass` in `css/base.css`): only the control layer over the map (tab bar,
+  search circle, Settings circle, lower-right group, simulated-buses chip, trip chip, the collapsed card's plate).
+  `#app.is-moving` (ui/sheet.js, while the sheet drags and settles) and `.glass--moves` make moving glass solid;
+  `html.glass-lite` (ui/frame.js `initGlassLite`, a slow device) and Increase Contrast / Reduce Transparency make all
+  glass solid. Budget: at most 6 blurred surfaces on at most 22% of the screen at rest (e2e "glass budget").
+- **Top rows** (fixed, `css/base.css`): `#pill` = Row A (banner form, topmost, Retry / See alert slot leading, 2.5 s
+  hold) or Row B leading (chip form); `#topbar` = the Settings circle (Row B trailing); `#ctxbar` beside Settings or
+  under the chip. `--banner-h` (from `--pill-h`), `--row-b-top`, `--ctx-top` on `#app`.
+- **Bottom row** `#bottomrow`: `<nav id="tabs" class="tabcap">` (the three sections, `.tab-pill` moved by `--tab-i`,
+  written by main.js) and `#searchBar` (the search circle, `dir:open` + `data-focus="to"`). `--nav-h` = the space it
+  takes from the bottom (`--bottom-inset` + 56). Hidden while a sheet text field has focus on touch screens and under
+  Settings / Lines by Time.
+- **Sheet** (`css/sheet.css`, `js/ui/sheet.js`): bottom at the screen's bottom, `--v-max` tall; collapsed visible
+  height `--v-peek-vis` (card + 8 + the bottom row; the peek probe measures it), expanded `--v-full`. `.sheet-bg`
+  holds `.sheet-glass` (the card's plate, header height, inset 12) and `.sheet-solid` (the opaque sheet); while
+  dragging, `paintP()` writes opacity / transform on `.sheet-solid`, `#content` and `#mapctl` from the progress p
+  (opaque by p .35, the group gone by p .30); at rest css drives them from `data-detent`. `--card-k` (card width /
+  sheet width) on `#app`. The sheet element takes no taps while collapsed except its header and `#mapctl`.
+- **Lower-right group** `#mapctl` (inside `#sheet`, `bottom: calc(100% + 8px)`): `#timeBtn` over `#locateBtn`; rides
+  with the sheet's transform, hidden when expanded. The map's bottom inset adds its height while collapsed
+  (`MapApi.setBottomInset(px, controls)`), the credit does not.
+- **Directions**: the Start / Destination card is the first child of the view, sticky; `#dirbar`, the search bar morph
+  and `barRects` / `useBar` are gone.
+- **Settings / Lines by Time** (`ui/settings-overlay.js`): a sheet of its own (top = safe + 10, bottom 0), zooming out
+  of its opener (`zoomOrigin`), swipe down on the header closes (`SWIPE_CLOSE_PX`), Done = checkmark named "Done",
+  Cancel = cross named "Cancel"; it no longer moves the app's sheet; the app behind is inert.
+- **Confirm dialogs** grow out of their button (`ui/confirm.js zoomFrom`). Buttons and segmented controls are capsules.
+Deviations from the glass spec: `docs/redesign/NOTES-glass-web.md`; screens: `docs/redesign/glass/web/`. sw `sb-v2-86`.
