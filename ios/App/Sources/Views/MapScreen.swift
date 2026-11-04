@@ -23,6 +23,8 @@ struct MapScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var scheme
+    /// The map's scope (RootView): its compass sits in the lower-right group, not where MapKit puts one.
+    var scope: Namespace.ID? = nil
 
     /// The trip drawn on the map: the started one, else the selected Directions option.
     var plan: TripOption? {
@@ -78,7 +80,7 @@ struct MapScreen: View {
         let labelSig = labelSignature(layers, ring: ring, tripLabels: labels, youGuess: youMark.flatMap { $0.guess ? $0.at : nil },
                                       plan: drawn, walkEnd: walk?.last)
         MapReader { proxy in
-        Map(position: $camera.position) {
+        Map(position: $camera.position, scope: scope) {
             // building and place names first: stops, buses, the trip and you are drawn over them, and they never take a tap
             ForEach(placed, id: \.drawKey) { p in
                 Annotation("", coordinate: p.landmark.coord.cl, anchor: p.anchor.unitPoint) {
@@ -184,7 +186,8 @@ struct MapScreen: View {
             }
         }
         .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
-        .mapControls { MapCompass() }
+        // no MapKit controls: the compass is the lower-right group's (MapControls, DESIGN-SPEC-GLASS 8.4)
+        .mapControls { }
         // the names are laid out when the camera stops, not on every frame of a pan or zoom: each frame only notes the
         // time, the layout runs once the camera has been still for 0.3 s (with .onEnd alone, the names stayed where an
         // earlier camera had put them after the app's own camera glides in the CI simulator)

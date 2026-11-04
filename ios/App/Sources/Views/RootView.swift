@@ -1,111 +1,101 @@
 import Combine
+import MapKit
 import SwiftUI
 import UIKit
 import StraightBussingKit
 
-/// The map screen (docs/DESIGN-SPEC.md 10.1 to 10.7, 10.19): the full-screen map; floating over it the search capsule
-/// with Lines by Time and Settings (in Directions it turns into the Start / Destination card, in place), one status
-/// banner when the feed needs a warning, the demo chip, the trip / filter chip and the locate button; the opaque bottom
-/// sheet with two resting states (owner 2026-10-12) on the bottom bar; toasts just above the sheet.
+/// The map screen in the glass layout (docs/DESIGN-SPEC-GLASS.md 3, the Apple Maps structure): the full-screen map
+/// under everything; the top rows (Row A the status banner when the feed needs a warning, Row B the demo chip and the
+/// Settings circle, Row C the trip / filter chip); the sheet (an inset glass card when collapsed, the opaque sheet
+/// when expanded) with the lower-right group (Lines by Time over Locate, the compass while the map is rotated) riding
+/// on it; the floating bottom row (the glass tab bar and the search circle); toasts just above the card. The map draws
+/// under every glass element.
 struct RootView: View {
     @Environment(AppModel.self) private var model
-    /// Measured height of the floating chrome the expanded sheet stays below (search bar or Directions card, status
-    /// banner, demo chip): a long warning, large text or the Directions card makes it taller.
-    @State private var chromeH: CGFloat = 48
-    /// Measured height of the bottom bar (49 pt, more with larger text).
-    @State private var tabH: CGFloat = Space.tabBar
-    /// The keyboard is up: the bottom bar steps aside so the sheet keeps its room for suggestions.
+    /// Measured height of Row A + Row B (status banner, demo chip, Settings): the expanded sheet starts 8 pt below
+    /// them, so a long warning or large text pushes it down instead of covering it.
+    @State private var chromeH: CGFloat = Space.chromeButton
+    /// Measured height of the tab bar capsule (56).
+    @State private var tabH: CGFloat = Space.tabBarH
+    /// The keyboard is up: the bottom row steps aside so the sheet keeps its room for suggestions.
     @State private var keyboardUp = false
-    /// The sheet's settled visible height: the map's bottom padding follows it, so the map never re-centers while the
-    /// sheet is still moving (owner 2026-10-12: no hitch).
+    /// The sheet's settled visible height, from the bottom of the screen: the map's bottom padding follows it, so the
+    /// map never re-centers while the sheet is still moving (owner 2026-10-12: no hitch).
     @State private var settledSheetH: CGFloat = 0
-    /// Directions' typed text, focus and suggestions, shared by the top card and the sheet below it.
+    /// Directions' typed text, focus and suggestions, shared by the card at the top of the sheet and the results.
     @State private var dirUI = DirectionsUI()
     /// Whether the sheet's content has scrolled under its header (the header hairline, spec 10.6).
     @State private var sheetScroll = SheetScroll()
-    @Namespace private var searchNS
+    /// The map's scope: the compass in the lower-right group belongs to the map (MapKit draws no second one).
+    @Namespace private var mapNS
+    /// Settings and Lines by Time open out of their buttons (`mZoomSheet`, iOS 18 and later).
+    @Namespace private var zoomNS
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         @Bindable var model = model
         GeometryReader { geo in
+            let safeBottom = geo.safeAreaInsets.bottom
+            // the sheet and the bottom row reach the screen's bottom edge; with the keyboard up they stop at it
+            let ext: CGFloat = keyboardUp ? 0 : safeBottom
+            let rowInset = Space.bottomRowInset(safeBottom: safeBottom)
+            // under the collapsed card: the bottom row, its inset and the 8 pt gap
+            let reserve: CGFloat = keyboardUp ? 0 : rowInset + tabH + Space.gapChrome
+            let expanded = model.detent == .full
             let inDirections = model.page == .directions
             // On the Routes list the list's own bar says the same thing with the same button (one action per intent).
-            let chip = TripChip.shows(model) && model.detent != .full && !(model.tab == .routes && model.page == nil) && !inDirections
-            let topReserved: CGFloat = Space.s2 + chromeH + Space.s2
-            let barH: CGFloat = keyboardUp ? 0 : tabH
-            let available = max(200, geo.size.height - barH - topReserved)
-            // the trip chip sits under the measured chrome: the follow camera keeps you out from under it too
-            let mapRects = MapRects.of(geo, chromeH: chromeH + (chip ? 36 + Space.gapChrome : 0), sheetH: settledSheetH, tabH: barH)
-            let showLocate = model.detent != .full
-            ZStack(alignment: .bottom) {
-                // The inset is applied here, not passed in: MapScreen has no inputs, so a settled sheet only
-                // relayouts the map instead of re-running its body.
-                MapScreen()
-                    .safeAreaPadding(.bottom, settledSheetH + barH)
+            let chip = TripChip.shows(model) && !expanded && !(model.tab == .routes && model.page == nil) && !inDirections
+            let available = max(200, geo.size.height + ext - (Space.s2 + chromeH + Space.gapChrome))
+            // the trip chip sits under the top rows and the group at the trailing edge: the follow camera keeps you clear
+            let mapRects = MapRects.of(geo, topH: chromeH + (chip ? 36 + Space.gapChrome : 0), sheetH: settledSheetH,
+                                       trailing: expanded ? 0 : Space.insetChrome + Space.chromeButton + Space.s1)
+            ZStack(alignment: .top) {
+                // The inset is applied here, not passed in: MapScreen's only input never changes, so a settled sheet
+                // only relayouts the map instead of re-running its body.
+                MapScreen(scope: mapNS)
+                    .safeAreaPadding(.bottom, settledSheetH)
                     .ignoresSafeArea()
-                VStack(spacing: Space.gapChrome) {
-                    VStack(spacing: Space.gapChrome) {
-                        // the bar and the card are one element that changes shape (matchedGeometryEffect; Reduce
-                        // Motion: a crossfade)
-                        if inDirections {
-                            DirectionsCard()
-                                .modifier(SearchMorphEffect(ns: searchNS, on: !reduceMotion))
-                                .transition(.opacity)
-                        } else {
-                            SearchBar()
-                                .modifier(SearchMorphEffect(ns: searchNS, on: !reduceMotion))
-                                .transition(.opacity)
-                        }
-                        StatusBanner()
-                        if model.simulating {
-                            HStack(alignment: .top, spacing: Space.gapChrome) {
-                                DemoChip()
-                                Spacer(minLength: 0)
-                                if showLocate { LocateButton() }
-                            }
-                        }
-                    }
-                    .animation(Motion.pick(Motion.morph, reduce: reduceMotion), value: inDirections)
-                    .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { h in
-                        if abs(h - chromeH) > 0.5 { withAnimation(Motion.quick) { chromeH = h } }
-                    }
-                    if chip || (showLocate && !model.simulating) {
-                        HStack(alignment: .top, spacing: Space.gapChrome) {
-                            if chip { TripChip() }
-                            Spacer(minLength: 0)
-                            if showLocate && !model.simulating { LocateButton() }
-                        }
-                    }
-                    Spacer(minLength: 0)
+                BottomSheet(detent: $model.detent, available: available, bottomReserve: reserve, onSettled: { _, h in
+                    if abs(h - settledSheetH) > 0.5 { settledSheetH = h }
+                }) {
+                    SheetHeader()
+                } content: {
+                    SheetContent()
+                } accessory: {
+                    MapControls(mapScope: mapNS, zoomNS: zoomNS)
                 }
-                .padding(.horizontal, Space.insetChrome)
-                .padding(.top, Space.s2)
                 // pinned to the screen's width: a too-wide child (very large text) can never widen its siblings
-                .frame(width: geo.size.width)
-                VStack(spacing: 0) {
-                    BottomSheet(detent: $model.detent, available: available, onSettled: { _, h in
-                        if abs(h - settledSheetH) > 0.5 { settledSheetH = h }
-                    }) {
-                        SheetHeader()
-                    } content: {
-                        SheetContent()
-                    }
-                    if !keyboardUp {
-                        TabBar()
-                            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { h in
-                                if abs(h - tabH) > 0.5 { tabH = h }
-                            }
-                    }
+                .frame(width: geo.size.width, height: available)
+                .frame(maxHeight: .infinity, alignment: .bottom)
+                .ignoresSafeArea(keyboardUp ? SafeAreaRegions() : .container, edges: .bottom)
+                .accessibilitySortPriority(2)
+                if expanded && !keyboardUp {
+                    BottomFade(height: rowInset + tabH + 24)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                        .ignoresSafeArea(.container, edges: .bottom)
                 }
-                .frame(width: geo.size.width)
+                topRows(chip: chip, width: geo.size.width)
+                    .frame(width: geo.size.width)
+                    .accessibilitySortPriority(3)
+                if !keyboardUp {
+                    bottomRow(narrow: geo.size.width < 360)
+                        .padding(.bottom, rowInset)
+                        .frame(width: geo.size.width)
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                        .transition(materialize)
+                        .accessibilitySortPriority(1)
+                }
             }
-            // just above the collapsed sheet, or above the bottom bar when the sheet is expanded; never over the search
-            // bar, the sheet title or Settings (spec 10.19)
-            .overlay(alignment: .bottom) {
+            .animation(Motion.pick(Motion.materialize, reduce: reduceMotion), value: keyboardUp)
+            // collapsed: leading, 12 above the card, never under the lower-right group; expanded: centered 12 above the
+            // tab bar; never over the status banner (DESIGN-SPEC-GLASS 8.13)
+            .overlay(alignment: expanded ? .bottom : .bottomLeading) {
                 ToastBanner()
+                    .frame(maxWidth: expanded ? 360 : max(160, geo.size.width - 2 * Space.insetChrome - Space.chromeButton - Space.gapChrome),
+                           alignment: expanded ? .center : .leading)
                     .padding(.horizontal, Space.insetChrome)
-                    .padding(.bottom, (model.detent == .peek ? settledSheetH : 0) + barH + Space.s3)
+                    .padding(.bottom, max(0, (expanded ? reserve - Space.gapChrome : settledSheetH) + Space.s3 - ext))
             }
             // the trip's follow camera keeps its frame inside what the rider can see of the map
             .onChange(of: mapRects, initial: true) { _, r in
@@ -114,6 +104,7 @@ struct RootView: View {
                 if cam.visibleRect != r.visible { cam.visibleRect = r.visible }
             }
         }
+        .mapScope(mapNS)
         .environment(dirUI)
         .environment(sheetScroll)
         .onChange(of: model.page) { _, _ in sheetScroll.scrolled = false }
@@ -124,9 +115,12 @@ struct RootView: View {
         .onChange(of: model.detent) { _, d in if d == .peek { model.sheetCollapsed() } }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardUp = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardUp = false }
-        .sheet(isPresented: $model.showSettings) { SettingsView() }
+        .sheet(isPresented: $model.showSettings) { SettingsView().sbZoomFrom("settings", in: zoomNS) }
         .onChange(of: model.mapCovered) { _, _ in model.mapCoverChanged() }   // no bus glides behind a sheet
-        .sheet(isPresented: $model.showTimePick) { TimePickView(start: model.routeState.timeView?.at ?? Date().timeIntervalSince1970) }
+        .sheet(isPresented: $model.showTimePick) {
+            TimePickView(start: model.routeState.timeView?.at ?? Date().timeIntervalSince1970)
+                .sbZoomFrom("timePick", in: zoomNS)
+        }
         .sheet(isPresented: $model.showLiveActivityPreview) {
             NavigationStack { LiveActivityPreviewView() }
         }
@@ -145,9 +139,158 @@ struct RootView: View {
         }
     }
 
+    /// Glass controls appearing and leaving (`mMaterialize`: scale .85 + fade; Reduce Motion: a fade).
+    var materialize: AnyTransition {
+        reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)
+    }
+
+    /// Row A (the status banner, opaque, Retry on its leading side), Row B (the demo chip leading, the Settings circle
+    /// trailing), Row C (the trip / filter chip, hidden while the sheet is expanded). Under a held banner Rows B and C
+    /// keep their place (owner 2026-11-03).
+    @ViewBuilder func topRows(chip: Bool, width: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: Space.gapChrome) {
+            VStack(spacing: Space.gapChrome) {
+                StatusBanner()
+                HStack(alignment: .center, spacing: Space.gapChrome) {
+                    if model.simulating { DemoChip().transition(materialize) }
+                    Spacer(minLength: 0)
+                    SettingsButton(zoomNS: zoomNS)
+                }
+            }
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { h in
+                if abs(h - chromeH) > 0.5 { withAnimation(Motion.quick) { chromeH = h } }
+            }
+            if chip {
+                TripChip()
+                    .frame(maxWidth: max(160, width - 2 * Space.insetChrome - Space.chromeButton - Space.gapChrome), alignment: .leading)
+                    .transition(materialize)
+            }
+        }
+        .animation(Motion.pick(Motion.materialize, reduce: reduceMotion), value: chip)
+        .animation(Motion.pick(Motion.materialize, reduce: reduceMotion), value: model.simulating)
+        .padding(.horizontal, Space.insetChrome)
+        .padding(.top, Space.s2)
+    }
+
+    /// The bottom row: the glass tab bar from the leading inset to 8 pt before the 56 pt search circle (one glass
+    /// container, so on iOS 26 they sample the map together).
+    @ViewBuilder func bottomRow(narrow: Bool) -> some View {
+        HStack(alignment: .center, spacing: Space.gapChrome) {
+            TabBar(narrow: narrow)
+                .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { h in
+                    if abs(h - tabH) > 0.5 { tabH = h }
+                }
+            SearchCircle()
+        }
+        .sbGlassContainer(spacing: Space.gapChrome)
+        .padding(.horizontal, Space.insetChrome)
+    }
+
     var deleteTitle: String { "Delete \u{201C}\(model.confirmDelete?.name ?? "")\u{201D}?" }
     var deleteBinding: Binding<Bool> {
         Binding(get: { model.confirmDelete != nil }, set: { if !$0 { model.confirmDelete = nil } })
+    }
+}
+
+/// Under the floating bottom row of the expanded sheet, iOS 17 to 25 only (iOS 26 draws the soft scroll edge, spec
+/// 8.8): `bgSheet` from clear to 0.9 over 24 pt, then 0.9 to the screen's edge, so rows scrolling under the bar never
+/// fight its labels. Takes no taps.
+struct BottomFade: View {
+    let height: CGFloat
+    var body: some View {
+        if #available(iOS 26.0, *) {
+            EmptyView()
+        } else {
+            let edge = height > 0 ? min(1, 24 / height) : 0
+            LinearGradient(stops: [
+                .init(color: Palette.bgSheet.opacity(0), location: 0),
+                .init(color: Palette.bgSheet.opacity(0.9), location: edge),
+                .init(color: Palette.bgSheet.opacity(0.9), location: 1),
+            ], startPoint: .top, endPoint: .bottom)
+            .frame(height: height)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+}
+
+/// Settings (DESIGN-SPEC-GLASS 8.2): a 44 pt glass circle at the top right, alone (rare, and riders know it there).
+/// Settings opens out of it (iOS 18 and later).
+struct SettingsButton: View {
+    @Environment(AppModel.self) private var model
+    let zoomNS: Namespace.ID
+    var body: some View {
+        Button { model.showSettings = true } label: {
+            Image(systemName: "gearshape").font(.system(size: 20, weight: .regular))
+        }
+        .buttonStyle(GlassCircleStyle())
+        .sbZoomSource("settings", in: zoomNS)
+        .accessibilityIdentifier("settingsButton")
+        .accessibilityLabel("Settings")
+        .accessibilityShowsLargeContentViewer { Label("Settings", systemImage: "gearshape") }
+    }
+}
+
+/// The lower-right group (DESIGN-SPEC-GLASS 8.4, Apple Maps' Map Modes over location): one 44 x 88 glass capsule with
+/// Lines by Time (`clock`) on top and Locate below, a hairline between them; the map's compass 8 pt above it while
+/// the map is rotated (a tap turns north up). Rides on the sheet (BottomSheet's accessory).
+struct MapControls: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.displayScale) private var displayScale
+    let mapScope: Namespace.ID
+    let zoomNS: Namespace.ID
+    var body: some View {
+        VStack(spacing: 0) {
+            Button { model.showTimePick = true } label: {
+                Image(systemName: "clock").font(.system(size: 20, weight: .regular)).foregroundStyle(Palette.label)
+                    .frame(width: Space.chromeButton, height: Space.chromeButton)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(ChromePressStyle())
+            .sbZoomSource("timePick", in: zoomNS)
+            .accessibilityIdentifier("timeButton")
+            .accessibilityLabel("Lines by Time")
+            .accessibilityHint("Check which lines the timetable has running at a time you pick")
+            .accessibilityShowsLargeContentViewer { Label("Lines by Time", systemImage: "clock") }
+            Rectangle().fill(Palette.separator)
+                .frame(height: 1 / max(1, displayScale))
+                .padding(.horizontal, Space.s2)
+                .accessibilityHidden(true)
+            LocateButton()
+        }
+        .frame(width: Space.chromeButton)
+        .sbGlass(in: Capsule(), interactive: true)
+        .overlay(alignment: .top) {
+            MapCompass(scope: mapScope)
+                .alignmentGuide(.top) { d in d[.bottom] + Space.gapChrome }
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// Search (DESIGN-SPEC-GLASS 8.7): a 56 pt glass circle at the trailing end of the bottom row, the magnifier in
+/// `label`, named "Search for a destination". A tap opens Directions with the sheet expanded and the keyboard on
+/// Destination (the Directions card sits at the top of the sheet); in Directions already, it goes back to typing the
+/// destination.
+struct SearchCircle: View {
+    @Environment(AppModel.self) private var model
+    @Environment(DirectionsUI.self) private var ui
+    var body: some View {
+        Button {
+            if model.page == .directions {
+                if model.detent == .peek { model.detent = .full }
+                ui.focus = .to
+            } else {
+                model.dirActiveTo = true
+                model.openDirections()
+            }
+        } label: {
+            Image(systemName: "magnifyingglass").font(.system(size: 22, weight: .medium))
+        }
+        .buttonStyle(GlassCircleStyle(size: Space.searchButton))
+        .accessibilityIdentifier("searchBar")
+        .accessibilityLabel("Search for a destination")
+        .accessibilityShowsLargeContentViewer { Label("Search for a destination", systemImage: "magnifyingglass") }
     }
 }
 
@@ -190,78 +333,6 @@ struct SheetScrollReporter: ViewModifier {
         } else {
             content
         }
-    }
-}
-
-/// The search bar and the Directions card are one element that changes shape (owner 2026-10-12, like Google Maps):
-/// a matched geometry between them; Reduce Motion: none (they crossfade).
-struct SearchMorphEffect: ViewModifier {
-    let ns: Namespace.ID
-    let on: Bool
-    func body(content: Content) -> some View {
-        if on { content.matchedGeometryEffect(id: "searchCard", in: ns) } else { content }
-    }
-}
-
-/// Floating search capsule (spec 10.1): 48 tall, system material, the magnifier and "Search for a destination" in
-/// `label2`, then Lines by Time and Settings as 44 pt icon buttons. A tap opens Directions: the capsule turns into the
-/// Start / Destination card in place, keyboard on Destination. Text stops growing at xxxLarge; at accessibility sizes
-/// the placeholder shortens to "Search".
-struct SearchBar: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dynamicTypeSize) private var typeSize
-    /// The search part is held down: the whole capsule takes `fillPressed` over its material (spec 10.1).
-    @State private var pressed = false
-    var body: some View {
-        HStack(spacing: 0) {
-            Button { model.dirActiveTo = true; model.openDirections() } label: {
-                HStack(spacing: Space.s3) {
-                    Image(systemName: "magnifyingglass").font(.title3).foregroundStyle(Palette.label2)
-                        .accessibilityHidden(true)
-                    Text(typeSize.isAccessibilitySize ? "Search" : "Search for a destination")
-                        .font(Typo.body).foregroundStyle(Palette.label2).lineLimit(1)
-                    Spacer(minLength: 0)
-                }
-                .padding(.leading, Space.insetContent)
-                .frame(minHeight: Space.searchHeight)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(CapsulePressStyle(pressed: $pressed))
-            .accessibilityIdentifier("searchBar")
-            .accessibilityLabel("Search for a destination")
-            Button { model.showTimePick = true } label: {
-                Image(systemName: "clock").font(.title3).foregroundStyle(Palette.label).frame(width: Space.tap, height: Space.tap)
-            }
-            .buttonStyle(ChromePressStyle())
-            .accessibilityIdentifier("timeButton")
-            .accessibilityLabel("Lines by Time")
-            .accessibilityHint("Check which lines the timetable has running at a time you pick")
-            .accessibilityShowsLargeContentViewer { Label("Lines by Time", systemImage: "clock") }
-            Button { model.showSettings = true } label: {
-                Image(systemName: "gearshape").font(.title3).foregroundStyle(Palette.label).frame(width: Space.tap, height: Space.tap)
-            }
-            .buttonStyle(ChromePressStyle())
-            .accessibilityIdentifier("settingsButton")
-            .accessibilityLabel("Settings")
-            .accessibilityShowsLargeContentViewer { Label("Settings", systemImage: "gearshape") }
-            .padding(.trailing, 2)
-        }
-        .frame(minHeight: Space.searchHeight)
-        .background(.regularMaterial, in: Capsule())
-        .overlay { Capsule().fill(pressed ? Palette.fillPressed : Color.clear).allowsHitTesting(false) }
-        .animation(Motion.press, value: pressed)
-        .elevation(.floating, in: Capsule())
-        // map chrome: grows with text size, but not so far that it hides the map (the sheet holds the content)
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-    }
-}
-
-/// The search capsule's press: reports the pressed state so the whole capsule, not only the text, takes the tint.
-struct CapsulePressStyle: ButtonStyle {
-    @Binding var pressed: Bool
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .onChange(of: configuration.isPressed) { _, v in pressed = v }
     }
 }
 
@@ -410,8 +481,9 @@ struct StatusBanner: View {
     }
 }
 
-/// "Simulated buses" (spec 10.3 chip): the Settings switch is on (never in `-demo`). Quiet, yet never mistaken for live
-/// service (the flask and the words); a tap opens Settings at the switch to turn it off.
+/// "Simulated buses" (spec 10.3 chip, DESIGN-SPEC-GLASS 8.3): the Settings switch is on (never in `-demo`). A 32 pt
+/// glass capsule in Row B, leading; quiet, yet never mistaken for live service (the flask and the words); a tap opens
+/// Settings at the switch to turn it off.
 struct DemoChip: View {
     @Environment(AppModel.self) private var model
     var body: some View {
@@ -419,14 +491,13 @@ struct DemoChip: View {
             HStack(spacing: Space.s2) {
                 Image(systemName: Sym.simulated).font(.system(size: IconSize.inline, weight: .semibold)).accessibilityHidden(true)
                 Text(AppModel.simulatedPillText).font(Typo.footnote.weight(.semibold)).lineLimit(1)
-                Image(systemName: "info.circle").font(.system(size: IconSize.inline, weight: .semibold)).foregroundStyle(Palette.tint)
+                Image(systemName: "info.circle").font(.system(size: IconSize.inline, weight: .semibold))
                     .accessibilityHidden(true)
             }
             .foregroundStyle(Palette.label)
             .padding(.horizontal, Space.s3)
             .frame(minHeight: 32)
-            .background(.regularMaterial, in: Capsule())
-            .elevation(.floating, in: Capsule())
+            .sbGlass(in: Capsule())
             .padding(.vertical, 6)
             .contentShape(Rectangle())
         }
@@ -438,8 +509,10 @@ struct DemoChip: View {
     }
 }
 
-/// The trip and filter chip (spec 10.5, web ui/contextbar.js): why the map shows fewer routes than usual, with a
-/// one-tap way out. Route badges (up to 3, then "+N"), the label, then Show all / Clear. Only the label truncates.
+/// The trip and filter chip (spec 10.5, web ui/contextbar.js, DESIGN-SPEC-GLASS 8.3): why the map shows fewer routes
+/// than usual, with a one-tap way out. A 36 pt glass capsule in Row C: route badges (up to 3, then "+N"), the label,
+/// then Show all / Clear as a `fill` capsule with `label` text (not tint text on glass, and not prominent: Show all
+/// ends a trip). Only the label truncates.
 struct TripChip: View {
     @Environment(AppModel.self) private var model
     static let maxBadges = 3
@@ -470,7 +543,7 @@ struct TripChip: View {
             HStack(spacing: 2) {
                 ForEach(rids.prefix(Self.maxBadges), id: \.self) { RouteBadge(route: model.route($0), rid: $0, size: .small) }
                 if rids.count > Self.maxBadges {
-                    Text("+\(rids.count - Self.maxBadges)").font(Typo.caption).foregroundStyle(Palette.label2).padding(.leading, 2)
+                    Text("+\(rids.count - Self.maxBadges)").font(Typo.caption).foregroundStyle(Palette.labelGlass2).padding(.leading, 2)
                 }
             }
             .fixedSize()
@@ -478,19 +551,14 @@ struct TripChip: View {
             Text(label).font(Typo.footnote.weight(.semibold)).foregroundStyle(Palette.label).lineLimit(1)
                 .accessibilityLabel(spoken)
             Button(action, action: run)
-                .font(Typo.footnote.weight(.semibold))
-                .foregroundStyle(Palette.tint)
-                .padding(.horizontal, Space.s2)
-                .frame(minHeight: 36)
-                .contentShape(Rectangle().inset(by: -4))
+                .buttonStyle(FillCapsuleStyle(compact: true))
                 .fixedSize()
                 .accessibilityHint(hint)
         }
         .padding(.leading, Space.s3)
-        .padding(.trailing, Space.s1)
+        .padding(.trailing, 2)
         .frame(minHeight: 36)
-        .background(.regularMaterial, in: Capsule())
-        .elevation(.floating, in: Capsule())
+        .sbGlass(in: Capsule())
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("contextBar")
@@ -531,8 +599,9 @@ struct ToastBanner: View {
     }
 }
 
-/// Locate button (spec 10.4): a 44 pt circle of system material; `location`, filled while the trip camera follows
-/// you; during a trip a tap re-centers on you. Denied location: the button stays and opens the way to iOS Settings.
+/// Locate (spec 10.4, DESIGN-SPEC-GLASS 8.4): the lower slot of the lower-right group; `location` in `tint`, filled
+/// while the trip camera follows you; during a trip a tap re-centers on you. Denied location: the button stays and
+/// opens the way to iOS Settings.
 struct LocateButton: View {
     @Environment(AppModel.self) private var model
     var body: some View {
@@ -544,11 +613,10 @@ struct LocateButton: View {
             model.locate()
         } label: {
             Image(systemName: following ? "location.fill" : "location")
-                .font(.system(size: IconSize.row, weight: .medium))
+                .font(.system(size: 19, weight: .medium))
                 .foregroundStyle(Palette.tint)
-                .frame(width: Space.tap, height: Space.tap)
-                .background(.regularMaterial, in: Circle())
-                .elevation(.floating, in: Circle())
+                .frame(width: Space.chromeButton, height: Space.chromeButton)
+                .contentShape(Rectangle())
         }
         .buttonStyle(ChromePressStyle())
         .accessibilityLabel(trip ? "Show me on my trip" : "Show my location")
@@ -558,28 +626,47 @@ struct LocateButton: View {
     }
 }
 
-/// Bottom bar (spec 10.7): Current trip / Routes / My Routes, equal width, opaque `bgSheet` with a hairline on top. The
-/// selected item is the filled glyph and `tint` for icon and label (and the selected trait), never a capsule indicator.
-/// Labels stop growing at xxxLarge; touch and hold shows the large content viewer.
+/// The floating tab bar (DESIGN-SPEC-GLASS 8.6, iOS 26's tab bar): Current trip / Routes / My Routes in a 56 pt glass
+/// capsule, equal widths. The selected item sits on a 48 pt `fill` capsule that slides to the new tab (`mTabPill`;
+/// Reduce Motion: it jumps) with its filled glyph in `tint` and its name in `label`; the others in `labelGlass2`.
+/// Selection is the capsule and the filled glyph (and the selected trait), never color alone. Names stop growing at
+/// xxxLarge and hide at accessibility sizes (and under 360 pt with large text): the icons stay, the names stay in the
+/// accessibility labels and the large content viewer (touch and hold).
 struct TabBar: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.displayScale) private var displayScale
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var pillNS
+    /// The screen is under 360 pt wide.
+    var narrow = false
+
     var body: some View {
+        let names = !typeSize.isAccessibilitySize && !(narrow && typeSize > .large)
         HStack(spacing: 0) {
             ForEach(Tab.allCases) { t in
                 let on = model.tab == t
                 Button { model.select(t) } label: {
-                    VStack(spacing: 2) {
+                    VStack(spacing: 1) {
                         Image(systemName: on ? t.iconSelected : t.icon)
-                            .font(.system(size: 21, weight: .regular))
-                            .frame(height: 26)
-                        Text(t.title).font(Typo.tabLabel).lineLimit(1)
+                            .font(.system(size: 20, weight: .regular))
+                            .foregroundStyle(on ? Palette.tint : Palette.labelGlass2)
+                            .frame(height: 24)
+                        if names {
+                            Text(t.title).font(Typo.tabLabel).lineLimit(1).minimumScaleFactor(0.9)
+                                .foregroundStyle(on ? Palette.label : Palette.labelGlass2)
+                        }
                     }
-                    .frame(maxWidth: .infinity, minHeight: Space.tabBar)
-                    .foregroundStyle(on ? Palette.tint : Palette.label2)
-                    .contentShape(Rectangle())
+                    .padding(.horizontal, 2)
+                    .frame(maxWidth: .infinity, minHeight: Space.tabBarH - 8)
+                    .background {
+                        if on {
+                            Capsule().fill(Palette.fill)
+                                .matchedGeometryEffect(id: "tabPill", in: pillNS)
+                        }
+                    }
+                    .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ChromePressStyle())
                 .accessibilityLabel(t.title)
                 .accessibilityIdentifier("tab.\(t.rawValue)")
                 .accessibilityAddTraits(on ? .isSelected : [])
@@ -588,12 +675,11 @@ struct TabBar: View {
                 }
             }
         }
-        .padding(.top, 1)
+        .padding(4)
+        .frame(minHeight: Space.tabBarH)
+        .sbGlass(in: Capsule())
+        .animation(reduceMotion ? nil : Motion.tabPill, value: model.tab)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-        .background(Palette.bgSheet, ignoresSafeAreaEdges: .bottom)
-        .overlay(alignment: .top) {
-            Rectangle().fill(Palette.separator).frame(height: 1 / max(1, displayScale)).accessibilityHidden(true)
-        }
     }
 }
 

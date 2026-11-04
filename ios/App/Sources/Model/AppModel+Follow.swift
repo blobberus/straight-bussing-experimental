@@ -14,17 +14,21 @@ extension ActiveTrip {
 
 /// The map rects the follow camera works with, in global points (RootView measures them).
 struct MapRects: Equatable {
-    /// What the rider can see of the map: below the floating chrome, above the sheet, with a small margin.
+    /// What the rider can see of the map: below the top rows, above the sheet (the collapsed card sits above the
+    /// bottom row, which `sheetH` includes), clear of the lower-right group, with a small margin (DESIGN-SPEC-GLASS 3).
     var visible: CGRect
-    /// The rect MapKit fits a `.region` into: the full-screen map minus its bottom padding (sheet + tab bar).
+    /// The rect MapKit fits a `.region` into: the full-screen map minus its bottom padding (the sheet).
     var safe: CGRect
 
-    @MainActor static func of(_ geo: GeometryProxy, chromeH: CGFloat, sheetH: CGFloat, tabH: CGFloat) -> MapRects {
+    /// `topH`: the top rows' height; `sheetH`: the sheet's visible height from the bottom of the screen; `trailing`:
+    /// what the lower-right group takes from the right edge (0 when it is hidden).
+    @MainActor static func of(_ geo: GeometryProxy, topH: CGFloat, sheetH: CGFloat, trailing: CGFloat = 8) -> MapRects {
         let g = geo.frame(in: .global), ins = geo.safeAreaInsets
         let top = g.minY - ins.top, bottom = g.maxY + ins.bottom
-        let safe = CGRect(x: g.minX, y: top, width: g.width, height: max(0, bottom - sheetH - tabH - top))
-        let vTop = g.minY + 4 + chromeH + 8, vBottom = g.maxY - tabH - sheetH - 8
-        return MapRects(visible: CGRect(x: g.minX + 8, y: vTop, width: max(0, g.width - 16), height: max(0, vBottom - vTop)), safe: safe)
+        let safe = CGRect(x: g.minX, y: top, width: g.width, height: max(0, bottom - sheetH - top))
+        let vTop = g.minY + 8 + topH + 8, vBottom = bottom - sheetH - 8
+        let right = max(8, trailing)
+        return MapRects(visible: CGRect(x: g.minX + 8, y: vTop, width: max(0, g.width - 8 - right), height: max(0, vBottom - vTop)), safe: safe)
     }
 }
 
