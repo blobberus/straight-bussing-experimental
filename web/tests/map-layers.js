@@ -1,6 +1,6 @@
 /** Tests for map/layers.js signatures + in-place updates, and the MapApi in map/map.js (needs Leaflet). */
 import { test, eq, ok, near } from './lib.js';
-import { idOf, sig, focusSet, networkSig, busSig, lineWeight, routeLabel, createNetworkLayer, createBusLayer, casingClass, notchRadius } from '../js/map/layers.js';
+import { idOf, sig, focusSet, networkSig, busSig, lineWeight, routeLabel, createNetworkLayer, createBusLayer, notchRadius } from '../js/map/layers.js';
 import { createMap } from '../js/map/map.js';
 import { P, squareLoop, stop } from './map-fixtures.js';
 
@@ -58,9 +58,6 @@ test('busSig / lineWeight / routeLabel', () => {
   // DESIGN-SPEC 11.3: z13 3, z14 3.5, z15 4.5, z16 5.5, z17 6.5, z18 8, linear between, clamped
   eq([13, 14, 15, 16, 17, 18].map(lineWeight), [3, 3.5, 4.5, 5.5, 6.5, 8]);
   eq(lineWeight(14.5), 4); eq(lineWeight(5), 3); eq(lineWeight(20), 8);
-  // the casing contrast switch, from the color (53RD yellow flips on the light map, RE navy on the dark map, red neither)
-  eq(casingClass('#F7EB07'), ' sb-cl'); eq(casingClass('#393B79'), ' sb-cd'); eq(casingClass('#D62728'), '');
-  eq(casingClass('#FF9900'), ' sb-cl', 'CEN'); eq(casingClass('#0E5700'), ' sb-cd', 'DCC');
   eq(routeLabel('r1', routes), 'CEN'); eq(routeLabel('r2', routes), 'N'); eq(routeLabel('zz', routes), '?');
   eq(routeLabel('x', { x: { short: '', long: 'Friend Center/Metra' } }), 'F', 'like the iPhone app (Route.chipText)');
   eq(routeLabel('x', { x: { short: 'AP/DX', long: 'Apostolic/Drexel' } }), 'AP/DX', 'never truncated (audit defect 4)');
@@ -73,7 +70,8 @@ test('network layer: polling does not repaint; changes do', () => {
   const layer = createNetworkLayer(m, { onStopTap: (id) => taps.push(id) });
   ok(layer.draw(net()), 'first draw');
   const el = m.getContainer(), first = paths(el);
-  ok(first.length >= 6 + 8, 'casing+line per shape and stop+halo per stop: ' + first.length);
+  eq(first.length, 3 + 8 * 2, 'one line per shape (no outline) and stop + halo per stop');
+  eq(el.querySelectorAll('path.sb-casing').length, 0, 'no outlines (owner 2026-11-04)');
   eq(layer.draw(net({ hidden: [] })), false, 'same inputs -> no redraw');
   ok(paths(el).every((p, i) => p === first[i]), 'same DOM nodes');
   ok(layer.draw(net({ hidden: ['r2'] })), 'hidden change redraws');
@@ -81,7 +79,6 @@ test('network layer: polling does not repaint; changes do', () => {
   layer.draw(net({ focus: ['r1'] }));
   const dim = paths(el).filter((p) => p.classList.contains('sb-route') && p.getAttribute('stroke-opacity') === '0.2');
   eq(dim.length, 2, 'two non-focus routes dimmed to 0.2 (spec 11.3)');
-  eq(m.getPane('sbLines').querySelectorAll('path.sb-casing').length, 0, 'dimmed routes have no casing');
   const front = m.getPane('sbFocusLines').querySelectorAll('path.sb-route');
   eq(front.length, 1, 'focused route drawn in the top pane');
   const halo = el.querySelector('path.sb-halo');

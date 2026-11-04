@@ -1,5 +1,5 @@
 /**
- * map/layers.js: route network (casing + colored lines, stops with 44 px tap halos) and live bus
+ * map/layers.js: route network (colored lines, no outline since 2026-11-04; stops with 44 px tap halos) and live bus
  * markers. Every redraw is gated by a cheap signature so 10 s polling never repaints static layers;
  * bus markers are updated in place (setLatLng + class toggles) and recreated only when a bus changes
  * route. The pure helpers (idOf, sig, networkSig, busSig, lineWeight, routeLabel, focusSet) do not touch
@@ -7,7 +7,7 @@
  * Lines stack by `order` (index 0 on top); focused routes always above unfocused ones. A bus is faded exactly when its
  * route is (core/visibility.js busFaded, owner 2026-11-04).
  */
-import { safeColor, textOn, contrast } from '../core/esc.js';
+import { safeColor, textOn } from '../core/esc.js';
 import { bearing as geoBearing } from '../core/geo.js';
 import { createChevronLayer, orientedLines } from './chevrons.js';
 import { lineAt as pickLine, LINE_TAP_PX } from './geometry.js';
@@ -118,7 +118,7 @@ export const LINE_WIDTHS = Object.freeze([[13, 3], [14, 3.5], [15, 4.5], [16, 5.
 
 /**
  * Route line weight in px for a zoom level: LINE_WIDTHS, linear between the stops, clamped at both ends. A focused line
- * adds FOCUS_EXTRA; the casing adds CASING_EXTRA (1.5 per side).
+ * adds FOCUS_EXTRA. No casing (owner 2026-11-04: "Remove the outlines on each line").
  * @param {number} z
  * @returns {number}
  */
@@ -132,22 +132,6 @@ export function lineWeight(z) {
 }
 /** Focused lines are this much wider (spec 11.3). */
 export const FOCUS_EXTRA = 2;
-/** The casing is the line plus 1.5 px per side. */
-export const CASING_EXTRA = 3;
-/** The default casing colors the 3:1 rule is measured against: white on the light map, the land on the dark map. */
-export const CASING_BASE = Object.freeze({ light: '#FFFFFF', dark: '#202124' });   // dark = map/style.js PALETTE.dark.bg
-
-/**
- * Casing classes for a route color (spec 11.3 contrast switch, from the color at runtime, never a list): " sb-cl" when
- * the color is under 3:1 against the light map's white casing (the casing flips to a dark edge there), " sb-cd" when it
- * is under 3:1 against the dark map's casing (it flips to a light edge). map.css picks the one for the current theme.
- * @param {string} color '#RRGGBB'
- * @returns {string}
- */
-export function casingClass(color) {
-  const c = safeColor(color);
-  return (contrast(c, CASING_BASE.light) < 3 ? ' sb-cl' : '') + (contrast(c, CASING_BASE.dark) < 3 ? ' sb-cd' : '');
-}
 
 /**
  * Stop circle size by zoom (spec 11.4): hidden below z14, radius 4 / stroke 2 at z14 to 15, radius 5 / stroke 2.5 from z16.
@@ -175,7 +159,7 @@ export function routeLabel(rid, routes) {
 }
 
 /**
- * Network layer: route lines in two panes (unfocused, focused above), each route's casings drawn
+ * Network layer: route lines in two panes (unfocused, focused above), the colored line only (no outline, 2026-11-04),
  * right under its own lines in stack order so a higher-priority route covers lower ones where they
  * overlap; stops in their own group shown at zoom >= 14; chevrons along 1-3 focused routes.
  * @param {L.Map} map
@@ -205,21 +189,17 @@ export function createNetworkLayer(map, cb) {
     const w = lineWeight(map.getZoom());
     const { back, front: fronts } = stackOrder(Object.keys(shapes), o);
     for (const rid of [...back, ...fronts]) {
-      // network state: every line at 0.9 with its casing; focused state: focused lines 2 px wider at full opacity, the
-      // others at 0.2 with no casing (spec 11.3)
+      // network state: every line at 0.9; focused state: focused lines 2 px wider at full opacity, the others at 0.2
+      // (spec 11.3); no outlines (owner 2026-11-04)
       const front = !!focus?.has(rid), dim = dimAll || (focus && !front), bonus = front && !dimAll ? FOCUS_EXTRA : 0;
       const color = safeColor(routes[rid]?.color), pane = front ? 'sbFocusLines' : 'sbLines';
       const segs = (shapes[rid] || []).filter((pts) => pts && pts.length >= 2);
-      // all of a route's casings, then its lines: its own segments never cut each other, and it
-      // covers every route below it in the same pane; the casing flips to the opposite edge under 3:1 (casingClass)
-      const casings = dim ? [] : segs.map((pts) => L.polyline(pts, { pane, className: 'sb-casing' + casingClass(color), weight: w + bonus + CASING_EXTRA,
-        opacity: 1, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(lines));
-      segs.forEach((pts, i) => {
+      for (const pts of segs) {
         const line = L.polyline(pts, { pane, className: 'sb-route', color, weight: w + bonus,
           opacity: dim ? 0.2 : front ? 1 : 0.9, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(lines);
-        polys.push({ casing: casings[i] || null, line, bonus });
+        polys.push({ line, bonus });
         hits.push({ rid, ll: pts, bounds: L.latLngBounds(pts), bonus });
-      });
+      }
     }
     const chevRoutes = !dimAll && fronts.length && fronts.length <= 3 ? fronts : [];
     chev.set(chevRoutes.map((rid) => ({ rid, color: routes[rid]?.color,
@@ -243,7 +223,7 @@ export function createNetworkLayer(map, cb) {
 
   function restyle() {
     const z = map.getZoom(), w = lineWeight(z), ss = stopStyle(z);
-    for (const p of polys) { p.line.setStyle({ weight: w + p.bonus }); p.casing?.setStyle({ weight: w + p.bonus + CASING_EXTRA }); }
+    for (const p of polys) p.line.setStyle({ weight: w + p.bonus });
     for (const m of stopMks) if (m.options.radius !== ss.radius) m.setStyle(ss).setRadius(ss.radius);
     showStops();
     chev.redraw();
@@ -256,7 +236,8 @@ export function createNetworkLayer(map, cb) {
    */
   function lineAt(p) {
     if (!hits.length || !p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
-    const width = lineWeight(map.getZoom()) + CASING_EXTRA + FOCUS_EXTRA, reach = LINE_TAP_PX + width;   // the widest drawn line = a focused one with its casing
+    // the widest line as drawn before 2026-11-04 (a focused one with its 3 px casing): the tap reach stays as it was
+    const width = lineWeight(map.getZoom()) + 3 + FOCUS_EXTRA, reach = LINE_TAP_PX + width;
     const near = L.latLngBounds(map.containerPointToLatLng([p.x - reach, p.y + reach]), map.containerPointToLatLng([p.x + reach, p.y - reach]));
     const toPx = (ll) => { const c = map.latLngToContainerPoint(ll); return [c.x, c.y]; };
     const lines = hits.filter((h) => h.bounds.intersects(near)).map((h) => ({ rid: h.rid, px: h.ll.map(toPx), width }));

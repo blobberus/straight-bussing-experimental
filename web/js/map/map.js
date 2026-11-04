@@ -8,7 +8,7 @@
  * keyed on the `.sb-dark` class this module toggles on the map element.
  */
 import { createBasemap } from './style.js';
-import { createNetworkLayer, createBusLayer, sig, casingClass } from './layers.js';
+import { createNetworkLayer, createBusLayer, sig } from './layers.js';
 import { createFavoritesLayer } from './favorites.js';
 import { createCredits } from './credits.js';
 import { createLandmarkLayer } from './landmarks.js';
@@ -21,7 +21,7 @@ const PAD = 24;           // side padding for fits
 const TOP_PAD = 132;      // clears the floating search bar and the locate button / chips
 const FIT_S = 0.6;        // fitTo glide (s). flyToBounds, not fitBounds: Leaflet's CSS zoom animation scales the
                           // vector basemap canvas down on zoom-out, leaving blank margins for ~250 ms
-const PANES = { sbCasing: 380, sbLines: 390, sbFocusCasing: 392, sbFocusLines: 394, sbPlanCasing: 400, sbPlan: 402,
+const PANES = { sbLines: 390, sbFocusLines: 394, sbPlan: 402,
   sbLabels: 410, sbStops: 420, sbPlanStops: 425, sbHighlight: 430, sbSel: 440 };   // sbLabels: building names above the lines
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
@@ -326,8 +326,8 @@ export function createMap(elId) {
 
     /**
      * Draw a trip option: bus legs along road shapes, walk legs dotted along leg.coords (else straight),
-     * board/alight dots, start/end pins. The network dims while a plan is shown, and so do the buses of every route
-     * the plan does not ride (busFaded). Returns the drawn points.
+     * board/alight dots, start/end pins, no outlines (owner 2026-11-04). The network dims while a plan is shown, and so
+     * do the buses of every route the plan does not ride (busFaded). Returns the drawn points.
      * Option may also be a bare walk {from, to, coords?}. Pass fit:true to frame it when it changes.
      * @param {object|null} option planner Option
      * @param {{routes, shapes, routeStops, fit?:boolean}} [ctx]
@@ -422,9 +422,7 @@ function renderPlan(L, g, o, ctx) {
     const ll = normLatLngs(coords);
     if (ll.length < 2) return;
     pts.push(...ll);
-    // the walking path as round 4 pt dots 7 pt apart in tintFill (spec 11.4, Apple Maps style), each on a slightly larger
-    // light dot so it reads over a route line
-    L.polyline(ll, { pane: 'sbPlanCasing', className: 'sb-walk-casing', weight: 6.5, dashArray: '0.1 7', lineCap: 'round', interactive: false }).addTo(g);
+    // the walking path as round 4 pt dots 7 pt apart in tintFill (spec 11.4, Apple Maps style), no outline (owner 2026-11-04)
     L.polyline(ll, { pane: 'sbPlan', className: 'sb-walk', weight: 4, dashArray: '0.1 7', lineCap: 'round', interactive: false }).addTo(g);
   };
   const legs = Array.isArray(o.legs) ? o.legs : [];
@@ -437,8 +435,7 @@ function renderPlan(L, g, o, ctx) {
     if (ll.length < 2) continue;
     pts.push(...ll);
     const color = safeColor(ctx.routes?.[l.rid]?.color);
-    L.polyline(ll, { pane: 'sbPlanCasing', className: 'sb-plan-casing' + casingClass(color), weight: 11, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(g);
-    L.polyline(ll, { pane: 'sbPlan', color, weight: 7, opacity: 1, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(g);
+    L.polyline(ll, { pane: 'sbPlan', className: 'sb-plan-bus', color, weight: 7, opacity: 1, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(g);
     for (const p of [l.board, l.alight]) {
       const q = toLatLng(p);
       if (q) L.circleMarker(q, { pane: 'sbPlanStops', radius: 6, weight: 3, color, className: 'sb-plan-stop', fillOpacity: 1, interactive: false }).addTo(g);

@@ -135,11 +135,6 @@ const hsl = (hex) => {
   const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
   return { h: (h * 60 + 360) % 360, s, l };
 };
-/** "rgba(r, g, b, a)" laid over an opaque hex: hex. */
-const over = (rgba, hex) => {
-  const [r, g, b, a] = String(rgba).match(/[\d.]+/g).map(Number), bk = rgbOf(hex);
-  return '#' + [r, g, b].map((v, i) => Math.round(v * a + bk[i] * (1 - a)).toString(16).padStart(2, '0')).join('');
-};
 
 test('palette: parks and woods are clearly green, water a clear blue, land warm off-white (light) / neutral dark gray (dark)', () => {
   for (const [theme, P] of [['light', PALETTE.light], ['dark', PALETTE.dark]]) {
@@ -185,25 +180,11 @@ test('palette: patchStyle adds the green and campus fills just below water (lago
   eq(ids(noWater).slice(0, 5), ['background', 'sb_campus', 'sb_cemetery', 'sb_green', 'sb_pitch'], 'no water layer: right above the background');
 });
 
-test('palette: every route line keeps a 3:1 edge over land, parks, woods, sports fields and water in both themes (casing or its flip)', async () => {
-  const routes = await (await fetch('../data/routes.json', { cache: 'no-store' })).json();
-  const list = Array.isArray(routes) ? routes : Object.values(routes.routes || routes);
-  const colors = [...new Set(list.map((r) => r && r.color).filter(Boolean).map((c) => '#' + String(c).replace('#', '').toUpperCase()))];
-  ok(colors.length >= 10, colors.length + ' route colors');
+// The route-line edge test (every line keeping a 3:1 edge through its casing or the flipped casing) went with the casing
+// (owner 2026-11-04: "Remove the outlines on each line"); the land token check stays.
+test('palette: the land token is the basemap land (first paint = map)', async () => {
   const css = await (await fetch('../css/tokens.css', { cache: 'no-store' })).text();
   const vals = (name) => [...css.matchAll(new RegExp(name + ':\s*([^;]+);', 'g'))].map((m) => m[1].trim());
-  const [caseL, caseD] = vals('--map-casing'), [flipL, flipD] = vals('--map-casing-contrast'), [landL, landD] = vals('--map-land');
+  const [landL, landD] = vals('--map-land');
   eq([landL, landD], [PALETTE.light.bg, PALETTE.dark.bg], 'the land token is the basemap land (first paint = map)');
-  const { casingClass } = await import('../js/map/layers.js');
-  const bad = [];
-  for (const [theme, P, cas, flip, cls] of [['light', PALETTE.light, caseL, flipL, 'sb-cl'], ['dark', PALETTE.dark, caseD, flipD, 'sb-cd']]) {
-    for (const c of colors) {
-      const flipped = casingClass(c).includes(cls);
-      for (const k of ['bg', 'park', 'wood', 'pitch', 'water', 'campus']) {
-        const edge = over(flipped ? flip : cas, P[k]), r = contrast(c, edge);
-        if (r < 3) bad.push(`${theme} ${c} over ${k}: ${r.toFixed(2)} (${flipped ? 'flipped ' : ''}edge ${edge})`);
-      }
-    }
-  }
-  eq(bad, [], 'route edges under 3:1');
 });

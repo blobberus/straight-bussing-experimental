@@ -57,8 +57,8 @@ const COPY = /(&copy;|\u00a9)\s*/g;
  * yellow and motorways in Apple's yellow-orange, light warm gray buildings, labels in a quiet gray hierarchy. Dark: a
  * neutral dark gray land, deep muted greens that still read as green, a clear dark blue, neutral gray roads with muted
  * amber motorways. Street text vs its land-colored halo: light 7.3:1 (minor) / 12.6:1 (major), dark 9.6:1 / 12.8:1;
- * minor text on a road fill >= 6.6:1. Route lines keep a 3:1 edge over land, park, wood and water through their casing
- * (map/layers.js casingClass, map.css; tests/map-style.js checks every route color).
+ * minor text on a road fill >= 6.6:1. Route lines have no casing since 2026-11-04 (owner: "Remove the outlines on each
+ * line"), so a few route colors sit under 3:1 on the land (53RD yellow on the light map, RE navy on the dark one).
  */
 export const PALETTE = {
   light: { bg: '#f5f3ee', park: '#c2e5ae', wood: '#aed79b', pitch: '#b5dda0', cemetery: '#d4e6c8', campus: '#efe9dc',
