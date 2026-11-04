@@ -119,6 +119,19 @@ const compass = createCompass({ onHeading: (deg, spread) => mapCall("setHeading"
 function askCompass() {
   if (mayAskCompass(store.get().locState)) compass.request();
 }
+/**
+ * The first tap anywhere in the app once location works also asks (owner 2026-11-04: "The build no longer shows the
+ * user heading. Allow the app to display user heading."): since 2026-11-02 the location tap itself never asks, and
+ * riders rarely tap the locate button a second time, so the cone never appeared. That tap's only system prompt is the
+ * motion one (location already works). Once per page load; a request that failed (not counted as a tap) lets the next
+ * tap try again. iOS keeps the answer for the session, so a later load usually asks without a prompt.
+ */
+let compassTapAsked = false;
+function askCompassOnTap() {
+  if (compassTapAsked || !mayAskCompass(store.get().locState)) return;
+  compassTapAsked = true;
+  compass.request().then((r) => { if (r === "error") compassTapAsked = false; });
+}
 const LOC_OFF = "sb-loc-off";   // the rider chose Stop sharing in Settings: no automatic location at the next launch
 const locOptOut = () => { try { return localStorage.getItem(LOC_OFF) === "1"; } catch (e) { return false; } };
 /** Settings > Stop sharing: forget the position, stop watching, remember the choice. */
@@ -367,6 +380,7 @@ function wireUI() {
   el.tabs.addEventListener("focusin", (e) => { try { if (e.target.matches(":focus-visible")) setTabsMin(false); } catch (err) { /* old browser */ } });
   el.content.addEventListener("scroll", onContentScroll, { passive: true });
   el.locate.addEventListener("click", onLocateFab);
+  document.addEventListener("click", askCompassOnTap, true);   // capture: before any handler, synchronously in the tap
   for (const root of [el.content, el.pill, el.dlg, el.ctxbar, el.topbar || el.gear, el.right, el.bottomrow, el.mapctl]) if (root) bindActions(root, () => ctx);
   el.dlg.addEventListener("click", (e) => { if (e.target === el.dlg) closeDlg(); });
   el.content.addEventListener("focusout", () => setTimeout(() => { if (dirty && !inputFocused()) render(); }, 0));
