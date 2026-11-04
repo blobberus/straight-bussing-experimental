@@ -115,9 +115,14 @@ final class SmokeUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
         app.buttons["settingsDone"].tap()
         XCTAssertTrue(app.buttons["searchBar"].waitForExistence(timeout: 10))
+        // the search bar "exists" under the sheet too: wait until Settings has really gone before the next tap
+        waitGone(app.navigationBars["Settings"], 10, "Settings closed")
 
         // Lines by Time (owner 2026-10-18): the clock next to the gear opens its sheet; Cancel changes nothing
-        app.buttons["timeButton"].tap()
+        let clock = app.buttons["timeButton"]
+        XCTAssertTrue(clock.waitForExistence(timeout: 10) && clock.isHittable, "the clock in the search bar")
+        clock.tap()
+        if !app.navigationBars["Lines by Time"].waitForExistence(timeout: 6) { clock.tap() }   // a tap lost to a settling sheet
         XCTAssertTrue(app.navigationBars["Lines by Time"].waitForExistence(timeout: 10), "Lines by Time sheet")
         save(app, "41-lines-by-time-light")
         app.buttons["timeCancel"].tap()
@@ -154,15 +159,20 @@ final class SmokeUITests: XCTestCase {
         XCTAssertTrue(chip.waitForExistence(timeout: 5), "the trip chip (its Show all ends the trip)")
         let window = app.windows.firstMatch.frame
         let f0 = retry.frame
+        let banner = app.descendants(matching: .any)["statusPill"]
+        let b0 = banner.frame, c0 = chip.frame
         XCTAssertLessThan(f0.midX, window.midX, "Retry on the leading side: \(f0)")
+        XCTAssertGreaterThan(c0.minY, b0.maxY, "the trip chip is under the banner")
         save(app, "53-retry-trip-light")
         let spot = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
             .withOffset(CGVector(dx: f0.midX - window.minX, dy: f0.midY - window.minY))
         for _ in 0..<6 { spot.tap() }   // the same screen point every time, as a hurried finger would
-        let slot = app.descendants(matching: .any)["bannerRetry"]
-        XCTAssertTrue(slot.exists, "the banner keeps its place while the finger keeps tapping")
-        XCTAssertEqual(slot.frame.minX, f0.minX, accuracy: 1, "the slot did not move")
-        XCTAssertEqual(slot.frame.minY, f0.minY, accuracy: 1, "the slot did not move")
+        let slot = app.buttons["bannerRetry"]
+        XCTAssertTrue(slot.exists, "the banner keeps its control in place while the finger keeps tapping")
+        XCTAssertTrue(slot.frame.contains(CGPoint(x: f0.midX, y: f0.midY)), "the tapped point is still on the slot: \(slot.frame) vs \(f0)")
+        XCTAssertEqual(banner.frame.minY, b0.minY, accuracy: 1, "the banner did not move")
+        XCTAssertGreaterThanOrEqual(banner.frame.height, b0.height - 1, "the banner did not shrink")
+        XCTAssertEqual(chip.frame.minY, c0.minY, accuracy: 1, "the trip chip (and its Show all) did not move")
         save(app, "54-retry-recovered-light")
         XCTAssertTrue(app.descendants(matching: .any)["arrivingIn"].exists, "the trip is still on (Arriving In in the header)")
         XCTAssertTrue(chip.exists, "the trip chip is still there")
