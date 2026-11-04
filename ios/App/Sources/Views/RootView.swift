@@ -308,10 +308,13 @@ struct StatusBanner: View {
         HStack(alignment: .top, spacing: Space.s3) {
             if hasSlot { slot(s).frame(width: min(slotW, 120), height: Space.tap) }
             HStack(alignment: .firstTextBaseline, spacing: Space.s2) {
-                Image(systemName: s.recovered ? "checkmark.circle.fill" : icon(p))
-                    .font(.system(size: IconSize.status, weight: .semibold))
-                    .foregroundStyle(s.recovered ? Palette.live : p.kind == .err ? Palette.danger : Palette.warn)
-                    .accessibilityHidden(true)
+                // recovered: the slot's check mark says it; no second one before the text
+                if !(s.recovered && hasSlot) {
+                    Image(systemName: s.recovered ? "checkmark.circle.fill" : icon(p))
+                        .font(.system(size: IconSize.status, weight: .semibold))
+                        .foregroundStyle(s.recovered ? Palette.live : p.kind == .err ? Palette.danger : Palette.warn)
+                        .accessibilityHidden(true)
+                }
                 (Text(parts.lead).fontWeight(.semibold) + Text(parts.rest.isEmpty ? "" : " " + parts.rest))
                     .font(Typo.rowDetail).foregroundStyle(Palette.label)
                     .fixedSize(horizontal: false, vertical: true)
