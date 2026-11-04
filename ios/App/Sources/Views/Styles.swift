@@ -4,8 +4,10 @@ import UIKit
 /// Button styles, layouts and symbol names shared by every screen (docs/DESIGN-SPEC.md 10.11, 10.12). One primary
 /// button per screen; a second action of equal weight uses Secondary. Press feedback `Motion.press`: filled buttons
 /// opacity .85 and scale .98, text and icon buttons opacity .6; Reduce Motion: opacity only. Disabled: 45%.
+/// Glass redesign (DESIGN-SPEC-GLASS 6, 8.11): filled buttons are capsules (iOS 26 bordered buttons), same colors and
+/// heights; a label that wraps at large text keeps the one-line height's radius, so its corners never cut the words.
 
-/// Primary: white on `tintFill` (4.7:1 in both themes), 50 tall when full width, 44 inline.
+/// Primary: white on `tintFill` (4.7:1 in both themes), 50 tall when full width, 44 inline; a capsule.
 struct PrimaryButtonStyle: ButtonStyle {
     var full = false
     /// Side padding (12 for buttons that share a row by their words, spec 10.14).
@@ -13,7 +15,7 @@ struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Radius.capsule(full ? 50 : Space.tap), style: .continuous)
         configuration.label
             .font(Typo.button)
             .foregroundStyle(Palette.onFill)
@@ -29,8 +31,8 @@ struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
-/// Secondary: `tint` (or `danger`) text on the neutral `fill` (5.0:1 / 4.7:1 or more), same sizes as Primary.
-/// `compact`: 36 pt tall visual with the 44 pt hit area kept (End trip, header actions).
+/// Secondary: `tint` (or `danger`) text on the neutral `fill` (5.0:1 / 4.7:1 or more), same sizes and shape as
+/// Primary. `compact`: 36 pt tall visual with the 44 pt hit area kept (End trip, header actions).
 struct SecondaryButtonStyle: ButtonStyle {
     var destructive = false
     var full = false
@@ -40,7 +42,7 @@ struct SecondaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Radius.capsule(compact ? 36 : full ? 50 : Space.tap), style: .continuous)
         configuration.label
             .font(compact ? Typo.sectionTitle : Typo.button)
             .foregroundStyle(destructive ? Palette.danger : Palette.tint)

@@ -50,13 +50,17 @@ enum Space {
 enum Radius {
     /// Route badges, small tags, skeleton bars.
     static let tag: CGFloat = 6
-    /// Buttons, fields inside the sheet, segmented track, menus.
+    /// Fields inside the sheet, the wheel band, segmented track, menus (buttons are capsules since the glass
+    /// redesign: `capsule(_:)`).
     static let control: CGFloat = 12
     /// Grouped cards, option cards, in-sheet banners, place summary, the status banner (iOS 26's rounder sections,
     /// DESIGN-SPEC-GLASS 6).
     static let card: CGFloat = 20
     /// The collapsed glass card (all corners), the expanded sheet's top corners, dialogs (DESIGN-SPEC-GLASS `rGlass`).
     static let glass: CGFloat = 28
+    /// A capsule for a control of this one-line height (`rCapsule`, spec 6): half the height, kept when large text
+    /// wraps the label, so the button becomes a rounded rectangle instead of a lens.
+    static func capsule(_ height: CGFloat) -> CGFloat { height / 2 }
     /// Older name of the sheet radius: now the glass radius.
     static let sheet: CGFloat = 28
     /// The bus marker on the map (7 at 26 pt tall: the badge's proportion).
