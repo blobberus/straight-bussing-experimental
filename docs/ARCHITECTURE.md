@@ -825,7 +825,8 @@ Deviations from the spec: `docs/redesign/NOTES-web.md`; screens: `docs/redesign/
 Apple Maps' iOS 26 layout in Liquid Glass; functions, words and states unchanged. What moved and the contracts views
 and tests rely on:
 - **Glass** (`css/tokens.css` glass tokens, `.glass` in `css/base.css`): only the control layer over the map (tab bar,
-  search circle, Settings circle, lower-right group, simulated-buses chip, trip chip, the collapsed card's plate).
+  search circle, Settings circle, lower-right group, simulated-buses chip, trip chip, the collapsed card's plate, the
+  feedback circle as the one tinted glass).
   `#app.is-moving` (ui/sheet.js, while the sheet drags and settles) and `.glass--moves` make moving glass solid;
   `html.glass-lite` (ui/frame.js `initGlassLite`, a slow device) and Increase Contrast / Reduce Transparency make all
   glass solid. Budget: at most 6 blurred surfaces on at most 22% of the screen at rest (e2e "glass budget").
@@ -851,4 +852,14 @@ and tests rely on:
   of its opener (`zoomOrigin`), swipe down on the header closes (`SWIPE_CLOSE_PX`), Done = checkmark named "Done",
   Cancel = cross named "Cancel"; it no longer moves the app's sheet; the app behind is inert.
 - **Confirm dialogs** grow out of their button (`ui/confirm.js zoomFrom`). Buttons and segmented controls are capsules.
-Deviations from the glass spec: `docs/redesign/NOTES-glass-web.md`; screens: `docs/redesign/glass/web/`. sw `sb-v2-86`.
+- **Compact status banner** (owner 2026-11-04: "Reduce the size of the reconnecting notification."; `ui/pill.js`,
+  `css/base.css`): one 44 pt line in the footnote role, a CSS grid of [action slot 84 x 44] [icon] [`.pillmore`]. The
+  slot keeps the owner's Retry rule (leading, fixed, 2.5 s hold). `pillState().short` is the line ("Live data lost. Times
+  may be off.", "No live data. Don't rely on times.", "Last update 1:23 PM. Times approximate."; it always says the times
+  can't be relied on), `msg` the full sentence in `#pillText` (always in the live region for screen readers, visually
+  hidden until open). `.pillmore` (name "Details", `aria-expanded`, `aria-controls="pillText"`) opens the sentence and
+  `.pillcall` "Call 773.702.8181" (`tel:`) under the line; the line never moves, the banner only grows downward (Row B
+  follows `--pill-h`), so fast taps on it never land on the trip chip. Open stays open across state changes; a banner
+  that comes back starts closed. The demo chip has no Details.
+- **Feedback circle** `#feedbackBtn` inside `#topbar` under Settings (see "Beta feedback" above).
+Deviations from the glass spec: `docs/redesign/NOTES-glass-web.md`; screens: `docs/redesign/glass/web/`. sw `sb-v2-87`.

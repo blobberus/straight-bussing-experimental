@@ -58,7 +58,7 @@ test("layout: map chrome text stops growing at 1.35 x, sheet text does not (spec
   await new Promise((res) => { f.onload = res; document.body.appendChild(f); });
   try {
     const d = f.contentDocument, px = (sel) => parseFloat(f.contentWindow.getComputedStyle(d.querySelector(sel)).fontSize);
-    near(px("#pill"), 20.25, 0.1, "status banner: rowDetail capped at 15 x 1.35");
+    near(px("#pill"), 17.55, 0.1, "status banner: footnote capped at 13 x 1.35 (compact banner, owner 2026-11-04)");
     near(px(".tabcap button"), 14.85, 0.1, "tab labels: 11 x 1.35");
     near(px("#ctxbar"), 17.55, 0.1, "trip chip: footnote capped at 13 x 1.35");
     near(px(".v-search input"), 34, 0.1, "sheet content never caps");

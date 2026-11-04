@@ -105,49 +105,75 @@ h1:focus, [tabindex="-1"]:focus { outline: none; }
 }
 
 /* status banner and simulated-buses chip (8.1, DESIGN-SPEC 10.3): the same words, icons and actions, two forms.
-   Never color alone: an icon and words every time. ui/pill.js sets data-form="chip" or "banner" (the default). */
+   Never color alone: an icon and words every time. ui/pill.js sets data-form="chip" or "banner" (the default).
+   Compact banner (owner 2026-11-04: "Reduce the size of the reconnecting notification."): one 44 pt line in the footnote
+   role ([action slot] [icon] [short line + chevron = Details]); open, the full sentence and "Call 773.702.8181" follow
+   under the line, which never moves (the banner grows downward only). Two lines only at large text or 320 pt. */
 .statuspill {
   position: fixed; z-index: var(--z-float);
   top: var(--search-top); left: calc(var(--safe-l) + var(--inset-chrome)); right: calc(var(--safe-r) + var(--inset-chrome));
-  display: flex; align-items: center; gap: var(--s-2);
-  min-height: var(--tap); padding: var(--s-2) var(--s-1) var(--s-2) var(--s-3); border-radius: var(--r-card);
+  display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center;
+  min-height: var(--tap); padding: 0 0 0 var(--s-3); border-radius: var(--r-card);
   background: var(--warn-bg); box-shadow: var(--glass-shadow), var(--glass-edge);
-  color: var(--label); font: var(--t-row-detail); font-size: min(var(--size-row-detail), var(--cap-row-detail)); line-height: 1.34;
+  color: var(--label); font: var(--t-footnote); font-size: min(var(--size-footnote), var(--cap-footnote)); line-height: 1.3;
   animation: sb-banner-in var(--m-banner) var(--ease-standard);
 }
 /* mBanner without its 8 px slide: the Retry slot must not move even while the banner arrives (owner 2026-11-03 wins
    over motion polish; NOTES-glass-web) */
 @keyframes sb-banner-in { from { opacity: 0; } }
-.statuspill .pilltext { flex: 1; min-width: 0; padding: 2px 0; }
-.statuspill .pilltext b { font-weight: var(--w-semibold); }
-.statuspill .pillicon { flex: none; display: grid; place-items: center; color: var(--warn); }
+.statuspill .pilltext b, .statuspill .pillshort b { font-weight: var(--w-semibold); }
+.statuspill .pillicon { flex: none; display: grid; place-items: center; color: var(--warn); grid-area: 1 / 2; margin-right: var(--s-2); }
+.statuspill .pillicon .ic { width: 15px; height: 15px; }
 .statuspill .pillicon:empty { display: none; }
 .statuspill.err { background: var(--danger-bg); }
 .statuspill.err .pillicon { color: var(--danger); }
+/* Details: the short line (first sentence Semibold) and a chevron; the whole rest of the line is the 44 pt target */
+.statuspill .pillmore {
+  grid-area: 1 / 3; display: flex; align-items: center; gap: var(--s-1); min-width: 0; min-height: var(--tap);
+  padding: var(--s-1) var(--s-3) var(--s-1) 0; text-align: left; color: var(--label); border-radius: 0 var(--r-card) var(--r-card) 0;
+  transition: opacity var(--m-press) var(--ease-out);
+}
+.statuspill .pillmore:active { opacity: .6; }
+.statuspill .pillshort { flex: 1; min-width: 0; }
+.statuspill .pillchev { flex: none; width: 15px; height: 15px; color: var(--label-2); transition: transform var(--m-standard) var(--ease-standard); }
+.statuspill.is-open .pillchev { transform: rotate(180deg); }
+/* the full sentence: always read by screen readers, shown under the line only while open */
+.statuspill .pilltext { grid-area: 2 / 2 / 3 / -1; min-width: 0; padding: 0 var(--s-3) var(--s-2) 0; }
+.statuspill[data-form="banner"]:not(.is-open) .pilltext {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.statuspill .pillcall {
+  grid-area: 3 / 2 / 4 / -1; justify-self: start; display: inline-flex; align-items: center; min-height: var(--tap);
+  margin: calc(-1 * var(--s-2)) 0 0; color: var(--tint); font-weight: var(--w-semibold); text-decoration: none;
+}
 .statuspill .pillbtn {
   position: relative; flex: none; min-width: var(--tap); min-height: var(--tap); padding: 0 var(--s-2);
   border-radius: var(--r-capsule); color: var(--tint); font-weight: var(--w-semibold);
   transition: opacity var(--m-press) var(--ease-out);
 }
 .statuspill .pillbtn:active { opacity: .6; }
-/* the banner's action slot (owner 2026-11-03, DESIGN-SPEC 10.3, glass spec 8.1): Retry or See alert on the LEADING edge
-   in a fixed 84 x 44 bgCard capsule at the banner's top-leading corner, so a text change, another line or a repeated tap
-   never moves it. Trip-ending controls (End trip, the trip chip's Show all) sit on the trailing side, away from it;
-   after a Retry tap the banner keeps its height (ui/pill.js RETRY_HOLD_MS). */
+/* the banner's action slot (owner 2026-11-03, DESIGN-SPEC 10.3, glass spec 8.1): Retry or See alert on the LEADING edge,
+   a fixed 84 x 44 target at the banner's top-leading corner (a bgCard capsule drawn 4 inside it), so a text change,
+   another line, the details opening or a repeated tap never moves it. Trip-ending controls (End trip, the trip chip's
+   Show all) sit on the trailing side, away from it; after a Retry tap the banner keeps its height (RETRY_HOLD_MS). */
 .statuspill .pillslot {
-  align-self: flex-start; width: 84px; min-width: 84px; height: var(--tap); min-height: var(--tap); margin: 0; padding: 0;
-  border-radius: var(--r-capsule); background: var(--bg-card); box-shadow: inset 0 0 0 .5px var(--separator);
+  grid-area: 1 / 1; align-self: start; width: 84px; min-width: 84px; height: var(--tap); min-height: var(--tap); margin: 0; padding: 0;
+  border-radius: var(--r-capsule); background: none; isolation: isolate;
+}
+.statuspill .pillslot::before {
+  content: ""; position: absolute; inset: 4px; z-index: -1; border-radius: var(--r-capsule);
+  background: var(--bg-card); box-shadow: inset 0 0 0 .5px var(--separator);
 }
 .statuspill .pillslot[aria-busy="true"], .statuspill .pillslot[aria-disabled="true"] { opacity: .6; }
-.statuspill:has(.pillslot:not([hidden])) { padding: 6px var(--s-3) 6px 6px; align-items: flex-start; }
-.statuspill:has(.pillslot:not([hidden])) .pillicon { margin: 13px 0 0 var(--s-1); }
-.statuspill:has(.pillslot:not([hidden])) .pilltext { padding-top: 11px; padding-bottom: 6px; }
+.statuspill:has(.pillslot:not([hidden])) { padding-left: 0; }
+.statuspill:has(.pillslot:not([hidden])) .pillicon { margin-left: var(--s-1); }
 /* the feed answered during the hold: "Live data is back." with a check mark (live data, so the live mark color) */
 .statuspill.is-back { background: var(--bg-card); }
 .statuspill.is-back .pillicon { color: var(--live-mark); }
 /* simulated-buses chip (8.3): a 32 glass capsule in Row B, sized to its content, leading; the whole chip is the button
    (44 hit area); text and the info glyph in label (tint is not allowed as text on glass, 5.3) */
 .statuspill[data-form="chip"] {
+  display: flex; align-items: center; gap: var(--s-2);
   top: calc(var(--row-b-top) + (var(--chrome-btn) - 32px) / 2); right: auto;
   max-width: calc(var(--app-w) - 2 * var(--inset-chrome) - var(--chrome-btn) - var(--gap-chrome));
   min-height: 32px; padding: 0 var(--s-1) 0 var(--s-3); border-radius: var(--r-capsule); font-weight: var(--w-semibold);
@@ -158,8 +184,9 @@ h1:focus, [tabindex="-1"]:focus { outline: none; }
 }
 /* both chips at once (a trip in demo mode): the simulated-buses chip is solid, so at most 6 surfaces blur (12.1) */
 #app:has(#ctxbar:not([hidden])) .statuspill[data-form="chip"] { background: var(--glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
-.statuspill[data-form="chip"] .pilltext { padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.statuspill[data-form="chip"] .pillicon { color: var(--label); }
+.statuspill[data-form="chip"] .pilltext { flex: 1; min-width: 0; padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.statuspill[data-form="chip"] .pillicon { color: var(--label); margin: 0; }
+.statuspill[data-form="chip"] .pillmore, .statuspill[data-form="chip"] .pillcall { display: none; }
 .statuspill .pilltap {
   flex: none; display: grid; place-items: center; width: 28px; height: 32px; margin-left: auto; padding: 0;
   border: 0; background: none; color: var(--label); cursor: pointer;
@@ -300,6 +327,7 @@ html[data-text="ax"] .tabcap .bn-label { position: absolute; width: 1px; height:
   .fbfab .fbfab-dot, .fbfab .fbfab-dot::after { forced-color-adjust: none; background: CanvasText; box-shadow: none; }
   .tabcap button[aria-current="page"] { outline: 2px solid Highlight; }
   .statuspill .pillbtn, .ctxbar .ctx-btn { border: 1px solid ButtonText; }
+  .statuspill .pillslot::before { border: 1px solid ButtonText; }
 }
 @media (prefers-contrast: more) {
   .statuspill, .toast { outline: 1px solid var(--label); }

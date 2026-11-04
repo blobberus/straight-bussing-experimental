@@ -478,7 +478,7 @@ test("status banner: Retry tapped again and again during a trip, also as the fee
   try {
     await waitFor(() => !$("#pill").hidden && $("#pill").classList.contains("err") && !$("#pillRetry").hidden, "error banner with Retry");
     const btn = $("#pillRetry"), pill = $("#pill"), at = () => { const b = btn.getBoundingClientRect(); return [b.left, b.top, b.width, b.height].map((v) => Math.round(v * 10) / 10).join(","); };
-    const first = at(), txtR = $("#pillText").getBoundingClientRect(), b0 = btn.getBoundingClientRect();
+    const first = at(), txtR = pill.querySelector(".pillmore").getBoundingClientRect(), b0 = btn.getBoundingClientRect();
     ok(b0.right <= txtR.left + 1 && b0.left - pill.getBoundingClientRect().left < 16, "Retry on the leading edge, before the text");
     const endTrip = [...D.querySelectorAll('[data-action="journey:end"]')].filter((e) => e.getClientRects().length);
     for (const e of endTrip) { const er = e.getBoundingClientRect(); ok(er.left >= b0.right || er.top >= b0.bottom + 8, "no trip-ending control under the Retry spot: " + e.textContent); }
@@ -499,6 +499,45 @@ test("status banner: Retry tapped again and again during a trip, also as the fee
     SB.store.set({ journey: null });
   }
   ok(r, "route " + rid);
+});
+
+// Owner 2026-11-04: "Reduce the size of the reconnecting notification." The compact banner opens its details (the full
+// sentence, Call 773.702.8181) under its one line; tapping the line again and again during a trip never ends the trip
+// (the line never moves, so no tap lands on the trip chip's Show all) and never moves Retry.
+test("status banner: compact, one line; its details open and close under the line; fast taps on it during a trip never end the trip", async () => {
+  const rid = T.R;
+  SB.store.set({ journey: { kind: "plan", rids: [rid], label: "To E2E Place", to: "E2E Place", t0: Math.floor(Date.now() / 1000), legs: [] } });
+  await waitFor(() => !$("#ctxbar").hidden, "the trip chip");
+  T.feedFail = true;
+  W.dispatchEvent(new W.Event("online"));
+  try {
+    await waitFor(() => !$("#pill").hidden && $("#pill").classList.contains("err") && !$("#pillRetry").hidden, "error banner with Retry");
+    const pill = $("#pill"), more = pill.querySelector(".pillmore"), k = parseFloat(W.getComputedStyle(D.documentElement).getPropertyValue("--frame-k")) || 1;
+    ok(pill.getBoundingClientRect().height <= 46 * k, "one 44 pt line: " + pill.getBoundingClientRect().height);
+    ok(/rely|off/.test(txt(more)) && /Can't reach the shuttle feed/.test(txt($("#pillText"))), "the line still warns; screen readers get the full sentence");
+    const retry0 = $("#pillRetry").getBoundingClientRect(), m0 = more.getBoundingClientRect();
+    for (let i = 0; i < 6; i++) {
+      const b = more.getBoundingClientRect(), x = b.right - 30 * k, y = b.top + b.height / 2;   // the trailing end, over the trip chip's column
+      const hit = D.elementFromPoint(x, y);
+      ok(hit && hit.closest(".pillmore"), `tap ${i + 1} lands on the banner's line (${hit && (hit.id || hit.className)})`);
+      hit.click();
+      await sleep(40);
+      eq(state().journey && state().journey.kind, "plan", `the trip is still running after tap ${i + 1}`);
+      const r = $("#pillRetry").getBoundingClientRect(), m = more.getBoundingClientRect();
+      eq([Math.round(r.left), Math.round(r.top), Math.round(m.top)], [Math.round(retry0.left), Math.round(retry0.top), Math.round(m0.top)], `Retry and the line stay put after tap ${i + 1}`);
+    }
+    eq(more.getAttribute("aria-expanded"), "false", "an even number of taps: closed again");
+    click(more, "Details");
+    const call = pill.querySelector(".pillcall");
+    ok(!call.hidden && call.getAttribute("href") === "tel:+17737028181" && /773\.702\.8181/.test(txt(call)), "open: Call 773.702.8181");
+    await waitFor(() => pill.getBoundingClientRect().bottom <= $("#settingsBtn").getBoundingClientRect().top + 0.5 || null, "Row B moved down under the open banner (never covered)");
+    click(more, "Details");
+  } finally {
+    T.feedFail = false;
+    W.dispatchEvent(new W.Event("online"));   // live.js polls at once when back online
+    await waitFor(() => $("#pill").hidden && !state().failed, "banner gone once the feed is back", 15000);
+    SB.store.set({ journey: null });
+  }
 });
 
 // Rider safety (2026-10-10): a fresh feed with no vehicles while a route is scheduled is not "no shuttles running".
