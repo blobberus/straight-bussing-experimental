@@ -11,6 +11,13 @@ icon-192.png / icon-512.png (purpose "any": desktop installs) and straight-bussi
 (full size, for the poster). The ones a system rounds itself stay square and opaque, or the corners would be doubled
 or turn black: icon-180.png (iPhone Home Screen), icon-maskable-512.png (Android: the picture at 80% on its own teal,
 inside the mask's safe zone) and the App Store icon (Apple wants it square, no transparency). Lanczos resampling.
+
+EXPERIMENTAL COPY (owner 2026-11-04: "Place a yellow border around the site icon so that I know that this site is the
+experimental version"): EXPERIMENTAL_BORDER below draws a yellow ring on every web icon, so the test site's tab, Home
+Screen and install icons never look like the live app's. Rounded icons: a ring along their squircle edge. icon-180
+(iOS rounds it): the same ring, and yellow outside it too, so iOS's own mask can only cut into yellow. Maskable:
+the picture a little smaller inside a yellow surround, so every mask shape (circle, squircle, square) shows yellow.
+The repo-root poster stays without the ring. Set EXPERIMENTAL_BORDER = None to make the plain icons.
 """
 import os
 import sys
@@ -24,6 +31,9 @@ ROUND = {"icon-32.png": 32, "icon-192.png": 192, "icon-512.png": 512}   # shown 
 MASKABLE = 0.8   # the maskable safe zone: a circle of 40% radius, the picture fits inside at 80%
 SQUIRCLE_N = 5.0  # |x|^n + |y|^n <= 1: close to the iPhone's continuous corners (n = 2 would be a circle)
 SS = 4            # supersampling of the corner mask (smooth edges)
+EXPERIMENTAL_BORDER = (255, 214, 10)   # Apple system yellow #FFD60A: the experimental site's icon ring (None = off)
+BORDER = 0.06                          # ring width as a share of the icon size (2 px on the 32 px tab icon)
+MASKABLE_EXP = 0.70                    # maskable picture scale inside the yellow surround
 
 
 def load(path=SRC):
@@ -67,6 +77,49 @@ def rounded(im, size):
     return out
 
 
+def ring_width(size):
+    return max(2, round(size * BORDER))
+
+
+def inner_mask(size):
+    """The squircle shrunk by the ring width, centered: the part of the icon that stays the picture."""
+    from PIL import Image
+    bw = ring_width(size)
+    m = Image.new("L", (size, size), 0)
+    m.paste(squircle_mask(size - 2 * bw), (bw, bw))
+    return m
+
+
+def with_ring(icon, size, outside=False):
+    """Yellow where the icon's squircle is but the inner squircle is not (the ring); with outside=True, yellow also
+    outside the squircle (for icons a system rounds itself)."""
+    from PIL import Image, ImageChops
+    yellow = Image.new("RGBA", (size, size), EXPERIMENTAL_BORDER + (255,))
+    keep = inner_mask(size)
+    if outside:
+        out = yellow.copy()
+        out.paste(icon.convert("RGBA"), (0, 0), keep)
+        return out.convert("RGB")
+    ring = ImageChops.subtract(squircle_mask(size), keep)
+    out = icon.convert("RGBA").copy()
+    out.paste(yellow, (0, 0), ring)
+    return out
+
+
+def maskable_ring(im, size):
+    """The picture at MASKABLE_EXP inside a circle (the safe zone, a bit inside the 40 % radius); yellow around it."""
+    from PIL import Image, ImageDraw
+    pic = render(im, size, MASKABLE_EXP).convert("RGBA")
+    big = size * SS
+    m = Image.new("L", (big, big), 0)
+    r = 0.37 * big
+    ImageDraw.Draw(m).ellipse((big / 2 - r, big / 2 - r, big / 2 + r, big / 2 + r), fill=255)
+    m = m.resize((size, size), Image.LANCZOS)
+    out = Image.new("RGBA", (size, size), EXPERIMENTAL_BORDER + (255,))
+    out.paste(pic, (0, 0), m)
+    return out.convert("RGB")
+
+
 def main():
     try:
         import PIL  # noqa: F401
@@ -75,11 +128,15 @@ def main():
         return 2
     im = load()
     os.makedirs(OUT, exist_ok=True)
+    exp = EXPERIMENTAL_BORDER is not None
     for name, size in SQUARE.items():
-        render(im, size).save(os.path.join(OUT, name), "PNG", optimize=True)
+        icon = render(im, size)
+        (with_ring(icon, size, outside=True) if exp else icon).save(os.path.join(OUT, name), "PNG", optimize=True)
     for name, size in ROUND.items():
-        rounded(im, size).save(os.path.join(OUT, name), "PNG", optimize=True)
-    render(im, 512, MASKABLE).save(os.path.join(OUT, "icon-maskable-512.png"), "PNG", optimize=True)
+        icon = rounded(im, size)
+        (with_ring(icon, size) if exp else icon).save(os.path.join(OUT, name), "PNG", optimize=True)
+    (maskable_ring(im, 512) if exp else render(im, 512, MASKABLE)).save(
+        os.path.join(OUT, "icon-maskable-512.png"), "PNG", optimize=True)
     rounded(im, im.width).save(ROUNDED, "PNG", optimize=True)
     print("wrote", ", ".join(list(SQUARE) + list(ROUND) + ["icon-maskable-512.png"]), "in web/icons and",
           os.path.basename(ROUNDED), "from", os.path.basename(SRC))
