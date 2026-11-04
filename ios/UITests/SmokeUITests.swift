@@ -166,13 +166,19 @@ final class SmokeUITests: XCTestCase {
         save(app, "53-retry-trip-light")
         let spot = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
             .withOffset(CGVector(dx: f0.midX - window.minX, dy: f0.midY - window.minY))
-        for _ in 0..<6 { spot.tap() }   // the same screen point every time, as a hurried finger would
+        for _ in 0..<4 { spot.tap() }   // the same screen point every time, as a hurried finger would
+        // the finger is still tapping: each check right after one more tap (a query takes a moment on a slow runner, and
+        // the banner gives its place back 2.5 s after the last tap)
         let slot = app.buttons["bannerRetry"]
-        XCTAssertTrue(slot.exists, "the banner keeps its control in place while the finger keeps tapping")
+        spot.tap()
+        let c1 = chip.frame
+        XCTAssertEqual(c1.minY, c0.minY, accuracy: 1, "the trip chip (and its Show all) did not move")
+        spot.tap()
+        let b1 = banner.frame
+        XCTAssertEqual(b1.minY, b0.minY, accuracy: 1, "the banner did not move")
+        XCTAssertGreaterThanOrEqual(b1.height, b0.height - 1, "the banner did not shrink")
+        spot.tap()
         XCTAssertTrue(slot.frame.contains(CGPoint(x: f0.midX, y: f0.midY)), "the tapped point is still on the slot: \(slot.frame) vs \(f0)")
-        XCTAssertEqual(banner.frame.minY, b0.minY, accuracy: 1, "the banner did not move")
-        XCTAssertGreaterThanOrEqual(banner.frame.height, b0.height - 1, "the banner did not shrink")
-        XCTAssertEqual(chip.frame.minY, c0.minY, accuracy: 1, "the trip chip (and its Show all) did not move")
         save(app, "54-retry-recovered-light")
         XCTAssertTrue(app.descendants(matching: .any)["arrivingIn"].exists, "the trip is still on (Arriving In in the header)")
         XCTAssertTrue(chip.exists, "the trip chip is still there")
@@ -183,16 +189,32 @@ final class SmokeUITests: XCTestCase {
 
     /// Turn a SwiftUI switch on: a tap on its trailing edge (the switch, not the label), then, if the value did not
     /// change (iOS 26 lays the row out differently), a tap on the inner switch control.
-    func turnOn(_ toggle: XCUIElement) -> Bool {
+    func turnOn(_ toggle: XCUIElement, in app: XCUIApplication) -> Bool {
         func isOn(_ timeout: TimeInterval) -> Bool {
             let on = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "1"), object: toggle)
             return XCTWaiter.wait(for: [on], timeout: timeout) == .completed
         }
         toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         if isOn(3) { return true }
+        // the list may have re-laid out (live alerts leave Settings when simulated buses start): find the switch again
+        _ = reveal(toggle, in: app)
+        if (toggle.value as? String) == "1" { return true }
         let inner = toggle.switches.firstMatch
         (inner.exists ? inner : toggle).tap()
         return isOn(5)
+    }
+
+    /// Scroll the screen until `e` is on screen and clear of the home indicator (Settings is long with live data: the
+    /// operator's alerts, the bus alerts, the credits); up first, then back down. Lists drop rows that are off screen
+    /// from the accessibility tree, so `exists` alone does not say where the row is.
+    func reveal(_ e: XCUIElement, in app: XCUIApplication) -> Bool {
+        let bottom = app.windows.firstMatch.frame.maxY - 140
+        func ok() -> Bool { e.exists && e.isHittable && e.frame.maxY < bottom }
+        var tries = 0
+        while !ok() && tries < 24 { app.swipeUp(); tries += 1 }
+        tries = 0
+        while !ok() && tries < 24 { app.swipeDown(); tries += 1 }
+        return ok()
     }
 
     func waitGone(_ e: XCUIElement, _ timeout: TimeInterval, _ why: String) {
@@ -214,12 +236,9 @@ final class SmokeUITests: XCTestCase {
         app.buttons["settingsButton"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
         let toggle = app.switches["simulatedBuses"]
-        let bottom = app.windows.firstMatch.frame.maxY - 140   // clear of the home indicator
-        var tries = 0
-        while !(toggle.exists && toggle.isHittable && toggle.frame.maxY < bottom) && tries < 12 { app.swipeUp(); tries += 1 }
-        XCTAssertTrue(toggle.exists && toggle.isHittable, "Settings has the Simulated buses switch")
+        XCTAssertTrue(reveal(toggle, in: app), "Settings has the Simulated buses switch")
         XCTAssertEqual(toggle.value as? String, "0", "off by default")
-        XCTAssertTrue(turnOn(toggle), "the Simulated buses switch turns on")
+        XCTAssertTrue(turnOn(toggle, in: app), "the Simulated buses switch turns on")
         save(app, "23-simulated-settings-light")
         app.buttons["settingsDone"].tap()
 
@@ -234,8 +253,7 @@ final class SmokeUITests: XCTestCase {
         pill.tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10), "the pill opens Settings")
         XCTAssertTrue(toggle.waitForExistence(timeout: 5), "at the switch")
-        tries = 0
-        while !(toggle.isHittable && toggle.frame.maxY < bottom) && tries < 6 { app.swipeUp(); tries += 1 }
+        XCTAssertTrue(reveal(toggle, in: app), "the switch on screen")
         XCTAssertEqual(toggle.value as? String, "1")
         toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         if (toggle.value as? String) == "1" { (toggle.switches.firstMatch.exists ? toggle.switches.firstMatch : toggle).tap() }
