@@ -307,7 +307,8 @@ export function searchHTML(state, q = R.q) {
 }
 
 /**
- * The list body (normal mode). With a search query: the matching routes first, best first, then "Other routes" in
+ * The list body (normal mode). With a search query: the matching routes first, best first, right under the search
+ * field (above the station filter chip, the feed notices, the operator's alerts and numbers), then "Other routes" in
  * the usual groups (nothing is hidden by the search).
  * @param {object} state
  * @param {number} [now] unix seconds
@@ -328,10 +329,13 @@ export function listHTML(state, now = nowS(), q = R.q) {
   else if (empty && !state.routeFilter) h += (silentService(state, now) ? emptyState("No live locations right now", silentText(state, g.scheduled, now, OFFICIAL_PHONE), { icon: "antenna-off" }) : emptyState("No shuttles running right now", "Routes are listed below for reference.", { icon: "bus-front" })) + help();
   const bulk = bulkHTML(state, g, now);   // before the search takes the matches out of the groups (same scope, same states)
   if (String(q || "").trim()) {
-    const { top, stopOf, active } = routeMatches(state, q, now), hiddenSet = new Set(g.hidden);
-    h += top.length   // a match that does not operate now is grayed and says "Not running now" (owner 2026-11-05)
-      ? `<h3 class="v-h rt-qhead">${esc(matchText(top.length))}</h3><div class="v-list rt-qlist">${top.map((i) => row(state, i, hiddenSet.has(i), now, stopOf.get(i), !!active && !active.has(i))).join("")}</div>`
-      : `<div class="rt-qnone">${emptyState("No routes match", "Try a route name, a street or a stop.", { icon: "search" })}<button type="button" class="v-btn v-btn--secondary" data-action="routes:search-clear">Clear search</button></div>`;
+    const { top, stopOf, active } = routeMatches(state, q, now), hiddenSet = new Set(g.hidden), f = state.routeFilter;
+    // the matches come right under the search field (owner 2026-11-05: "above the phone numbers and other information"):
+    // the station filter chip, the feed notices, the operator's alerts and both numbers follow them, never removed
+    const scope = f ? ` at ${f.label || "this station"}` : "";   // the filter chip now sits below: the heading names the scope
+    h = (top.length   // a match that does not operate now is grayed and says "Not running now" (owner 2026-11-05)
+      ? `<h3 class="v-h rt-qhead">${esc(matchText(top.length) + scope)}</h3><div class="v-list rt-qlist">${top.map((i) => row(state, i, hiddenSet.has(i), now, stopOf.get(i), !!active && !active.has(i))).join("")}</div>`
+      : `<div class="rt-qnone">${emptyState("No routes match", f ? `Only routes to ${f.label || "this station"} are searched. Clear the station filter to search every route.` : "Try a route name, a street or a stop.", { icon: "search" })}<button type="button" class="v-btn v-btn--secondary" data-action="routes:search-clear">Clear search</button></div>`) + h;
     const got = new Set(top), label = top.length ? "Other routes" : "All routes";
     for (const k of Object.keys(g)) g[k] = g[k].filter((i) => !got.has(i));
     if (g.running.length + g.scheduled.length + g.idle.length + g.hidden.length) h += `<div class="rt-qdiv" role="separator" aria-label="${label}"><span aria-hidden="true">${label}</span></div>`;
