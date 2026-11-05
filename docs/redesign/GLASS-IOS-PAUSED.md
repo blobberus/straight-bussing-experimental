@@ -115,6 +115,13 @@ smart search such as allowing 53rdst -> 53rd Street or 53rd St -> 53rd Street et
   - Glass adaptation: the field goes where the glass Routes list puts its first control (under the custom-route bar;
     Edit map order stays in the header), matches as a grouped card under "N routes match", the "Other routes"
     divider, then the usual groups; same words as the web here.
+  - Follow-up (owner 2026-11-05: "Searching routes in the routes menu should still show results if they are inactive
+    (the top results, unless the name is clearly specified, should priortize active routes--make it clearly show which
+    ones are active by graying them out in results)"). Web here: done. iPhone, from the live repo: Kit
+    `RouteSearch.rankByActive` + `namedMin` + tests (live commit a4034d1e; the golden file's `active` cases are
+    already here), and `AppModel.routeMatches` returning `active` (Set(operatingRoutes()), nil while live status is
+    unknown), `RouteRow(idle:)` (`.grayscale(1)` chip, label2 name, "Not running now · ..." from
+    `Schedule.restingText`, the hidden line on its own line) in RoutesView (live commit ea5257b8).
 
 ## How to resume
 1. `git fetch origin && git checkout -B glass origin/redesign-ios`, then `git rebase origin/main` (the web side keeps
