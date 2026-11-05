@@ -170,7 +170,7 @@ setUser(pos|null)                // blue dot
 setHeading(deg|null, spread?)    // heading cone on the dot (2026-10-14): accent wedge, deg clockwise from north, spread = width (default 60, 20..160);
                                  // fed by ui/compass.js straight from main.js (never the store), DOM written only on a change; null hides it
 highlightStops(items|null, {onPick})   // items [{id,lat,lon}] ring highlights; null clears
-drawFavorites(stops|null)        // [{id,name?,lat,lon}] gold star badges (map/favorites.js), pane z422 (above stops, below highlights/selection/buses), all zooms (smaller <z14), taps -> onStopTap; selected favorite gets a wider unfilled ring; faded while a plan is drawn
+drawFavorites(stops|null)        // [{id,name?,lat,lon}] yellow star badges (map/favorites.js; owner 2026-11-05: yellow, not the old #A35400 brown: tokens `--fav-mark` #FFCC00 / #FFD60A, `--fav-ink` star #1C1C1E, `--fav-edge` 1 px dark edge on light; the sheet's favorite stars use the same tokens), pane z422 (above stops, below highlights/selection/buses), all zooms (smaller <z14), taps -> onStopTap; selected favorite gets a wider unfilled ring; faded while a plan is drawn
 drawPlan(option|null, {routes, shapes, routeStops})  // bus legs follow road shapes (geometry.alongShape); walk legs dashed along leg.coords else straight; start/end pins
 fitTo(points|bounds, {maxZoom})  flyTo({lat,lon}, zoom)
 onStopTap(fn) onBusTap(fn) onUserMove(fn)
@@ -961,3 +961,12 @@ Hand-ported from the live repo (same core files; its docs/ARCHITECTURE.md "Route
   (gray chip, label2 name) and says "Not running now · Scheduled from 4:00 PM today" / "... No more service today"
   (`notRunningText` over myroutes.js `restingText`); hidden keeps its fade and eye, hidden + not running shows both.
   Golden `active` cases. sw `sb-v2-95`.
+- Results first (2026-11-05, owner: "Routes that come up in searching for my routes should appear right under the
+  search bar above the phone numbers and other information."): with text in the field `listHTML` starts with "N routes
+  match" + the matches (or the "No routes match" card + Clear search); the station filter chip, the feed notice (No
+  live locations / No shuttles running / Live bus status unavailable), "From the shuttle operator", the "Other routes"
+  divider, the bulk capsules, the groups and the calls / official page follow. Nothing is removed (rider safety: the
+  alerts and both numbers stay on the page, below the matches). With a station filter the heading names it ("1 route
+  matches at Main") and an empty result says "Only routes to Main are searched. Clear the station filter to search
+  every route." Empty field: the old order. Tests: tests/routes-search.js (the two "matches ... lead" cases). sw
+  `sb-v2-97`.
