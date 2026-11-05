@@ -953,3 +953,11 @@ Hand-ported from the live repo (same core files; its docs/ARCHITECTURE.md "Route
   order only, nothing stored. css `.rt-search`, `.rt-qx`, `.rt-qdiv`, `.rt-qnone`, `.rt-why`.
 - Tests: tests/core-routesearch.js, tests/routes-search.js; golden `web/tests/routesearch-golden.json`
   (`python tools/gen_routesearch_golden.py`). iPhone: noted in docs/redesign/GLASS-IOS-PAUSED.md. sw `sb-v2-94`.
+- Active routes first (2026-11-05, owner: "should still show results if they are inactive (the top results, unless the
+  name is clearly specified, should priortize active routes--make it clearly show which ones are active by graying them
+  out in results)"): every route stays findable; `rankByActive(hits, active)` keeps a route the query names (score >=
+  `NAMED_MIN` 88.5) on top, then the matches operating now (`operatingIds`, the Show running rule), then the rest;
+  null while live status is unknown (no reorder, no gray). A match that does not operate now is `.v-routerow.is-idle`
+  (gray chip, label2 name) and says "Not running now · Scheduled from 4:00 PM today" / "... No more service today"
+  (`notRunningText` over myroutes.js `restingText`); hidden keeps its fade and eye, hidden + not running shows both.
+  Golden `active` cases. sw `sb-v2-95`.
