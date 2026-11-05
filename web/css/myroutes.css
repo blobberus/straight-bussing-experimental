@@ -63,7 +63,7 @@
 /* sticky Save bar: the scroller keeps 16 px of bottom padding (sheet.css); reach into it so rows never show below the bar */
 .mr-edit .v-actions { position: sticky; bottom: -16px; margin: var(--s-3) 0 0; padding: var(--s-2) 0 calc(var(--s-2) + 16px); background: var(--bg-sheet); }
 
-/* stop view: the Favorite button (Secondary with the star; "Favorited" with a filled star in warn) */
+/* stop view: the Favorite button (Secondary with the star; "Favorited" with a filled yellow star) */
 .mr-stoptop { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
 .mr-stoptop .v-addr { flex: 1 1 auto; min-width: 0; }
 .mr-stophead .mr-label { margin: var(--s-2) 0 0; padding: 0; }
@@ -72,13 +72,14 @@
 .mr-fav:active { background: var(--fill-pressed); transform: scale(.98); }
 .mr-fav .ic { width: 17px; height: 17px; }
 .mr-fav .ic-on { display: none; }
-.mr-fav.is-on .ic-on { display: block; color: var(--warn); }
+.mr-fav.is-on .ic-on { display: block; color: var(--fav-mark); stroke: var(--fav-edge); stroke-width: 1.5; }   /* yellow like the map badge (2026-11-05) */
 .mr-fav.is-on .ic-off { display: none; }
 
 @media (prefers-reduced-motion: reduce) { .mr-hl, .mr-fav { transition: none; } .mr-fav:active { transform: none; } }
 @media (forced-colors: active) {
   .mr-showing, .mr-hl, .mr-fav { border: 1px solid CanvasText; }
   .mr-hl.is-on, .mr-fav.is-on { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .mr-fav.is-on .ic-on { color: HighlightText; stroke: HighlightText; }
 }
 
 /* custom routes: rows with a fixed geometry + a swipe-left action tray (myroutes-swipe.js). Selecting a route only

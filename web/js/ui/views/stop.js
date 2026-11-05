@@ -73,7 +73,7 @@ const STAR = pair("star", 17);
  */
 export function favButton(id, on) {
   const label = on ? "Remove from favorites" : "Add to favorites";
-  // a Secondary button with the star (spec 10.11: the outlined pill is retired); "Favorited" with the filled star in warn
+  // a Secondary button with the star (spec 10.11: the outlined pill is retired); "Favorited" with the filled yellow star
   return `<button type="button" class="v-btn v-btn--secondary mr-fav${on ? " is-on" : ""}" data-action="stop:fav" data-id="${esc(id)}" aria-pressed="${on}" aria-label="${label}">${STAR}<span class="mr-favtxt">${on ? "Favorited" : "Favorite"}</span></button>`;
 }
 
