@@ -751,7 +751,7 @@ The green fills sit below the water layer (lagoons inside a park stay blue). Rou
 (`--map-casing-contrast`) is now 75% instead of 55%, so every route color keeps a 3:1 edge over land, parks, woods,
 sports fields, campus and water in both themes (mid-tone lines such as East `#54BD00` and Apostolic/Drexel `#EA7948`
 were under 3:1 with either edge before); the dark casing and bus ring follow the new land (`#202124`). Tests:
-`tests/map-style.js` (parks green, water blue, land warm / neutral, roads yellow-orange, every route edge >= 3:1).
+`tests/map-style.js` (parks green, water blue, land warm / neutral, only motorways yellow-orange (D4), every route edge >= 3:1).
 **2026-11-04:** the route line casing and its flip are removed and the lines are thinner (owner: "Remove the outlines for
 the lines but make the lines themselves thinner"), and with it the route edge test; the `--map-casing*` tokens stay for
 the paused iPhone work (docs/redesign/GLASS-IOS-PAUSED.md).
