@@ -49,6 +49,24 @@
 .rt-orow.is-dragging { z-index: 2; transition: none; border-radius: var(--r-control); background: var(--bg-card); box-shadow: var(--e-3); }
 .rt-orow.is-dragging .rt-grip { cursor: grabbing; color: var(--tint); }
 
+/* route search (owner 2026-11-04): the sheet's search field (.v-search), a clear button like the Directions fields',
+   the matches heading, the stop that matched and the quiet "Other routes" divider */
+.rt-search { position: relative; margin: 0 0 var(--s-3); }
+.rt-search .v-search { margin: 0; }
+.rt-search input { padding-right: var(--tap); }
+.rt-search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; display: none; }
+.rt-qx { position: absolute; top: 0; right: 0; display: grid; place-items: center; width: var(--tap); height: var(--tap); border: 0; border-radius: 50%; background: none; color: var(--label-2); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: opacity var(--m-press) var(--ease-out); }
+.rt-qx[hidden] { display: none; }
+.rt-qx:active { opacity: .6; }
+.rt-qx:focus-visible { outline: 2px solid var(--tint); outline-offset: -2px; }
+.rt-why { overflow-wrap: anywhere; }
+.rt-qnone { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-3); }
+.rt-qnone .empty { align-self: stretch; margin: 0; }
+.rt-qnone .v-btn { min-height: var(--tap); }
+.rt-qdiv { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-2) 0 var(--s-3); font: var(--t-section); color: var(--label-2); }
+.rt-qdiv::before, .rt-qdiv::after { content: ""; flex: 1 1 auto; height: .5px; background: var(--separator); }
+@media (prefers-reduced-motion: reduce) { .rt-qx { transition: none; } }
+
 /* Show all / Show running / Hide all (10.12): three actions as Secondary capsule buttons, 36 tall (44 hit area); the
    one matching the current state shows a check and label text; none is drawn disabled */
 .rt-bulk { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0 0 var(--s-1); }
