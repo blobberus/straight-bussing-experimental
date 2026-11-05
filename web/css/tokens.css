@@ -48,7 +48,10 @@
   --map-casing-contrast: rgba(17, 17, 20, .75);   /* the flipped route edge: 3:1 for every route color over land, park, water */
   --badge-ring: rgba(17, 17, 20, .22);
   --map-ring: #ffffff;            /* bus marker ring (spec 11.4) */
-  --warn-mark: #a35400;           /* the favorite star's disc on the map: white on it 5.3:1, both themes */
+  --fav-mark: #ffcc00;            /* favorite stars (owner 2026-11-05: yellow, not brown): the map disc, the sheet stars;
+                                     a deeper gold than 53rd Street's lemon #F7EB07 (hue 48 vs 57) */
+  --fav-ink: #1c1c1e;             /* the star on the yellow disc: 11.3:1 */
+  --fav-edge: rgba(28, 28, 30, .6);   /* the yellow's edge on light surfaces: 4.3:1 on the land, 4.5:1 on white */
   --neutral-fill: #636366;        /* neutral fills under white text (the Details swipe action): 6:1 */
   --rail-dim-base: #fcfcfd;       /* passed parts of a timeline rail: the route color mixed toward this */
   --rail-dim-pct: 45%;
@@ -296,6 +299,9 @@
     --map-casing-contrast: rgba(245, 245, 247, .75);
     --badge-ring: rgba(245, 245, 247, .30);
     --map-ring: #202124;
+    --fav-mark: #ffd60a;
+    --fav-ink: #1c1c1e;
+    --fav-edge: #ffd60a;          /* no edge needed on dark: the yellow is 9.9:1 on the card, 11.4:1 on the land */
     --map-land: #202124;
     --rail-dim-base: #6e6e73;
     --rail-dim-pct: 35%;
@@ -342,6 +348,9 @@
   --map-casing-contrast: rgba(245, 245, 247, .75);
   --badge-ring: rgba(245, 245, 247, .30);
   --map-ring: #202124;
+  --fav-mark: #ffd60a;
+  --fav-ink: #1c1c1e;
+  --fav-edge: #ffd60a;
   --map-land: #202124;
   --rail-dim-base: #6e6e73;
   --rail-dim-pct: 35%;

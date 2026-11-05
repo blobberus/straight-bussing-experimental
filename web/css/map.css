@@ -60,16 +60,19 @@
 .sb-map .leaflet-tooltip.sb-sel-label::before{display:none}
 .sb-map.sb-dark .leaflet-tooltip.sb-sel-label{box-shadow:0 0 0 1px var(--sb-hairline),var(--sb-shadow)}
 
-/* favorite stations (map/favorites.js): gold disc, dark star, white casing; static (never pulses).
+/* favorite stations (map/favorites.js): yellow disc, dark star, ring in the bus-ring color; static (never pulses).
    44 px hit area (28 px below z14, where the badge shrinks); the outer 44 px box ignores pointers.
    A selected favorite gets a wider unfilled accent ring (.sb-sel-fav) around the badge. */
-/* the star is white on a #A35400 disc (spec 11.4; 5.3:1), the same in both themes */
-.sb-map{--sb-fav:var(--warn-mark,#a35400);--sb-fav-ink:var(--sb-white)}
+/* yellow (owner 2026-11-05, was a #A35400 brown disc): #FFCC00 light / #FFD60A dark with a #1C1C1E star (11:1); on the light
+   land a 1 px dark edge outside the white ring keeps the badge 4.3:1 against the map (the yellow alone is 1.4:1); on dark the
+   edge is the dark ring itself (the yellow is 11:1 on the land) */
+.sb-map{--sb-fav:var(--fav-mark,#ffcc00);--sb-fav-ink:var(--fav-ink,#1c1c1e);--sb-fav-edge:var(--fav-edge,rgba(28,28,30,.6))}
+.sb-map.sb-dark{--sb-fav:var(--fav-mark,#ffd60a);--sb-fav-edge:var(--sb-bus-ring)}
 .sb-map .leaflet-marker-icon.sb-favicon{pointer-events:none;outline:none}
 .sb-fav-wrap{position:absolute;inset:0;display:grid;place-items:center}
 .sb-fav-hit{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;pointer-events:auto;cursor:pointer}
 .sb-fav{position:relative;box-sizing:border-box;width:20px;height:20px;border-radius:50%;border:2px solid var(--sb-bus-ring);background:var(--sb-fav);
-  display:grid;place-items:center;box-shadow:var(--e-marker,0 1px 3px rgba(30,32,45,.3));pointer-events:none}
+  display:grid;place-items:center;box-shadow:0 0 0 1px var(--sb-fav-edge),var(--e-marker,0 1px 3px rgba(30,32,45,.3));pointer-events:none}
 .sb-fav-star{display:block;width:12px;height:12px;fill:var(--sb-fav-ink)}
 .sb-fav-sm .sb-fav{width:16px;height:16px;border-width:1.5px}
 .sb-fav-sm .sb-fav-star{width:10px;height:10px}
