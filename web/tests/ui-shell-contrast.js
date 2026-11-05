@@ -172,3 +172,41 @@ test("contrast: text and icons on glass pass over the worst backdrop with no blu
   f.remove();
   ok(!bad.length, bad.join("; "));
 });
+
+// Owner 2026-11-05: "change the color of favorite station icons to yellow instead of brown". The star tokens are a real
+// yellow (not the old #A35400 brown, not 53rd Street's lemon #F7EB07 route color), the dark star on the map disc reads,
+// and the badge / sheet star stays visible: on light surfaces through the dark edge (the yellow alone is about 1.4:1),
+// on dark surfaces the yellow itself.
+test("contrast: favorite stars are yellow and stay visible on the land and the cards in light and dark", async () => {
+  const f = document.createElement("iframe");
+  f.style.cssText = "position:absolute;left:-2000px;width:200px;height:200px";
+  f.srcdoc = '<!doctype html><html><head><link rel="stylesheet" href="../css/tokens.css"></head><body></body></html>';
+  await new Promise((r) => { f.onload = () => setTimeout(r, 30); document.body.appendChild(f); });
+  const win = f.contentWindow, doc = f.contentDocument, bad = [];
+  const hex = (v) => v.trim().replace(/^#([0-9a-f]{6})$/i, (m, h) => `rgb(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4), 16)})`);
+  const col = (name) => rgba(hex(win.getComputedStyle(doc.documentElement).getPropertyValue("--" + name)));
+  const hsl = ({ r, g, b }) => {
+    const R = r / 255, G = g / 255, B = b / 255, mx = Math.max(R, G, B), mn = Math.min(R, G, B), l = (mx + mn) / 2, d = mx - mn;
+    if (!d) return { h: 0, s: 0, l };
+    const h = mx === R ? ((G - B) / d) % 6 : mx === G ? (B - R) / d + 2 : (R - G) / d + 4;
+    return { h: (h * 60 + 360) % 360, s: d / (1 - Math.abs(2 * l - 1)), l };
+  };
+  const lemon = hsl({ r: 0xf7, g: 0xeb, b: 0x07 }).h;   // 53rd Street Express (routes.json), a route color: stars must not look like it
+  for (const theme of ["light", "dark"]) {
+    doc.documentElement.dataset.theme = theme;
+    const mark = col("fav-mark"), ink = col("fav-ink"), edge = col("fav-edge"), land = col("map-land"), card = col("bg-card");
+    if (!mark || !ink || !edge || !land || !card) { bad.push(`${theme}: unreadable favorite token`); continue; }
+    const c = hsl(mark);
+    if (!(c.h >= 42 && c.h <= 54 && c.s >= 0.9 && c.l >= 0.45 && L(mark) >= 0.5)) bad.push(`${theme} fav-mark is not a clear yellow: ${JSON.stringify(c)}`);
+    if (!(Math.abs(c.h - lemon) >= 5)) bad.push(`${theme} fav-mark hue ${c.h.toFixed(1)} too close to 53rd Street's ${lemon.toFixed(1)}`);
+    const star = ratio(over(ink, mark), mark);
+    if (!(star >= 4.5)) bad.push(`${theme} star on the yellow disc: ${star.toFixed(2)}`);
+    for (const [name, base] of [["map-land", land], ["bg-card", card]]) {
+      // the visible boundary: on light the dark edge (composited over the surface), on dark the yellow itself
+      const seen = theme === "light" ? ratio(over(edge, base), base) : ratio(mark, base);
+      if (!(seen >= 3)) bad.push(`${theme} favorite star boundary on ${name}: ${seen.toFixed(2)} < 3`);
+    }
+  }
+  f.remove();
+  ok(!bad.length, bad.join("; "));
+});
