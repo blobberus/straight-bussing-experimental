@@ -122,6 +122,7 @@ smart search such as allowing 53rdst -> 53rd Street or 53rd St -> 53rd Street et
     already here), and `AppModel.routeMatches` returning `active` (Set(operatingRoutes()), nil while live status is
     unknown), `RouteRow(idle:)` (`.grayscale(1)` chip, label2 name, "Not running now · ..." from
     `Schedule.restingText`, the hidden line on its own line) in RoutesView (live commit ea5257b8).
+- 2026-11-05 web changes to port when iOS resumes (owner): favorite stars yellow instead of brown (map badge `#FFCC00` / `#FFD60A` disc, `#1C1C1E` star, 1 px dark edge on light; `Palette.starBadge` and the Favorite button's filled star, today `#A35400` / `warn`; glass spec D7), and Routes search matches right under the field, above the notices, the operator's alerts and the phone numbers (RoutesView: `matchSection` before the status / alert sections while searching; glass spec D8).
 
 ## How to resume
 1. `git fetch origin && git checkout -B glass origin/redesign-ios`, then `git rebase origin/main` (the web side keeps
