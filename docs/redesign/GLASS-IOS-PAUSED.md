@@ -99,6 +99,23 @@ Port to this iPhone app when iOS resumes (copy by hand, never merge):
 - **Only motorways yellow on the map** (spec 18 D4): MapKit already draws main streets neutral.
 - **Compact status banner** (spec 18 D2), **feedback circle under Settings** (D1).
 
+## Owner request noted while paused: route search (2026-11-04)
+Owner: "You should be able to search routes from the routes menu which will bring them to the top. Allow keywords and
+smart search such as allowing 53rdst -> 53rd Street or 53rd St -> 53rd Street etc."
+- **Web here: done** (core/routesearch.js + core/text.js, the Routes list's search field, docs/ARCHITECTURE.md "Route
+  search"). The live repo (github.com/blobberus/straight-bussing) did web AND iPhone; port its iPhone part by hand
+  when iOS resumes (never merge or cherry-pick between the repos):
+  - Kit: `ios/StraightBussingKit/Sources/StraightBussingKit/RouteSearch.swift` and
+    `ios/StraightBussingKit/Tests/StraightBussingKitTests/RouteSearchTests.swift` (live commit 421eab3c; the test reads
+    `web/tests/routesearch-golden.json`, which is already here, so it checks the same cases as the web); add
+    `"web/tests/routesearch-golden.json"` to `ios.yml`'s push paths.
+  - App (live commit 75e2c823): `AppModel.routeSearchCache` + `AppModel.routeMatches` / `sortedRouteIds`
+    (AppModel.swift, AppModel+Actions.swift), `SearchField(clearLabel:)` (PlaceSearchViews.swift), RoutesView
+    `searchSection` / `matchSection` / `Groups.without` / `RouteRow(stop:)`, UI test `SmokeUITests.testRouteSearch`.
+  - Glass adaptation: the field goes where the glass Routes list puts its first control (under the custom-route bar;
+    Edit map order stays in the header), matches as a grouped card under "N routes match", the "Other routes"
+    divider, then the usual groups; same words as the web here.
+
 ## How to resume
 1. `git fetch origin && git checkout -B glass origin/redesign-ios`, then `git rebase origin/main` (the web side keeps
    changing docs and web/; resolve docs conflicts by keeping both).
