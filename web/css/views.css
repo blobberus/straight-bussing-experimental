@@ -224,3 +224,7 @@ html[data-text="ax"] .v-oarr { margin-left: 0; flex-basis: 100%; }
 @media (prefers-contrast: more) {
   .v-opt, .v-alert, .v-locoff, .v-note, .v-anchor, .v-tl, .v-plain { outline: 1px solid var(--separator); }
 }
+
+/* Current trip with no trip in progress (owner 2026-11-04, ui/views/nearby.js noTripHTML): the state in words, how to
+   start, one primary way to start; the empty-state card's look (10.20) */
+.pt-notrip .pt-notrip-go { margin-top: var(--s-3); }

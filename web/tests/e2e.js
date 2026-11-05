@@ -86,15 +86,13 @@ async function boot() {
   await waitFor(() => state().staticLoaded && state().liveLoaded && state().lastOk, "static + live data", 15000);
 }
 
-test("boot: Nearby fills from the live feed, no status pill", async () => {
-  const rows = await waitFor(() => {
-    const r = $$('#content [data-region="nearby-results"] [data-action="stop:open"]');
-    return r.length ? r : null;
-  }, "Arriving soon rows");
-  ok(rows.length >= 3, "expected several arrival rows, got " + rows.length);
+test("boot: Current trip says no trip is selected (no nearby buses, owner 2026-11-04), the live feed loads, no status pill", async () => {
+  const card = await waitFor(() => $("#content .pt-notrip"), "the no-trip card");
+  ok(/No current trip selected/.test(txt(card)), "No current trip selected");
+  ok(state().liveLoaded && state().buses.length >= 3, "the live feed loaded: " + state().buses.length + " buses");
   eq(title(), "Current trip");
   ok($("#pill").hidden, "status pill should be hidden with fresh data: " + txt($("#pill")));
-  ok(txt(content()).includes("Use my location"), "location prompt shown without permission");
+  ok(!txt(content()).includes("Use my location") && !$('#content [data-region="nearby-results"] [data-action="stop:open"]'), "no location prompt and no nearby rows without a trip");
   eq(W.document.documentElement.dataset.text, "default", "text-size class set in the first frames (ui/frame.js), default browser text");
   ok(parseFloat(W.document.getElementById("app").style.getPropertyValue("--v-peek")) > 40, "collapsed height measured from the header after boot");
 });
@@ -165,7 +163,7 @@ test("tabs: Nearby / Routes / My Routes switch title and aria-current; no Alerts
   eq($('#tabs button[data-tab="myroutes"]').getAttribute("aria-current"), "page");
   ok($("#back").hidden, "no Back button on a tab");
   tab("nearby");
-  await waitFor(() => title() === "Current trip" && $('[data-region="nearby-results"] [data-action="stop:open"]'), "Nearby again");
+  await waitFor(() => title() === "Current trip" && $("#content .pt-notrip"), "Current trip again");
   ok($("#back").hidden, "no Back button on a tab");
 });
 
@@ -266,7 +264,8 @@ const shellHelpers = { test, ok, eq, waitFor, $, txt, click, tab, W: () => W, st
 shellE2E(shellHelpers, "chip");
 
 test("stop view: arrivals, directions buttons, back returns to Nearby", async () => {
-  const row = $('[data-region="nearby-results"] [data-action="stop:open"]');
+  SB.store.set({ favStops: [T.S] });   // a stop row on Current trip (no trip: the favorites, owner 2026-11-04)
+  const row = await waitFor(() => $('[data-region="nearby-results"] [data-action="stop:open"]'), "a favorite stop row");
   const id = row.dataset.id;
   click(row, "arrival row");
   await waitFor(() => state().view === "stop" && title() === stopName(id), "stop view");
@@ -276,6 +275,7 @@ test("stop view: arrivals, directions buttons, back returns to Nearby", async ()
   ok(!$("#back").hidden, "Back visible in a sub view");
   click($("#back"), "back");
   await waitFor(() => state().view === "nearby" && title() === "Current trip", "back to Nearby");
+  SB.store.set({ favStops: [] });
 });
 
 test("nearby search: a result tapped after the field loses focus still opens (no rebuild under the finger)", async () => {
@@ -292,7 +292,7 @@ test("nearby search: a result tapped after the field loses focus still opens (no
   click($("#back"), "back");
   await waitFor(() => state().view === "nearby", "back to Nearby");
   type($('#content [data-input="nearby-q"]'), "", "clear search");
-  await waitFor(() => $('[data-region="nearby-results"] h3'), "Arriving soon again");
+  await waitFor(() => !$('#content [data-region="nearby-results"] [data-action="stop:open"]') || null, "the search results gone again (no nearby list without a trip)");
 });
 
 test("routes: eye toggle hides a route (persisted) and shows it again", async () => {
@@ -322,8 +322,8 @@ test("layout: the search circle beside the tab bar opens Directions; floating ta
   ok(edit.getBoundingClientRect().height >= 44 * (parseFloat(W.getComputedStyle(D.documentElement).getPropertyValue("--frame-k")) || 1) - 0.5, "44 pt target (in the scaled phone frame): " + edit.getBoundingClientRect().height);
   ok(!$('#content [data-action="pick:open"]') && !$('#content [data-action="dir:open"]'), "no Routes to station / Directions on Routes");
   tab("nearby");
-  await waitFor(() => title() === "Current trip" && $("#content .pt-hint") && !$("#content .pt-notrip"), "Current trip view with the quiet no-trip hint (no card)");
-  eq($$('#content [data-action="dir:open"]').length, 0, "destination search lives in the search circle");
+  await waitFor(() => title() === "Current trip" && $("#content .pt-notrip"), "Current trip with 'No current trip selected' (owner 2026-11-04)");
+  eq($$('#content [data-action="dir:open"]').length, 1, "besides the search circle, one Search for a destination in the no-trip card");
   eq($$('#content [data-action="pick:open"]').length, 1, "one Routes to station entry");
 });
 

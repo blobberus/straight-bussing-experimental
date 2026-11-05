@@ -907,10 +907,17 @@ and tests rely on:
   the screen should still show (same way as the settings button)"): `#ctxbar` no longer hides when expanded; beside
   Settings it needs no room; in Row C (with the simulated-buses chip) `--v-full` shrinks by 36 + 8 so the expanded
   sheet starts 8 below it (sheet.css). Peek never moves for it.
+- **Current trip with no trip** (owner 2026-11-04: "if a current trip is not selected, don't display nearby routes, rather,
+  just show that no current trip is selected. Keep the favorites and search station bar. Also keep the alerts."; spec 18
+  D6): `views/nearby.js` renders the alert row, `noTripHTML()` ("No current trip selected", `NO_TRIP_HINT`, a
+  Search for a destination button = `dir:open`), the station search with its links, and the favorites; `nextHTML`,
+  `locHTML` and the Arriving soon / Also nearby lists run only during a trip (or for a typed place, the search's own
+  result); `metaNearby` / `metaNearbyHTML` are empty and the collapsed subtitle is `NO_TRIP_TITLE`. Tests run the nearby
+  list with a trip (`views-fixtures.js onTrip`).
 - **Basemap roads** (owner 2026-11-04: "Do not make the main streets yellow. The highways being yellow is ok."): only
   motorways (and motorway bridges) are yellow-orange; main streets white / gray (`map/style.js PALETTE`); a test checks
   no other road layer has a yellow or orange hue.
-Deviations from the glass spec: `docs/redesign/NOTES-glass-web.md`; screens: `docs/redesign/glass/web/`. sw `sb-v2-92`.
+Deviations from the glass spec: `docs/redesign/NOTES-glass-web.md`; screens: `docs/redesign/glass/web/`. sw `sb-v2-93`.
 
 ## Faded buses, trip-only lines, thinner lines without outlines (2026-11-04, owner: "The buses on faded routes should also be faded. If on a trip, only the lines on the particular trip should be displayed.", "Remove the outlines for the lines but make the lines themselves thinner. All these changes should go onto the experimental build.")
 Ported by hand from the live app (straight-bussing commit d0e20d0e on its branch `fade-buses`; the live

@@ -1,6 +1,6 @@
 // State-machine tests: pick flow (3 modes) and directions (fields, plan, refine, live updates).
 import { test, eq, ok } from "./lib.js";
-import { NOW, makeCtx, tick, root, type } from "./views-fixtures.js";
+import { NOW, makeCtx, tick, root, type, onTrip } from "./views-fixtures.js";
 import { runAction } from "../js/ui/actions.js";
 import { P, placeDeps, renderPick, mountPick, unmountPick, setMode, resetPick, openPickDialog } from "../js/ui/views/pick.js";
 import { D, deps, renderDirections, mountDirections, unmountDirections, NOTE, computeSugs, setEndpoint } from "../js/ui/views/directions.js";
@@ -108,9 +108,9 @@ test("pick: type an address -> places -> stops near the place", async () => {
   unmountPick(); el.remove(); resetPick(); placeDeps.local = realLocal;
 });
 
-test("nearby: mounted view updates itself on live data without touching the search field", async () => {
+test("nearby (during a trip): mounted view updates itself on live data without touching the search field", async () => {
   N.q = ""; N.mode = "station"; N.anchor = null;
-  const ctx = makeCtx({ trips: [], buses: [] });
+  const ctx = makeCtx({ trips: [], buses: [], journey: onTrip().journey });
   const el = mountWith(ctx, (s) => renderNearby(s, NOW), mountNearby);
   ok(el.textContent.includes("No shuttles running right now"));
   const full = makeCtx().store.get();

@@ -85,5 +85,6 @@ test("trip header (DESIGN-SPEC 10.6, O3): collapsed = the next step over the tri
   ok(/Arriving In/.test(def.metaHTML(s, peek)) && /aria-label="Arriving In [^"]+"/.test(def.metaHTML(s, peek)), "Arriving In over the minutes, one spoken label");
   eq([def.title(s, full), def.subtitle(s, full), def.metaHTML(s, full)], ["Current trip", "", ""], "expanded: no second copy of the step");
   const none = baseState();
-  eq([def.title(none, peek), def.subtitle(none, peek)], ["Current trip", ""], "no trip: Current trip");
+  eq([def.title(none, peek), def.subtitle(none, peek)], ["Current trip", "No current trip selected"], "no trip, collapsed: Current trip over No current trip selected (owner 2026-11-04)");
+  eq([def.title(none, full), def.subtitle(none, full), def.metaHTML(none, peek)], ["Current trip", "", ""], "expanded: the card says it; never the next bus in the header");
 });

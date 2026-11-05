@@ -85,6 +85,20 @@ Port to this iPhone app when iOS resumes (copy by hand, never merge):
 - The paused glass branch (`redesign-ios`) needs the same when it resumes; the web version on this repo's test site is
   the parity reference.
 
+## Owner requests noted while paused: the web glass build, 2026-11-04 (port when the iPhone work resumes)
+
+- **No current trip selected** (owner: "In the current trip menu, if a current trip is not selected, don't display
+  nearby routes, rather, just show that no current trip is selected. Keep the favorites and search station bar. Also
+  keep the alerts."): with no trip, Current trip shows the alert row, "No current trip selected" with "Search for a
+  destination, choose a route and tap Start." and a Search for a destination button, the station search with its
+  links, and the favorites; no nearest stop, no Arriving soon / Also nearby, no "Use my location"; the collapsed card's
+  subtitle says "No current trip selected" and its trailing slot is empty. During a trip the next-bus block stays. Web:
+  `web/js/ui/views/nearby.js` (`noTripHTML`, `NO_TRIP_TITLE`, `NO_TRIP_HINT`); spec 18 D6. This departs from the
+  ship checklist's "next bus in one glance" on purpose (the owner's choice).
+- **Trip chip stays visible when the sheet is expanded** (spec 18 D5), like the Settings circle.
+- **Only motorways yellow on the map** (spec 18 D4): MapKit already draws main streets neutral.
+- **Compact status banner** (spec 18 D2), **feedback circle under Settings** (D1).
+
 ## How to resume
 1. `git fetch origin && git checkout -B glass origin/redesign-ios`, then `git rebase origin/main` (the web side keeps
    changing docs and web/; resolve docs conflicts by keeping both).
