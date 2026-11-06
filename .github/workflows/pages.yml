@@ -25,6 +25,13 @@ jobs:
             echo "::warning title=GTFS refresh failed::deploying the committed web/data/*.json"
             git checkout -- web/data
           }
+      - name: Refresh CTA schedule data (CTA GTFS, Hyde Park routes only; keeps the committed web/data/cta on failure)
+        run: |
+          python tools/test_build_cta.py > "$RUNNER_TEMP/cta-test.log" 2>&1 || { cat "$RUNNER_TEMP/cta-test.log"; echo "::warning title=CTA tool tests failed::deploying the committed web/data/cta"; exit 0; }
+          python tools/build_cta.py || {
+            echo "::warning title=CTA GTFS refresh failed::deploying the committed web/data/cta/*.json"
+            git checkout -- web/data/cta
+          }
       - name: Refresh campus places (OpenStreetMap; daily run only, keeps the committed copy on failure)
         if: github.event_name == 'schedule'
         run: python tools/build_places.py || echo "places refresh failed; using committed web/data/places.json"
