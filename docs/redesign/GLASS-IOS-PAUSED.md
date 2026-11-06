@@ -133,3 +133,17 @@ smart search such as allowing 53rdst -> 53rd Street or 53rd St -> 53rd Street et
    blobberus/straight-bussing-experimental --ref redesign-ios`; rerun a run whose jobs never started (busy macOS
    runners). Download the `ios-simulator-preview` artifact of a green run and do the bug run against the spec.
 4. Push to main in large green chunks; the web version on the test site is the parity reference.
+
+## CTA routes (web, 2026-11-06): port when iOS resumes
+Owner 2026-11-06 (experimental only): "implemenent the CTA routes in the same way passio go shows but make the bus shapes
+identifiable to be cta and make their stations square. Also list them noticably idfferently on the routes menu. They
+should still behave on the interface like the normal bus routes." Web here: done (docs/ARCHITECTURE.md "CTA routes
+beside the shuttles", glass spec D9). The iPhone app has none of it yet. To port:
+- Kit: the CTA files in `StaticLoader` (merge `cta:` entries only, `ctaPatterns`), `Agency` (isCta, allBuses, ctaLevel,
+  ctaStatusText, ctaSourceText), `CtaSchedule` (decode, servicesOn, scheduledTrips, tripsUnderway; golden cases from
+  web/tests/core-cta.js), shuttle-only `Operating.scheduledRoutes` / `scheduledNoLive` / `Coverage`, planner per CTA
+  direction with `waitTimed`, `TripFollow` never following a scheduled CTA time.
+- App: `CtaLive` (off / live / demo; the same proxy URL, `CTA_LIVE_URL`), squared CTA bus annotation with a "CTA"
+  tag, square stop annotations from the zoom the web uses, thinner CTA overlays under the shuttles, the Routes "CTA
+  buses" section, the route page per direction, the stop page, "Scheduled, est." rows, CTA contact rows, Settings >
+  Credits CTA line, App Privacy: still Data Not Collected (the proxy request carries no user data).
