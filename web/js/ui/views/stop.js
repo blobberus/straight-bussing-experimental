@@ -20,6 +20,9 @@ import { noBusHelpHTML } from "./alerts.js";
 import { isStale, nameOf } from "./nearby-cards.js";
 import { minsUntil } from "../../core/time.js";
 import { pair, svg } from "../icons.js";
+import { isCta, ctaId, ctaNoneText, ctaSourceText, ctaLevel } from "../../core/agency.js";
+import { arrStale } from "../components.js";
+import { ctaContactHTML } from "./routes-cta.js";
 
 /** The collapsed sheet's one-line summary at a stop (owner 2026-10-12: a map tap keeps the sheet collapsed): its next bus. */
 /**
@@ -30,21 +33,21 @@ import { pair, svg } from "../icons.js";
  */
 export function metaStopHTML(state, now = nowS()) {
   const id = state.stopId;
-  if (!id || !state.staticLoaded || !state.liveLoaded) return "";
+  if (!id || !state.staticLoaded || (!state.liveLoaded && !isCta(id))) return "";
   const a = arrivalsFor(state, id, { hidden: effectiveHidden(state), nowS: now })[0];
   if (!a) return "";
-  const stale = isStale(state, now), m = minsUntil(a.t, now);
-  const say = `Next bus: ${state.routes?.[a.rid]?.long || nameOf(state, a.rid)}, ${m < 1 ? "now" : (stale ? "about " : "in ") + m + " minute" + (m === 1 ? "" : "s")}`;
+  const stale = isCta(a.rid) ? arrStale(a, state, now) : isStale(state, now), m = minsUntil(a.t, now);
+  const say = `Next bus: ${isCta(a.rid) ? "CTA " : ""}${state.routes?.[a.rid]?.long || nameOf(state, a.rid)}, ${m < 1 ? "now" : (stale ? "about " : "in ") + m + " minute" + (m === 1 ? "" : "s")}${a.sched ? ", scheduled" : ""}`;
   return `<span class="hm" role="text" aria-label="${esc(say)}"><span class="hm-row" aria-hidden="true">${routeChip(a.rid, state.routes, { small: true })}${etaBlock(a.t, { stale, now })}${stale ? "" : '<span class="dot-live"></span>'}</span></span>`;
 }
 
 export function metaStop(state, now = nowS()) {
   const id = state.stopId;
-  if (!id || !state.staticLoaded || !state.liveLoaded) return "";
+  if (!id || !state.staticLoaded || (!state.liveLoaded && !isCta(id))) return "";
   const a = arrivalsFor(state, id, { hidden: effectiveHidden(state), nowS: now })[0];
   if (!a) return "";
-  const m = minsUntil(a.t, now);
-  return nameOf(state, a.rid) + " · " + (m < 1 ? "Now" : (isStale(state, now) ? "~" : "") + m + " min");
+  const m = minsUntil(a.t, now), est = isCta(a.rid) ? arrStale(a, state, now) : isStale(state, now);
+  return nameOf(state, a.rid) + " · " + (m < 1 ? "Now" : (est ? "~" : "") + m + " min");
 }
 
 /** Max arrivals listed on the stop screen. */
@@ -95,20 +98,22 @@ export function renderStop(state, now = nowS()) {
   // place details for a station (spec 10.14): the address and the walk, the routes as badges, then Directions (Primary),
   // From here and Favorite (Secondary) in one row (stacked at accessibility sizes), then the arrivals in a card
   const walk = state.user && Number.isFinite(st.lat) ? `${Math.max(1, Math.round(stopWalkMin(hav(state.user, st))))} min walk` : "";
-  const line = [addr || (walk ? "" : "Address not available"), walk].filter(Boolean).join(", ");
+  const cta = isCta(id);   // a CTA stop: its CTA stop number instead of an address, CTA's time source and contact below
+  const line = cta ? [`CTA stop ${ctaId(id)}`, walk].filter(Boolean).join(", ") : [addr || (walk ? "" : "Address not available"), walk].filter(Boolean).join(", ");
   let h = '<div class="v-stop">';
   h += `<div class="v-stophead mr-stophead"><p class="v-sec v-addr">${esc(line)}</p>`;
   h += `<p class="sr" id="mr-rts">Routes at this stop</p>`;
   h += shown.length
-    ? `<span class="v-chips v-stopchips" role="list" aria-labelledby="mr-rts">${shown.map((r) => `<span role="listitem"><button type="button" class="v-chipbtn" data-action="route:open" data-id="${esc(r)}" aria-label="Route ${esc(state.routes?.[r]?.long || r)}">${routeChip(r, state.routes)}</button></span>`).join("")}</span>`
+    ? `<span class="v-chips v-stopchips" role="list" aria-labelledby="mr-rts">${shown.map((r) => `<span role="listitem"><button type="button" class="v-chipbtn" data-action="route:open" data-id="${esc(r)}" aria-label="${isCta(r) ? "CTA route" : "Route"} ${esc(state.routes?.[r]?.long || r)}">${routeChip(r, state.routes)}</button></span>`).join("")}</span>`
     : `<p class="v-sec">${all.length ? "None of your visible routes stop here." : "No routes listed for this stop."}</p>`;
   h += "</div>";
   h += `<div class="v-actions v-stopacts"><button type="button" class="v-btn v-btn--primary" data-action="dir:to-stop" data-id="${esc(id)}" aria-label="Directions to here">${svg("corner-up-right", 17)}Directions</button><button type="button" class="v-btn v-btn--secondary" data-action="dir:from-stop" data-id="${esc(id)}">From here</button>${favButton(id, fav)}</div>`;
   h += '<h3 class="v-h">Arrivals</h3>';
-  if (!state.liveLoaded) h += skeleton(3);
+  if (!state.liveLoaded && !cta) h += skeleton(3);   // a CTA stop never waits for the shuttle feed
   else {
     const arr = arrivalsFor(state, id, { hidden, nowS: now }).slice(0, MAX_ARRIVALS);
     if (arr.length) h += '<div class="v-card v-arrivals">' + arr.map((a) => arrivalRow(a, state, { now, action: "route:open" })).join("") + "</div>";
+    else if (cta) h += emptyState(ctaNoneText(state, now), "CTA's own Bus Tracker and transitchicago.com have the latest.", { icon: "bus-front" });
     else {
       const running = (state.buses || []).length > 0, silent = !running && silentService(state, now);   // empty feed, routes scheduled
       const here = silent ? scheduledRoutes(state, now, { among: shown }) : [];
@@ -123,6 +128,10 @@ export function renderStop(state, now = nowS()) {
     h += state.journey
       ? `<div class="v-note"><span class="v-grow v-sec">${n} (hidden during your trip).</span></div>`
       : `<div class="v-note"><span class="v-grow v-sec">${n}.</span><button type="button" class="v-btn v-btn--quiet" data-action="stop:unhide" data-id="${esc(id)}" aria-label="Show the hidden routes that stop here">Show</button></div>`;
+  }
+  if (cta) {   // CTA's freshness and contact, never the shuttle feed's (core/agency.js)
+    const l = ctaLevel(state.cta, now);
+    return h + `<p class="v-foot${l === "err" ? " v-foot--warn" : ""}">${esc(ctaSourceText(state.cta, now))}</p>${ctaContactHTML()}</div>`;
   }
   const level = staleLevel(state, now);
   h += `<p class="v-foot${level === "err" ? " v-foot--warn" : ""}">${esc(updatedText(state, now))}</p>`;
