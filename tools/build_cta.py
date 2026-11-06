@@ -198,6 +198,24 @@ def decode_trips(enc):
     return out
 
 
+def _m(hhmm):
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def all_day(day, min_cover=23 * 60):
+    """A 24-hour route (4 Cottage Grove, 55 Garfield...) folds onto the clock as one window with a short gap, like
+    01:14 to 25:06; that would read "Scheduled until 1:06 AM" at 4 AM. A day whose one window covers 23 h or more is
+    written as 00:00 to 24:00 (in place): the app says "24 hours"."""
+    if not day or len(day.get("spans") or []) != 1:
+        return day
+    a, b = day["spans"][0]
+    if _m(b) - _m(a) >= min_cover:
+        day["spans"] = [["00:00", "24:00"]]
+        day["first"], day["last"] = "00:00", "24:00"
+    return day
+
+
 def active_services(z, today):
     """service_id -> {days, start, end, add, drop} for the services still in effect on or after `today`."""
     cal = {}
@@ -344,6 +362,9 @@ def build(z, today=None, routes=ROUTES, box=BOX):
                  for tid, t in trips.items() if tid in times]
     service = BG.build_service(z, svc_trips, times, (), today=today)
     service["routes"] = {k: v for k, v in service["routes"].items() if k in routes_out}
+    for r in service["routes"].values():
+        for d in list(r["days"].values()) + [e.get("hours") for e in r["exceptions"]]:
+            all_day(d)
 
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     used = {svc for dirs in sched.values() for d in dirs for svc in d["trips"]}

@@ -141,6 +141,15 @@ def service_hours_use_the_times_inside_the_box():
 
 
 @test
+def a_day_of_23_hours_or_more_is_written_as_24_hours():
+    d = {"first": "01:14", "last": "25:06", "spans": [["01:14", "25:06"]]}
+    assert B.all_day(d) == {"first": "00:00", "last": "24:00", "spans": [["00:00", "24:00"]]}, d
+    night = {"first": "16:00", "last": "28:29", "spans": [["16:00", "28:29"]]}
+    assert B.all_day(dict(night)) == night
+    assert B.all_day(None) is None
+
+
+@test
 def merge_patterns_inserts_extra_stops_in_order():
     m = B.merge_patterns([(("a", "b", "d"), 10), (("a", "b", "c", "d"), 3), (("z", "a"), 2), (("q",), 1)])
     assert m == ["z", "a", "b", "c", "d"], m
