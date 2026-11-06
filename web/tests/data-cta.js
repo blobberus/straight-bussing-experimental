@@ -130,3 +130,15 @@ test('parseCtaLive: canceled, drop-off only and invalidated predictions are neve
   const out = parseCtaLive({ ts: NOW, vehicles: [], predictions: [p(0, '1'), p(1, '2'), p(4, '6'), p(16, '4'), p(17, '5')] }, STATIC, NOW);
   eq(out.trips.flatMap((t) => t.stop_time_update.map((u) => u.stop_id)), ['cta:1']);
 });
+
+test('startCtaLive live: a proxy answer with ok:false (CTA limit, CTA down) counts as a failure, flagged', async () => {
+  const proxy = 'https://example.test/cta/v1/live.json';
+  const f = stubFetch((url) => (url.endsWith('cta/schedule.json') ? res(SCHED) : url.startsWith(proxy) ? res({ v: 1, ok: false, ts: NOW - 600, vehicles: [], predictions: [], errors: ['cta-limit'] }) : res(null, 404)));
+  const store = store0();
+  const h = startCtaLive(store, { url: proxy, fetch: f, now: () => NOW });
+  await h.tick();
+  h.stop();
+  const s = store.get();
+  ok(s.cta.failed && s.cta.loaded, 'flagged');
+  ok(s.ctaTrips.every((x) => x.sched), 'never answered: scheduled times, labeled');
+});

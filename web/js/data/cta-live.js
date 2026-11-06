@@ -189,6 +189,7 @@ export function startCtaLive(store, opts = {}) {
       if (!r || !r.ok) throw new Error('CTA proxy HTTP ' + (r ? r.status : '?'));
       const j = await r.json();
       if (!j || typeof j !== 'object' || !Array.isArray(j.vehicles)) throw new Error('CTA proxy: bad answer');
+      if (j.ok === false) throw new Error('CTA proxy: ' + (Array.isArray(j.errors) ? j.errors.join('; ') : 'not ok'));   // flagged; the schedule after FALLBACK_S
       const got = parseCtaLive(j, store.get(), t);
       lastOk = t;
       store.set({ ctaBuses: got.buses, ctaTrips: got.trips, cta: { mode, loaded: true, failed: false, lastOk: t, feedTs: got.feedTs || t } });
