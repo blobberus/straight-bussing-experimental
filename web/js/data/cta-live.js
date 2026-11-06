@@ -31,6 +31,11 @@ export const DEMO_TICK_MS = 4000;
 export const FALLBACK_S = 120;
 /** A CTA vehicle report older than this (s) is not drawn (same rule as the shuttles, core/operating.js). */
 export const CTA_STALE_S = 300;
+/**
+ * Bus Tracker v3 prediction "dyn" values that must not be shown as an arrival to board: 1 canceled, 4 expressed (drop-off
+ * only), 16 / 17 invalidated (CTA's guide: do not display).
+ */
+export const DYN_SKIP = new Set([1, 4, 16, 17]);
 /** Stops listed per simulated trip ahead of the bus. */
 const DEMO_AHEAD = 14;
 
@@ -74,6 +79,7 @@ export function parseCtaLive(j, state, nowS) {
     if (!p || typeof p !== 'object') continue;
     const rid = 'cta:' + String(p.rt ?? ''), sid = 'cta:' + String(p.stpid ?? ''), vid = String(p.vid ?? ''), t = parseCtaTime(p.prdtm);
     if (!routes[rid] || !stops[sid] || !vid || !Number.isFinite(t)) continue;
+    if (DYN_SKIP.has(Number(p.dyn))) continue;   // canceled, drop-off only or invalidated: never shown as a bus to catch
     const key = vid + '|' + String(p.tatripid || ''), tid = 'cta:' + String(p.tatripid || 'v' + vid);
     if (!byTrip.has(key)) byTrip.set(key, { trip: { trip_id: tid, route_id: rid }, vehicle: { id: 'cta:' + vid, label: vid }, stop_time_update: [] });
     byTrip.get(key).stop_time_update.push({ stop_id: sid, arrival: { time: t } });
