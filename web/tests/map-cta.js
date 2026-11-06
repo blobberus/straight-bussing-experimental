@@ -4,7 +4,8 @@
  * and css/map.css (map.test.html loads both).
  */
 import { test, eq, ok, near } from './lib.js';
-import { CTA_LINE_WIDTHS, CTA_STOP_MIN_Z, CTA_STOP_PANE, ctaStopStyle, squarePath, markerName } from '../js/map/cta.js';
+import { CTA_LINE_WIDTHS, CTA_STOP_MIN_Z, CTA_STOP_PANE, CTA_LINE_MIN_CONTRAST, ctaStopStyle, ctaLineColor, squarePath, markerName } from '../js/map/cta.js';
+import { contrast } from '../js/core/esc.js';
 import { stackOrder, lineWeight, ctaLineWeight, FOCUS_EXTRA, createNetworkLayer, createBusLayer } from '../js/map/layers.js';
 import { createMap } from '../js/map/map.js';
 import { P, squareLoop } from './map-fixtures.js';
@@ -118,6 +119,36 @@ test('network: CTA lines thinner and under the shuttle lines; square stops in th
   layer.draw(net({ hidden: ['cta:171', 'cta:55'] }));
   m.setZoom(16, { animate: false }); layer.restyle();
   eq(m.getContainer().querySelectorAll('path.sb-route-cta, path.sb-stop-cta').length, 0, 'hidden CTA routes: no line, no stop');
+  m.remove();
+});
+
+test('CTA line colors keep 3:1 against the land in both themes; the theme switch re-colors without a rebuild', () => {
+  const LIGHT = '#F5F3EE', DARK = '#202124';
+  for (const c of ['#747477', '#414145', '#B71234', '#0065BD', '#99999C']) {
+    ok(contrast(ctaLineColor(c, true), DARK) >= CTA_LINE_MIN_CONTRAST, c + ' on the dark land');
+    ok(contrast(ctaLineColor(c, false), LIGHT) >= CTA_LINE_MIN_CONTRAST, c + ' on the light land');
+  }
+  eq(ctaLineColor('#414145', false), '#414145', 'already 3:1 on light: the route color itself');
+  eq(ctaLineColor('#747477', true), '#747477', 'already 3:1 on dark: unchanged');
+  ok(ctaLineColor('#414145', true) !== '#414145' && contrast(ctaLineColor('#414145', true), '#FFFFFF') > 2, 'key-route gray lifted on dark, still a gray, not white');
+  ok(contrast('#414145', DARK) < 2, 'why: CTA key-route gray is under 2:1 on the dark land');
+
+  const m = bareMap('t-cta-dark', 16);
+  const layer = createNetworkLayer(m, { onStopTap: () => {} });
+  layer.draw(net());
+  const line55 = () => [...m.getContainer().querySelectorAll('path.sb-route-cta')].find((p) => p.getAttribute('stroke').toUpperCase() !== '#747477');
+  const before = [...m.getContainer().querySelectorAll('path')];
+  eq(line55().getAttribute('stroke').toUpperCase(), '#414145', 'light: the route color');
+  layer.setDark(true);
+  eq(line55().getAttribute('stroke').toUpperCase(), ctaLineColor('#414145', true), 'dark: lifted');
+  const sq55 = [...m.getContainer().querySelectorAll('path.sb-stop-cta:not(.sb-stop-multi)')].map((p) => p.getAttribute('stroke').toUpperCase());
+  ok(sq55.includes(ctaLineColor('#414145', true)), 'its stop outlines too');
+  ok([...m.getContainer().querySelectorAll('path.sb-route:not(.sb-route-cta)')].map((p) => p.getAttribute('stroke').toUpperCase()).sort().join() === '#0099CC,#FF9900', 'shuttle lines keep their colors');
+  ok([...m.getContainer().querySelectorAll('path')].every((p, i) => p === before[i]), 'no rebuild');
+  layer.draw(net({ hidden: ['r2'] }));
+  eq(line55().getAttribute('stroke').toUpperCase(), ctaLineColor('#414145', true), 'a redraw while dark keeps the dark colors');
+  layer.setDark(false);
+  eq(line55().getAttribute('stroke').toUpperCase(), '#414145', 'back to light');
   m.remove();
 });
 

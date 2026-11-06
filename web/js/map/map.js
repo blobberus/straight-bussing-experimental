@@ -185,6 +185,7 @@ export function createMap(elId) {
       el.classList.toggle('sb-dark', d);
       if (d === dark) return;
       dark = d;
+      network.setDark(d);   // CTA lines keep 3:1 against the new land (map/cta.js ctaLineColor)
       basemap.setDark(d);
     },
 

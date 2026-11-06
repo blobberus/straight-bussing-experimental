@@ -17,7 +17,7 @@ import { unwrapDeg } from './geometry.js';
 import { prepareShape, follow, pathCum, pointAt, advance, headingAt } from './track.js';
 import { busKey, busNumbers } from '../core/busnum.js';
 import { busFaded } from '../core/visibility.js';
-import { isCta, CTA_LINE_WIDTHS, CTA_STOP_MIN_Z, CTA_STOP_PANE, CTA_STOP_PANE_Z, ctaStopStyle, squareMarker, markCtaBus, markerName } from './cta.js';
+import { isCta, CTA_LINE_WIDTHS, CTA_STOP_MIN_Z, CTA_STOP_PANE, CTA_STOP_PANE_Z, ctaStopStyle, ctaLineColor, squareMarker, markCtaBus, markerName } from './cta.js';
 
 const ids = new WeakMap();
 let nextId = 1;
@@ -198,7 +198,8 @@ export function routeLabel(rid, routes) {
  * @param {L.Map} map
  * @param {{onStopTap:(id:string)=>void}} cb
  * lineAt(containerPoint) names the route line under a tap: the topmost one drawn (map/geometry.js lineAt).
- * @returns {{draw(o:object, dimAll?:boolean):boolean, restyle():void, chevrons():number, stopPoints():Array, lineAt(p:{x:number, y:number}):string|null}}
+ * setDark(on) re-colors CTA lines and stop outlines for the theme (ctaLineColor) without a rebuild.
+ * @returns {{draw(o:object, dimAll?:boolean):boolean, restyle():void, setDark(on:boolean):void, chevrons():number, stopPoints():Array, lineAt(p:{x:number, y:number}):string|null}}
  */
 export function createNetworkLayer(map, cb) {
   const L = window.L;
@@ -207,6 +208,7 @@ export function createNetworkLayer(map, cb) {
   if (!map.getPane(CTA_STOP_PANE)) map.createPane(CTA_STOP_PANE).style.zIndex = String(CTA_STOP_PANE_Z);
   const chev = createChevronLayer(map);
   let last = '', polys = [], stopPts = [], hits = [], stopMks = [];   // hits: drawn route lines, bottom to top: {rid, ll, bounds}
+  let dark = false;   // the theme: CTA lines and stop outlines take ctaLineColor
   const showStops = () => {
     for (const [g, on] of [[stopsG, map.getZoom() >= 14], [ctaG, map.getZoom() >= CTA_STOP_MIN_Z]]) {
       if (on && !map.hasLayer(g)) g.addTo(map);
@@ -230,9 +232,9 @@ export function createNetworkLayer(map, cb) {
       const color = safeColor(routes[rid]?.color), pane = front ? 'sbFocusLines' : 'sbLines', cta = isCta(rid);
       const segs = (shapes[rid] || []).filter((pts) => pts && pts.length >= 2);
       for (const pts of segs) {
-        const line = L.polyline(pts, { pane, className: cta ? 'sb-route sb-route-cta' : 'sb-route', color, weight: (cta ? ctaLineWeight(z) : lineWeight(z)) + bonus,
+        const line = L.polyline(pts, { pane, className: cta ? 'sb-route sb-route-cta' : 'sb-route', color: cta ? ctaLineColor(color, dark) : color, weight: (cta ? ctaLineWeight(z) : lineWeight(z)) + bonus,
           opacity: dim ? 0.2 : front ? 1 : 0.9, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(lines);
-        polys.push({ line, bonus, cta });
+        polys.push({ line, bonus, cta, color });
         hits.push({ rid, ll: pts, bounds: L.latLngBounds(pts), bonus });
       }
     }
@@ -248,9 +250,10 @@ export function createNetworkLayer(map, cb) {
       if (g === stopsG) stopPts.push(ll);   // building names keep off the stops drawn from zoom 14
       // a circle (CTA: a square, map/cta.js) in the card color with a route-color stroke; a stop of several routes gets
       // the neutral label2 stroke
-      const opts = { pane, ...(cta ? ctaStopStyle(z) : stopStyle(z)), color: single ? safeColor(routes[rs[0]]?.color) : '#5c5c63',
+      const rc = single ? safeColor(routes[rs[0]]?.color) : null, sbColor = cta && rc ? rc : null;
+      const opts = { pane, ...(cta ? ctaStopStyle(z) : stopStyle(z)), color: rc ? (sbColor ? ctaLineColor(rc, dark) : rc) : '#5c5c63',
         className: (cta ? 'sb-stop sb-stop-cta' : 'sb-stop') + (single ? '' : ' sb-stop-multi'),
-        opacity: dimAll ? 0.4 : 1, fillOpacity: dimAll ? 0.4 : 1, interactive: false, sbCta: cta };
+        opacity: dimAll ? 0.4 : 1, fillOpacity: dimAll ? 0.4 : 1, interactive: false, sbCta: cta, sbColor };
       stopMks.push((cta ? squareMarker(ll, opts) : L.circleMarker(ll, opts)).addTo(g));
       L.circleMarker(ll, { pane, radius: 22, stroke: false, fillOpacity: 0, className: 'sb-halo', bubblingMouseEvents: false })
         .on('click', () => cb.onStopTap(id)).addTo(g);
@@ -266,6 +269,13 @@ export function createNetworkLayer(map, cb) {
     showStops();
     chev.redraw();
   }
+  /** Theme switch: CTA lines and single-route CTA stop outlines take their color for the new land (no rebuild). */
+  function setDark(on) {
+    if (!!on === dark) return;
+    dark = !!on;
+    for (const p of polys) if (p.cta) p.line.setStyle({ color: ctaLineColor(p.color, dark) });
+    for (const m of stopMks) if (m.options.sbColor) m.setStyle({ color: ctaLineColor(m.options.sbColor, dark) });
+  }
   /**
    * The route line under a point of the map container (px), the one drawn on top when several are near; null when
    * none is within reach. Only lines drawn now count (hidden routes are not drawn).
@@ -280,7 +290,7 @@ export function createNetworkLayer(map, cb) {
     const lines = hits.filter((h) => h.bounds.intersects(near)).map((h) => ({ rid: h.rid, px: h.ll.map(toPx), width }));
     return pickLine([p.x, p.y], lines);
   }
-  return { draw, restyle, chevrons: () => chev.count(), stopPoints: () => stopPts, lineAt };
+  return { draw, restyle, setDark, chevrons: () => chev.count(), stopPoints: () => stopPts, lineAt };
 }
 
 const STALE_S = 60;

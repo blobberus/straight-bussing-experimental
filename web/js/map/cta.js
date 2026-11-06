@@ -4,7 +4,7 @@
  * behave on the interface like the normal bus routes"). CTA routes are ordinary routes to map/layers.js (ids "cta:<id>",
  * core/agency.js); this file only holds what is drawn differently, never by color alone:
  *  - lines: thinner than the shuttle lines (CTA_LINE_WIDTHS) and, unless the rider's draw order says otherwise, under
- *    them (layers.js stackOrder);
+ *    them (layers.js stackOrder); in the route color, lifted to 3:1 against the land where it is darker (ctaLineColor);
  *  - stops: squares (squareMarker: a Leaflet CircleMarker that draws a square), in their own pane under the shuttle stops,
  *    shown from CTA_STOP_MIN_Z (they stand on every block, both sides of the street) unless their route is in focus (its
  *    route page): then from zoom 14 like any focused route;
@@ -12,8 +12,37 @@
  * The pure helpers (squarePath, ctaStopStyle, markerName) do not touch Leaflet.
  */
 import { isCta } from '../core/agency.js';
+import { safeColor, contrast } from '../core/esc.js';
+import { PALETTE } from './style.js';
 
 export { isCta };
+
+/** The least contrast a CTA line or stop outline keeps against the map land (WCAG 1.4.11, graphics). */
+export const CTA_LINE_MIN_CONTRAST = 3;
+
+/** Mix two '#RRGGBB' colors: k = 0 gives a, 1 gives b. */
+function mix(a, b, k) {
+  const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
+  const ch = (s) => Math.round(((x >> s) & 255) * (1 - k) + ((y >> s) & 255) * k);
+  return '#' + ((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0').toUpperCase();
+}
+
+/**
+ * The color a CTA line and its stop outlines are drawn in: the route color, moved toward white (dark map) or black (light
+ * map) in 5% steps until it has CTA_LINE_MIN_CONTRAST against the land. CTA's key-route gray #414145 is 1.6:1 on the dark
+ * land (#202124) and nearly vanishes there; the badges keep the route color (white text on it is what counts there).
+ * @param {string} color route color
+ * @param {boolean} dark the dark map
+ * @returns {string} '#RRGGBB'
+ */
+export function ctaLineColor(color, dark) {
+  const c = safeColor(color), land = dark ? PALETTE.dark.bg : PALETTE.light.bg, to = dark ? '#FFFFFF' : '#000000';
+  for (let i = 0; i <= 20; i++) {
+    const m = i ? mix(c, to, i / 20) : c;
+    if (contrast(m, land) >= CTA_LINE_MIN_CONTRAST) return m;
+  }
+  return to;
+}
 
 /** CTA line width (px) by zoom: about two thirds of a shuttle line (map/layers.js LINE_WIDTHS 2 .. 6). */
 export const CTA_LINE_WIDTHS = Object.freeze([[13, 1.25], [14, 1.5], [15, 2], [16, 2.5], [17, 3], [18, 3.5]]);
