@@ -32,6 +32,8 @@ import { attachOrderDrag } from "./routes-drag.js";
 import { restingText } from "./myroutes.js";
 import { svg } from "../icons.js";
 import { bus } from "../../core/events.js";
+import { isCta, ctaLive } from "../../core/agency.js";
+import { ctaSectionHTML, ctaStatusText, ctaOperating } from "./routes-cta.js";
 
 const EYE = svg("eye", 20);
 const EYEOFF = svg("eye-off", 20);
@@ -107,7 +109,8 @@ export function notRunningText(state, id, now) {
 }
 
 /**
- * Group routes: running / scheduled with no live bus ([] in a feed outage) / not running / hidden (effectiveHidden).
+ * Group the shuttle routes: running / scheduled with no live bus ([] in a feed outage) / not running / hidden
+ * (effectiveHidden). CTA routes are listed in their own section (routes-cta.js, ctaIds).
  * @param {object} state
  * @param {number} [now] unix seconds
  * @returns {{running:string[], scheduled:string[], idle:string[], hidden:string[]}}
@@ -115,6 +118,7 @@ export function notRunningText(state, id, now) {
 export function groupRoutes(state, now = nowS()) {
   const hiddenSet = new Set(effectiveHidden(state)), unknown = liveUnknown(state, now), out = { running: [], scheduled: [], idle: [], hidden: [] };
   for (const id of routeIds(state)) {
+    if (isCta(id)) continue;
     if (hiddenSet.has(id)) out.hidden.push(id);
     else if (runningCount(state, id) > 0) out.running.push(id);
     else if (!unknown && scheduledNoLive(state, id, now)) out.scheduled.push(id);   // never "Not running"
@@ -139,15 +143,17 @@ const nameOf = (state, id) => { const r = state.routes?.[id] || {}; return r.lon
 export const idleText = (state, id, now) => { const h = hoursOn(state.service, id, now); return h && h.first ? `Not running · Today ${h.label}` : "Not running"; };
 
 function row(state, id, hidden, now, stop = null, idle = false) {
-  const r = state.routes[id] || {}, n = runningCount(state, id), name = nameOf(state, id);
+  const r = state.routes[id] || {}, cta = isCta(id), n = runningCount(state, id), name = nameOf(state, id);
   const tripOff = hidden && !!state.journey && !(state.hiddenRoutes || []).includes(id);   // hidden only by the journey
-  // whether the route runs, also for a hidden one (owner 2026-10-17: a grayed line must still say if it is running)
-  const live = n ? `${n} bus${n > 1 ? "es" : ""} running` : liveUnknown(state, now) ? "Live status unknown" : idle ? notRunningText(state, id, now) : noLiveStatus(state, id, now) || idleText(state, id, now);
+  // whether the route runs, also for a hidden one (owner 2026-10-17: a grayed line must still say if it is running);
+  // a CTA route says it from CTA's own status (its schedule, CTA live data), never the shuttle feed's
+  const live = cta ? ctaStatusText(state, id, now) : n ? `${n} bus${n > 1 ? "es" : ""} running` : liveUnknown(state, now) ? "Live status unknown" : idle ? notRunningText(state, id, now) : noLiveStatus(state, id, now) || idleText(state, id, now);
   const why = tripOff ? "Not part of this trip" : hidden ? "Hidden from map and times" : "";
   // a search result that does not run (idle) keeps one middle dot per line: why it is grayed goes on its own line
   const status = why && !idle ? `${live} · ${why}` : live, more = why && idle ? `<span class="v-sec">${why}</span>` : "";
   const eye = tripOff ? "" : `<button type="button" class="v-eye" data-action="routes:toggle" data-id="${esc(id)}" aria-pressed="${hidden ? "false" : "true"}" aria-label="${hidden ? "Show" : "Hide"} route ${esc(r.short || "")} ${esc(name)}">${hidden ? EYEOFF : EYE}</button>`;
-  return `<div class="v-routerow${hidden ? " is-off" : ""}${idle ? " is-idle" : ""}"><button type="button" class="v-row v-rowmain" data-action="route:open" data-id="${esc(id)}">${routeChip(id, state.routes)}<span class="v-grow"><span class="v-prim">${esc(name)}</span><span class="v-sec">${n ? '<span class="v-livedot" aria-hidden="true"></span>' : ""}${esc(status)}</span>${more}${stop ? `<span class="v-sec rt-why">Stops at ${esc(stop)}</span>` : ""}</span></button>${eye}</div>`;
+  const dot = n && (!cta || ctaLive(state.cta, now)) ? '<span class="v-livedot" aria-hidden="true"></span>' : "";
+  return `<div class="v-routerow${cta ? " is-cta" : ""}${hidden ? " is-off" : ""}${idle ? " is-idle" : ""}"><button type="button" class="v-row v-rowmain" data-action="route:open" data-id="${esc(id)}">${routeChip(id, state.routes)}<span class="v-grow"><span class="v-prim">${esc(name)}</span><span class="v-sec">${dot}${esc(status)}</span>${more}${stop ? `<span class="v-sec rt-why">Stops at ${esc(stop)}</span>` : ""}</span></button>${eye}</div>`;
 }
 
 /**
@@ -225,7 +231,8 @@ export function orderHTML(state) {
  * @returns {string[]}
  */
 export function operatingIds(state, now = nowS(), scope = null) {
-  return (scope || routeIds(state)).map(String).filter((id) => runningCount(state, id) > 0 || scheduledNoLive(state, id, now));
+  return (scope || routeIds(state)).map(String).filter((id) => (isCta(id) ? ctaOperating(state, id, now)
+    : runningCount(state, id) > 0 || scheduledNoLive(state, id, now)));
 }
 
 /** The live feed cannot tell what runs (not loaded yet, or failing with no bus): Show running changes nothing. */
@@ -258,11 +265,12 @@ export function onlyRunningShown(state, now = nowS()) {
  */
 export function bulkHTML(state, g, now = nowS()) {
   if (state.journey) return "";
-  const shown = g.running.length + g.scheduled.length + g.idle.length, scope = state.routeFilter ? " at this station" : "";
+  const hid = new Set(effectiveHidden(state)), cta = routeIds(state).filter(isCta), ctaHidden = cta.filter((i) => hid.has(i)).length;
+  const shown = g.running.length + g.scheduled.length + g.idle.length + cta.length - ctaHidden, scope = state.routeFilter ? " at this station" : "";
   const done = onlyRunningShown(state, now);
   // three actions as Secondary capsules (spec 10.12); the one matching the current state shows a check, none looks disabled
   return `<div class="rt-bulk" role="group" aria-label="All routes${scope}">`
-    + `<button type="button" class="v-btn v-btn--quiet" data-action="routes:show-all"${g.hidden.length ? "" : " disabled"}>${CHECK}Show all<span class="v-sr"> routes${scope}</span></button>`
+    + `<button type="button" class="v-btn v-btn--quiet" data-action="routes:show-all"${g.hidden.length + ctaHidden ? "" : " disabled"}>${CHECK}Show all<span class="v-sr"> routes${scope}</span></button>`
     + `<button type="button" class="v-btn v-btn--quiet" data-action="routes:show-running"${done ? ' aria-disabled="true"' : ""}>${CHECK}Show running<span class="v-sr"> routes only${scope}${done ? ", only running routes are shown" : ""}</span></button>`
     + `<button type="button" class="v-btn v-btn--quiet" data-action="routes:hide-all"${shown ? "" : " disabled"}>${CHECK}Hide all<span class="v-sr"> routes${scope}</span></button></div>`;
 }
@@ -318,8 +326,9 @@ export function searchHTML(state, q = R.q) {
 export function listHTML(state, now = nowS(), q = R.q) {
   if (!state.staticLoaded) return skeleton(5);
   const g = groupRoutes(state, now);
+  let ctaIds = routeIds(state).filter(isCta);
   let h = filterChipHTML(state);
-  const total = g.running.length + g.scheduled.length + g.idle.length + g.hidden.length;
+  const total = g.running.length + g.scheduled.length + g.idle.length + g.hidden.length + ctaIds.length;
   if (!total) return h + (state.routeFilter ? emptyState("No routes at this station", "Clear the filter to see every route.") : emptyState("No routes", "The schedule data did not load. Reload the app.") + OFFICIAL_HTML);
   const unknown = liveUnknown(state, now), empty = state.liveLoaded && !(state.buses || []).length;   // unknown: feed unreachable, we cannot say a route is not running
   // the operator's alerts stay at the top; its number and ours (the call buttons, the official page) go to the bottom,
@@ -338,7 +347,8 @@ export function listHTML(state, now = nowS(), q = R.q) {
       : `<div class="rt-qnone">${emptyState("No routes match", f ? `Only routes to ${f.label || "this station"} are searched. Clear the station filter to search every route.` : "Try a route name, a street or a stop.", { icon: "search" })}<button type="button" class="v-btn v-btn--secondary" data-action="routes:search-clear">Clear search</button></div>`) + h;
     const got = new Set(top), label = top.length ? "Other routes" : "All routes";
     for (const k of Object.keys(g)) g[k] = g[k].filter((i) => !got.has(i));
-    if (g.running.length + g.scheduled.length + g.idle.length + g.hidden.length) h += `<div class="rt-qdiv" role="separator" aria-label="${label}"><span aria-hidden="true">${label}</span></div>`;
+    ctaIds = ctaIds.filter((i) => !got.has(i));
+    if (g.running.length + g.scheduled.length + g.idle.length + g.hidden.length + ctaIds.length) h += `<div class="rt-qdiv" role="separator" aria-label="${label}"><span aria-hidden="true">${label}</span></div>`;
   }
   h += bulk;
   const group = (title, ids, hidden, cls) => (ids.length ? `<h3 class="v-h">${title}</h3><div class="v-list${cls ? " " + cls : ""}">${ids.map((i) => row(state, i, hidden, now)).join("")}</div>` : "");
@@ -346,6 +356,7 @@ export function listHTML(state, now = nowS(), q = R.q) {
   h += group("Scheduled, no live location", g.scheduled, false, "");
   h += group(unknown ? "Live status unknown" : "Not running", g.idle, false, empty ? "is-dim" : "");
   h += group(state.journey ? "Not on this trip" : "Hidden", g.hidden, true, "");
+  h += ctaSectionHTML(state, ctaIds, new Set(effectiveHidden(state)), now, row);   // after the shuttles, its own section
   return h + `<div class="rt-official">${calls ? callsHTML(state, now) : OFFICIAL_HTML}</div>`;
 }
 

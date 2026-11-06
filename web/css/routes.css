@@ -92,3 +92,16 @@
 @media (prefers-reduced-motion: reduce) {
   .rt-move, .rt-order.is-sorting .rt-orow { transition: none; }
 }
+
+/* CTA buses (routes-cta.js, owner 2026-11-06: "list them noticably idfferently"): a section of its own after the shuttles,
+   set off by a rule, a CTA mark (squared, like CTA's badges) and where its times come from */
+.rt-cta { margin: var(--s-6) 0 var(--s-3); padding-top: var(--s-3); border-top: 1px solid var(--separator); }
+.rt-ctahead { display: flex; align-items: center; gap: var(--s-2); margin: 0 var(--s-1); }
+.rt-ctamark { display: inline-grid; place-items: center; min-height: 22px; padding: 0 6px; border-radius: 2px; background: var(--label); color: var(--bg-card); font: var(--t-badge); letter-spacing: .06em; }
+.rt-ctah { margin: 0; }
+.rt-ctasrc { margin: var(--s-1) var(--s-1) var(--s-2); }
+.rt-ctasrc.is-warn { color: var(--warn); }
+.rt-ctahid { margin: var(--s-2) var(--s-1) var(--s-1); }
+.rt-cta .v-list { border-radius: 6px; }
+.cta-contact { margin: var(--s-2) var(--s-1) 0; }
+.cta-credit { margin: var(--s-1) var(--s-1) 0; }

@@ -74,6 +74,8 @@ html[data-text="ax"] :is(.row, .v-row) + :is(.row, .v-row)::before { left: var(-
 .dot-off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--label-2); }
 .src-live { color: var(--live); }
 .src-sched, .src-stale { color: var(--label-2); }
+/* a CTA scheduled time (components.js ctaArrLabel): a hollow square, never the live dot */
+.dot-sched { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border: 1.5px solid var(--label-2); border-radius: 1px; vertical-align: 1px; }
 
 /* ---------- route badge (10.9): rTag; 24 tall in rows, 20 inline; the short name is never truncated (longer names widen
    the badge, over 5 characters drop to 10 pt); a ring when the color is under 3:1 against the surface
@@ -94,6 +96,10 @@ html[data-text="ax"] :is(.row, .v-row) + :is(.row, .v-row)::before { left: var(-
 :root[data-theme="dark"] .chip.lt { box-shadow: none; }
 :root[data-theme="dark"] .chip.dk { box-shadow: inset 0 0 0 1px var(--badge-ring); }
 .chip.is-hidden { opacity: .4; }
+/* a CTA route badge (core/agency.js, owner 2026-11-06): squared corners and the word "CTA" before the number, so CTA
+   routes read as CTA by shape and text, never by color alone */
+.chip.chip--cta { grid-auto-flow: column; column-gap: 3px; border-radius: 2px; padding: 0 5px; }
+.chip-cta { font-size: .72em; font-weight: 800; letter-spacing: .04em; }
 
 /* ---------- ETA notation (10.10): numeral + the unit on its baseline ("4 min"), "Now" in live Semibold, clock time at
    60 min or more, "~" + label2 when stale. Trailing, right-aligned, min width 64; numbers change without animation. ---------- */

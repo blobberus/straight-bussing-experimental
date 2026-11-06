@@ -10,6 +10,7 @@ import { esc, safeColor, textOn, contrast } from "../core/esc.js";
 import { minsUntil, nowS, clock } from "../core/time.js";
 import { svg } from "./icons.js";
 import { staleLevel } from "../core/arrivals.js";
+import { isCta, ctaLevel } from "../core/agency.js";
 
 /** Official service phone (display form). */
 export const OFFICIAL_PHONE = "773.702.8181";
@@ -103,6 +104,8 @@ export function routeChip(rid, routes, opts = {}) {
   const r = (routes && routes[rid]) || {};
   const c = safeColor(r.color), name = chipText(rid, routes);
   const cls = "chip" + ringClass(c) + (opts.small ? " sm" : "") + (name.length > 5 ? " long" : "");
+  // a CTA route (core/agency.js): a squared badge led by the word "CTA" (shape and text, never color alone)
+  if (isCta(rid)) return `<span class="${cls} chip--cta" style="background:${c};color:${textOn(c)}"><span class="chip-cta">CTA</span> ${esc(name)}</span>`;
   return `<span class="${cls}" style="background:${c};color:${textOn(c)}">${esc(name)}</span>`;
 }
 
@@ -150,8 +153,38 @@ export function liveLabel(level) {
 }
 
 /**
+ * Label of a CTA arrival (core/agency.js): a scheduled time says "Scheduled, est." (never live; ETA with "~"); a CTA
+ * live prediction gets the shuttle wording from CTA's own freshness (ctaLevel), so a CTA outage never marks shuttle
+ * times stale or the reverse.
+ * @param {{sched?:boolean}} a arrival
+ * @param {object} state store state (cta)
+ * @param {number} now
+ * @returns {{html:string, text:string, stale:boolean}}
+ */
+export function ctaArrLabel(a, state, now) {
+  if (a && a.sched) return { html: '<span class="dot-sched" aria-hidden="true"></span><span class="src-sched">Scheduled, est.</span>', text: "scheduled time, an estimate", stale: true };
+  const l = ctaLevel(state && state.cta, now);
+  const lv = l === "demo" ? "" : l === "late" ? "late" : l === "" ? "" : "err";
+  return { ...liveLabel(lv), stale: !!lv };
+}
+
+/**
+ * Is this arrival's time an estimate to mark with "~" (a stale shuttle feed; a CTA scheduled time or stale CTA data)?
+ * @param {{rid:string, sched?:boolean}} a
+ * @param {object} state
+ * @param {number} now
+ * @returns {boolean}
+ */
+export function arrStale(a, state, now) {
+  if (a && isCta(a.rid)) return ctaArrLabel(a, state, now).stale;
+  const st = state || {};
+  return staleLevel({ lastOk: st.lastOk || 0, failed: !!st.failed, feedTs: st.feedTs || 0 }, now) !== "";
+}
+
+/**
  * One arrival row: route chip, route name, live label (+ bus label), ETA.
- * Screen readers get a single sentence, e.g. "Route 6, Campus North, arrives in 4 minutes, live".
+ * Screen readers get a single sentence, e.g. "Route 6, Campus North, arrives in 4 minutes, live". A CTA arrival says
+ * "CTA route 171" and, for a scheduled time, "scheduled time, an estimate" (ctaArrLabel).
  * @param {{rid:string, t:number, bus?:string, tripId?:string}} a  from core/arrivals.arrivalsFor
  * @param {Object} state store state (routes, lastOk, failed, feedTs)
  * @param {{action?:string, now?:number, sub?:string}} [opts] action -> render as a button with data-action/data-id(rid)/data-trip
@@ -160,17 +193,19 @@ export function liveLabel(level) {
 export function arrivalRow(a, state, opts = {}) {
   const n = typeof opts.now === "number" ? opts.now : nowS();
   const st = state || {};
+  const cta = isCta(a.rid);
   const level = staleLevel({ lastOk: st.lastOk || 0, failed: !!st.failed, feedTs: st.feedTs || 0 }, n);
   const r = (st.routes && st.routes[a.rid]) || {};
   const short = routeName(a.rid, st.routes);
   const long = r.long || short;
   const m = minsUntil(a.t, n);
-  const lbl = liveLabel(level);
+  const lbl = cta ? ctaArrLabel(a, st, n) : liveLabel(level);
+  const stale = cta ? lbl.stale : !!level;
   const when = m < 1 ? "arriving now" : `arrives in ${m} minute${m === 1 ? "" : "s"}`;
-  const label = `Route ${short}, ${long}, ${when}, ${lbl.text}`;
+  const label = `${cta ? "CTA route" : "Route"} ${short}, ${long}, ${when}, ${lbl.text}`;
   const extra = opts.sub ? " · " + esc(opts.sub) : a.bus ? " · Bus " + esc(a.bus) : "";
   const vis = `${routeChip(a.rid, st.routes)}<span class="grow"><span class="prim">${esc(long)}</span>`
-    + `<span class="sec">${lbl.html}${extra}</span></span>${etaBlock(a.t, { stale: !!level, now: n })}`;
+    + `<span class="sec">${lbl.html}${extra}</span></span>${etaBlock(a.t, { stale, now: n })}`;
   if (opts.action) {
     return `<button type="button" class="row arr" data-action="${esc(opts.action)}" data-id="${esc(a.rid)}" data-trip="${esc(a.tripId || "")}" aria-label="${esc(label)}">${vis}</button>`;
   }

@@ -7,7 +7,8 @@
 import { esc } from "../../core/esc.js";
 import { nowS, minsUntil } from "../../core/time.js";
 import { arrivalsFor, staleLevel, liveUnknown } from "../../core/arrivals.js";
-import { routeChip, etaBlock, arrivalRow } from "../components.js";
+import { routeChip, etaBlock, arrivalRow, arrStale } from "../components.js";
+import { isCta } from "../../core/agency.js";
 import { silentService } from "../../core/operating.js";
 import { effectiveHidden } from "../../core/visibility.js";
 import { ICONS } from "./pick.js";
@@ -65,9 +66,10 @@ export function favoritesHTML(state, now = nowS()) {
     const name = state.stops[id].name || id;
     const a = state.liveLoaded ? arrivalsFor(state, id, { hidden, nowS: now })[0] : null;
     const m = a ? Math.max(0, minsUntil(a.t, now)) : null;
-    const label = a ? `Favorite ${name}: route ${nameOf(state, a.rid)} ${m < 1 ? "arriving now" : "in " + m + " minutes"}${stale ? ", estimate" : ""}`
-      : `Favorite ${name}: ${unknown ? "live times unavailable" : state.liveLoaded ? "no upcoming arrivals" : "loading"}`;
-    const right = a ? etaBlock(a.t, { stale, now }) : `<span class="v-sec">${unknown ? "No live times" : state.liveLoaded ? "No buses soon" : ""}</span>`;
+    const est = a ? (isCta(a.rid) ? arrStale(a, state, now) : stale) : false, sched = !!(a && a.sched);   // a CTA time: its own source
+    const label = a ? `Favorite ${name}: ${isCta(a.rid) ? "CTA " : ""}route ${nameOf(state, a.rid)} ${m < 1 ? "arriving now" : "in " + m + " minutes"}${sched ? ", scheduled time, an estimate" : est ? ", estimate" : ""}`
+      : `Favorite ${name}: ${unknown && !isCta(id) ? "live times unavailable" : state.liveLoaded ? "no upcoming arrivals" : "loading"}`;
+    const right = a ? etaBlock(a.t, { stale: est, now }) : `<span class="v-sec">${unknown && !isCta(id) ? "No live times" : state.liveLoaded ? "No buses soon" : ""}</span>`;
     return `<button type="button" class="v-row" data-action="stop:open" data-id="${esc(id)}" aria-label="${esc(label)}">${a ? routeChip(a.rid, state.routes) : `<span class="v-ic v-favic" aria-hidden="true">${ICONS.star}</span>`}<span class="v-grow"><span class="v-prim">${esc(name)}</span>${a ? `<span class="v-sec">${esc(state.routes?.[a.rid]?.long || "")}</span>` : ""}</span>${right}</button>`;
   }).join("");
   const more = '<button type="button" class="v-link v-favmore" data-action="nav" data-view="myroutes">All favorites</button>';
@@ -75,7 +77,8 @@ export function favoritesHTML(state, now = nowS()) {
 }
 
 /**
- * The next visible arrival at every stop, soonest first (the "Arriving soon" list without location).
+ * The next visible arrival at every shuttle stop, soonest first (the "Arriving soon" list without location). CTA stops
+ * are left out: their times come every few minutes on every block and are often scheduled, not live.
  * @param {object} state
  * @param {number} now
  * @returns {{id:string, a:object}[]} at most 6
@@ -83,7 +86,7 @@ export function favoritesHTML(state, now = nowS()) {
 export function soonest(state, now) {
   const hidden = effectiveHidden(state), out = [];
   for (const id of Object.keys(state.stops || {})) {
-    if (!(state.stopRoutes?.[id] || []).length) continue;
+    if (isCta(id) || !(state.stopRoutes?.[id] || []).length) continue;
     const a = arrivalsFor(state, id, { hidden, nowS: now })[0];
     if (a) out.push({ id, a });
   }

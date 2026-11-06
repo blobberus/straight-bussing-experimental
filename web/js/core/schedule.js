@@ -82,6 +82,7 @@ function spansOf(day) {
 /** '7:00 AM to 11:30 PM' (windows joined with ', '), or 'No service'. */
 function spanLabel(day) {
   const s = spansOf(day);
+  if (s.length === 1 && s[0][0] === "00:00" && s[0][1] === "24:00") return "24 hours";   // all day (CTA owl routes)
   return s.length ? s.map(([a, b]) => clock12(a) + TO + clock12(b)).join(", ") : "No service";
 }
 

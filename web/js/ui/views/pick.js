@@ -19,6 +19,7 @@ import { createPlaceSearch, placeListHTML, setHTMLKeepFocus, focusNote } from ".
 import { officialLinks } from "../components.js";
 import { onlySwitchHTML, filterJourney, watchStation } from "./journey.js";
 import { svg } from "../icons.js";
+import { isCta } from "../../core/agency.js";
 
 /** Radius for "stops near here" in the picker (meters). */
 export const PICK_RADIUS_M = 1500;
@@ -58,13 +59,15 @@ export function walkShort(d) {
  * Stops served by at least one route within maxM of a point, nearest first.
  * @param {object} state store state (stops, stopRoutes)
  * @param {{lat:number, lon:number}} point
- * @param {{maxM?:number, max?:number, hidden?:string[]}} [opts] hidden: routes that do not count as serving
+ * @param {{maxM?:number, max?:number, hidden?:string[], agency?:'shuttle'|'cta'|null}} [opts] hidden: routes that do not
+ *   count as serving; agency: only shuttle stops, or only CTA stops (core/agency.js isCta); null = both
  * @returns {{id:string,name:string,lat:number,lon:number,d:number}[]}
  */
-export function stopsNear(state, point, { maxM = PICK_RADIUS_M, max = 5, hidden = [] } = {}) {
+export function stopsNear(state, point, { maxM = PICK_RADIUS_M, max = 5, hidden = [], agency = null } = {}) {
   if (!point || !isFinite(point.lat) || !isFinite(point.lon)) return [];
   const out = [];
   for (const [id, s] of Object.entries(state.stops || {})) {
+    if (agency && (agency === "cta") !== isCta(id)) continue;
     const rs = (state.stopRoutes?.[id] || []).filter((r) => !hidden.includes(r));
     if (!rs.length || !s || !isFinite(s.lat)) continue;
     const d = hav(point, s);

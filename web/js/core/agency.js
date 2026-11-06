@@ -125,6 +125,16 @@ export function ctaLive(cta, nowS) {
 }
 
 /**
+ * What a CTA stop with no arrival to list says (plain text): no scheduled bus in the window shown, or no live prediction.
+ * @param {{cta?:object}} state
+ * @param {number} nowS
+ * @returns {string}
+ */
+export function ctaNoneText(state, nowS) {
+  return ctaLive(state && state.cta, nowS) ? "No CTA arrivals predicted right now" : "No CTA bus scheduled in the next 90 minutes";
+}
+
+/**
  * One line on where CTA times come from right now (CTA group heading, CTA route and stop pages). Plain text.
  * @param {object} cta store.cta
  * @param {number} nowS

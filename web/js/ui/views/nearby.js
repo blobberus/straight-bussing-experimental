@@ -38,6 +38,7 @@ import { stopWalkMin } from "./tripinfo.js";
 import { FAV_MAX, isStale, nameOf, guidedRow, pickArrivals, favoritesHTML, soonest } from "./nearby-cards.js";
 import { isPlanJourney } from "./journey.js";
 import { tripProgressHTML, tripMetaText, tripMetaHTML, tripHeader } from "./tripprogress.js";
+import { isCta, ctaNoneText } from "../../core/agency.js";
 
 export { FAV_MAX, guidedRow, pickArrivals, favoritesHTML };   // their home is ./nearby-cards.js (tests import them from here)
 
@@ -75,20 +76,34 @@ function stopCard(state, s, now, max, hero, guide) {
   let body;
   if (!arr) body = skeleton(hero ? 3 : 1);
   else if (arr.length) body = arr.map((a) => (guide ? guidedRow(a, state, now, walkM) : arrivalRow(a, state, { now, action: "route:open" }))).join("");
-  else body = `<div class="v-none"><span class="v-sec">${liveUnknown(state, now) ? NO_LIVE : silentService(state, now) ? "No live times right now" : "No upcoming arrivals"}</span><span class="v-chips">${rs.map((r) => routeChip(r, state.routes)).join("")}</span></div>`;
+  else body = `<div class="v-none"><span class="v-sec">${isCta(s.id) ? ctaNoneText(state, now) : liveUnknown(state, now) ? NO_LIVE : silentService(state, now) ? "No live times right now" : "No upcoming arrivals"}</span><span class="v-chips">${rs.map((r) => routeChip(r, state.routes)).join("")}</span></div>`;
   return hero ? `<section class="v-card v-hero pt-next" aria-label="${esc("Next buses at " + s.name)}">${head}${body}</section>`
     : `<section class="v-card">${head}${body}</section>`;
 }
 
 /** The point the nearest stop is measured from: your location, else a typed place (N.anchor). */
 const pointOf = (state) => state.user || N.anchor;
-const nearest = (state, point, max) => stopsNear(state, point, { maxM: NEARBY_MAX_M, max, hidden: effectiveHidden(state) });
+/** CTA stops this close are listed under the shuttle stops (a walk of about 10 minutes). */
+export const CTA_NEAR_M = 800;
+/**
+ * The nearest stops: the shuttle stops first (CTA stops sit on every block, so they would take every card; owner rule
+ * for Current trip is the next shuttle in one glance), CTA stops only when no visible shuttle route has a stop nearby.
+ */
+const nearest = (state, point, max) => {
+  const o = { maxM: NEARBY_MAX_M, max, hidden: effectiveHidden(state) };
+  const sh = stopsNear(state, point, { ...o, agency: "shuttle" });
+  return sh.length ? sh : stopsNear(state, point, { ...o, agency: "cta" });
+};
+/** The nearest CTA stop within CTA_NEAR_M of visible CTA routes (its own card under the shuttle stops), or null. */
+const nearestCta = (state, point) => stopsNear(state, point, { maxM: CTA_NEAR_M, max: 1, hidden: effectiveHidden(state), agency: "cta" })[0] || null;
 
-/** Below the hero: the other nearby stops (1 arrival each) and the walking-estimate note. */
+/** Below the hero: the other nearby stops (1 arrival each), the nearest CTA stop (2), and the walking-estimate note. */
 function nearList(state, point, now, guide) {
   const near = nearest(state, point, 3);
   if (!near.length) return null;
   let h = near.length > 1 ? '<h3 class="v-h">Also nearby</h3>' + near.slice(1).map((s) => stopCard(state, s, now, 1, false, guide)).join("") : "";
+  const cta = isCta(near[0].id) ? null : nearestCta(state, point);
+  if (cta) h += '<h3 class="v-h">CTA nearby</h3>' + stopCard(state, cta, now, 2, false, guide);
   if (guide) h += '<p class="v-fine pt-walknote">Leave times use a walking estimate (80 m a minute) and live bus times. Allow extra time.</p>';
   return h;
 }
