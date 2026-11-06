@@ -11,6 +11,7 @@
  * trip, only the lines on the particular trip should be displayed."): during a trip in progress it draws only the
  * trip's lines (mapHidden; a walk draws none), and a bus is faded exactly when its route is (busFaded).
  */
+import { isCta } from "./agency.js";
 
 /**
  * Route ids hidden right now (journey wins over the user's hidden list).
@@ -65,7 +66,8 @@ export function mapFocus(state) {
 
 /**
  * Draw order for route lines, top-most first: focused routes, then the user's priority list
- * (store.routeOrder), then every other route in data order. Unknown ids are dropped.
+ * (store.routeOrder), then every other shuttle route in data order, then every other CTA route (CTA lines sit under
+ * the shuttles unless the rider orders them up; core/agency.js). Unknown ids are dropped.
  * @param {{routes?:object, routeOrder?:string[]}} state
  * @param {string[]|null} [focus]
  * @returns {string[]}
@@ -76,7 +78,8 @@ export function drawOrder(state, focus = null) {
   const add = (rid) => { rid = String(rid); if (known.has(rid) && !out.includes(rid)) out.push(rid); };
   (focus || []).forEach(add);
   ((state && state.routeOrder) || []).forEach(add);
-  all.forEach(add);
+  all.filter((r) => !isCta(r)).forEach(add);
+  all.filter(isCta).forEach(add);
   return out;
 }
 

@@ -3,6 +3,7 @@ import { test, eq, ok } from "./lib.js";
 import { isCta, ctaId, splitAgency, allBuses, allTrips, ctaLevel, ctaLive, ctaSourceText, CTA_IDLE } from "../js/core/agency.js";
 import { decodeSchedule, servicesOn, serviceZero, tripsBetween, scheduledTrips, tripsUnderway } from "../js/core/ctasched.js";
 import { chicagoUnix } from "../js/core/timeactive.js";
+import { drawOrder } from "../js/core/visibility.js";
 
 test("isCta / ctaId / splitAgency: CTA ids are the namespaced ones", () => {
   ok(isCta("cta:171") && isCta("cta:1427") && !isCta("1075") && !isCta(1075) && !isCta(null) && !isCta("xcta:1"));
@@ -96,4 +97,11 @@ test("tripsBetween: a 25:10 trip runs at 1:10 AM the next morning (service day z
 test("tripsUnderway: the trips between their first and last stop now (demo buses)", () => {
   eq(tripsUnderway(S, at(2026, 11, 6, 8, 35)).map((x) => x.start), [at(2026, 11, 6, 8, 30)]);
   eq(tripsUnderway(S, at(2026, 11, 6, 8, 45)), []);
+});
+
+test("drawOrder: CTA routes below the shuttles unless focused or ordered up", () => {
+  const routes = { "cta:55": {}, "1075": {}, "cta:171": {}, "5702": {} };
+  eq(drawOrder({ routes, routeOrder: [] }), ["1075", "5702", "cta:55", "cta:171"]);
+  eq(drawOrder({ routes, routeOrder: ["cta:171"] }), ["cta:171", "1075", "5702", "cta:55"], "the rider's order wins");
+  eq(drawOrder({ routes, routeOrder: [] }, ["cta:55"])[0], "cta:55", "a focused CTA route is on top");
 });
