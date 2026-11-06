@@ -114,10 +114,21 @@ export function resetPick() {
   places.state.q = ""; places.state.items = []; places.state.status = "";
 }
 
+/**
+ * Stations near a point for the picker: up to 5 shuttle stations and the 2 nearest CTA stations (CTA stops sit on every
+ * block and would otherwise fill the list), nearest first.
+ * @param {object} state
+ * @param {{lat:number, lon:number}} p
+ * @returns {{id:string,name:string,lat:number,lon:number,d:number}[]}
+ */
+export function pickNear(state, p) {
+  return [...stopsNear(state, p, { agency: "shuttle" }), ...stopsNear(state, p, { agency: "cta", max: 2 })].sort((a, b) => a.d - b.d);
+}
+
 /** Items to list/highlight for the current mode. */
 export function pickItems(state) {
-  if (P.mode === "loc") return state.user ? stopsNear(state, state.user) : [];
-  if (P.mode === "addr") return P.anchor ? stopsNear(state, P.anchor) : [];
+  if (P.mode === "loc") return state.user ? pickNear(state, state.user) : [];
+  if (P.mode === "addr") return P.anchor ? pickNear(state, P.anchor) : [];
   if (P.mode === "sel") return matchStations(state, P.q, 40).map((s) => ({ ...s, d: state.user ? hav(state.user, s) : null }));
   return [];
 }

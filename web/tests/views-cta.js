@@ -134,3 +134,11 @@ test("Routes: the CTA section's own Show all / Hide all touch only the CTA route
   runAction("routes:cta-show", {}, null, { store });
   eq(store.get().hiddenRoutes, ["R2"], "the hidden shuttle route stays hidden");
 });
+
+test("Routes to station: near a point, the shuttle stations stay listed; CTA adds its 2 nearest", async () => {
+  const { pickNear } = await import("../js/ui/views/pick.js");
+  const s = withCta();
+  const ids = pickNear(s, { lat: 41.7901, lon: -87.6001 }).map((x) => x.id);
+  ok(ids.includes("S1") && ids.includes("S2") && ids.includes("cta:1"), JSON.stringify(ids));
+  ok(ids.filter((i) => i.startsWith("cta:")).length <= 2);
+});
