@@ -14,7 +14,7 @@ const FILES = {
     r2: 'bad' } },
   'landmarks.json': { v: 1, l: [['Regenstein Library', 41.792, -87.6, 1, 'library', 'Joseph Regenstein Library'], ['bad', 'x', 1, 1], ['No tier', 41.79, -87.6, 7]] },
 };
-const fileOf = (url) => url.split('/').pop();
+const fileOf = (url) => url.split('data/').pop();   // 'routes.json', 'cta/routes.json'
 const okFetch = (overrides = {}) => stubFetch((url) => {
   const f = fileOf(url);
   if (f in overrides) return overrides[f]();
@@ -143,4 +143,43 @@ test('static: real web/data files load and cross-reference', async () => {
   ok(Object.keys(s.service.routes || {}).length > 0, 'service.json routes');
   for (const rid of Object.keys(s.service.routes)) ok(s.routes[rid], 'service route exists: ' + rid);
   for (const [rid, ids] of Object.entries(s.routeStops)) for (const id of ids) ok(s.stopRoutes[id].includes(rid), 'stopRoutes covers ' + id);
+});
+
+const CTA = {
+  'cta/routes.json': { 'cta:171': { short: '171', long: 'U. of Chicago/Hyde Park', color: '#747477', text_color: '#FFFFFF', agency: 'cta' },
+    r1: { short: 'X', long: 'not namespaced: dropped' }, 'cta:9': { short: '9', long: 'no stops: dropped' } },
+  'cta/stops.json': { 'cta:1': { name: 'Ellis (EB)', lat: 41.795, lon: -87.601 }, 'cta:2': { name: 'University (EB)', lat: 41.795, lon: -87.598 }, s1: { name: 'hijack', lat: 0, lon: 0 } },
+  'cta/shapes.json': { 'cta:171': [[[41.795, -87.601], [41.795, -87.598]]] },
+  'cta/route_stops.json': { 'cta:171': ['cta:1', 'cta:2'], r2: ['s1'] },
+  'cta/service.json': { feed: { start: '2026-11-01', end: '2026-11-30' }, routes: { 'cta:171': { days: { mon: { first: '06:00', last: '18:00', trips: 9, buses: [] } }, exceptions: [] }, r1: { days: {}, exceptions: [] } } },
+  'cta/patterns.json': { 'cta:171': [{ dir: 'Southbound', stops: ['cta:2', 'cta:1'] }, { dir: 'Northbound', stops: ['cta:1', 'cta:2'] }], r1: [{ dir: 'x', stops: ['s1', 's2'] }] },
+};
+
+test('static: CTA files merge into the same slices with cta: ids only; a shuttle id in a CTA file is dropped', async () => {
+  const store = createStore({});
+  const f = stubFetch((url) => { const k = fileOf(url); return res(k in CTA ? CTA[k] : FILES[k]); });
+  const out = await loadStatic(store, { fetch: f });
+  const s = store.get();
+  eq(out.failed, []);
+  eq(out.ctaFailed, []);
+  eq(Object.keys(s.routes), ['r1', 'r2', 'cta:171'], 'shuttles first, then CTA; the CTA file cannot replace r1');
+  eq(s.routes.r1.long, 'Alpha');
+  eq(s.routes['cta:171'].agency, 'cta');
+  eq(s.stops.s1.name, 'One', 'a CTA file cannot replace a shuttle stop');
+  eq(s.routeStops['cta:171'], ['cta:1', 'cta:2']);
+  eq(s.routeStops.r2, ['s2']);
+  eq(s.stopRoutes['cta:1'], ['cta:171']);
+  eq(Object.keys(s.service.routes), ['r1', 'cta:171']);
+  eq(s.service.routes.r1.days.mon.first, '07:00', "the shuttle's hours stay");
+  eq(s.service.ctaFeed, { start: '2026-11-01', end: '2026-11-30' });
+  eq(s.ctaPatterns, { 'cta:171': [{ dir: 'Southbound', stops: ['cta:2', 'cta:1'] }, { dir: 'Northbound', stops: ['cta:1', 'cta:2'] }] });
+});
+
+test('static: CTA files missing -> no CTA routes, shuttles unaffected, listed apart in ctaFailed', async () => {
+  const store = createStore({});
+  const out = await loadStatic(store, { fetch: okFetch() });
+  eq(out.failed, []);
+  eq(out.ctaFailed.length, 6);
+  eq(Object.keys(store.get().routes), ['r1', 'r2']);
+  eq(store.get().ctaPatterns, {});
 });

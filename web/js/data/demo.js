@@ -18,6 +18,7 @@ import { alongShape, pathLength, distM } from "../map/geometry.js";
 import { hav, bearing } from "../core/geo.js";
 import { routeOrder } from "../core/notify.js";
 import { isScheduledNow } from "../core/schedule.js";
+import { isCta } from "../core/agency.js";
 
 /** Most simulated buses on one route. */
 export const MAX_BUSES = 3;
@@ -64,13 +65,14 @@ export function busCount(service, rid, nStops) {
 }
 
 /**
- * Routes to simulate at `now`: those with 3+ stops scheduled now; all of them when none is scheduled.
+ * Shuttle routes to simulate at `now`: those with 3+ stops scheduled now; all of them when none is scheduled. CTA routes
+ * are never in this feed (it stands in for Passio's): data/cta-live.js simulates CTA buses from CTA's own schedule.
  * @param {object} state static slices (routes, stops, routeStops, service)
  * @param {number} now unix seconds
  * @returns {{rids:string[], scheduled:boolean}} scheduled: false = the all-routes fallback
  */
 export function demoRoutes(state, now) {
-  const all = Object.keys(state.routeStops || {}).filter((rid) => state.routes?.[rid]
+  const all = Object.keys(state.routeStops || {}).filter((rid) => !isCta(rid) && state.routes?.[rid]
     && routeOrder(state.routeStops[rid]).order.filter((id) => state.stops?.[id]).length >= 3);
   const on = all.filter((rid) => isScheduledNow(state.service || {}, rid, now) === true);
   return on.length ? { rids: on, scheduled: true } : { rids: all, scheduled: false };

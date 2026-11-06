@@ -8,6 +8,7 @@ import { demoFeeds, demoFetch, demoRoutes, busCount, segSeconds, pointAlong, MAX
 import { isScheduledNow } from '../js/core/schedule.js';
 import { operatingBuses } from '../js/core/operating.js';
 import { routeOrder } from '../js/core/notify.js';
+import { isCta } from '../js/core/agency.js';
 import { load, save, remove, useMemoryOverlay, memoryOverlay } from '../js/core/storage.js';
 
 const NIGHT = 1791702000;   // Sun 2026-10-11 2:00 AM Chicago: the night routes are scheduled
@@ -36,7 +37,7 @@ test('demo feed: the routes scheduled now run their peak (1 to 3 buses), on the 
   const { state, segments } = await realState();
   const f = demoFeeds(state, NIGHT, { epoch: NIGHT - 600, segments });
   const buses = parseBuses(f.vehiclePositions), trips = parseTrips(f.tripUpdates), alerts = parseAlerts(f.serviceAlerts);
-  const all = Object.keys(state.routeStops).filter((r) => state.routes[r] && routeOrder(state.routeStops[r]).order.length >= 3);
+  const all = Object.keys(state.routeStops).filter((r) => !isCta(r) && state.routes[r] && routeOrder(state.routeStops[r]).order.length >= 3);   // shuttles: CTA demo buses come from data/cta-live.js
   const rids = all.filter((r) => isScheduledNow(state.service, r, NIGHT) === true);
   ok(rids.length >= 1 && rids.length < all.length, 'night: some routes scheduled (' + rids.length + ' of ' + all.length + ')');
   eq(demoRoutes(state, NIGHT), { rids, scheduled: true });
@@ -63,7 +64,7 @@ test('demo feed: the routes scheduled now run their peak (1 to 3 buses), on the 
 
 test('demo feed: when no route is scheduled (early morning), every route runs so the demo is never empty', async () => {
   const { state, segments } = await realState();
-  const all = Object.keys(state.routeStops).filter((r) => state.routes[r] && routeOrder(state.routeStops[r]).order.length >= 3);
+  const all = Object.keys(state.routeStops).filter((r) => !isCta(r) && state.routes[r] && routeOrder(state.routeStops[r]).order.length >= 3);
   let quiet = 0;
   for (let t = NIGHT; t < NIGHT + 7 * 86400 && !quiet; t += 900) if (!all.some((r) => isScheduledNow(state.service, r, t) === true)) quiet = t;
   ok(quiet, 'the published schedule has a quiet hour this week');

@@ -12,22 +12,25 @@ export const LATE_AFTER_S = 120;
 export const OLD_AFTER_S = 300;
 
 /**
- * Upcoming live arrivals at a stop, sorted by time ascending.
+ * Upcoming arrivals at a stop, sorted by time ascending: the shuttles' live predictions (state.trips) and the CTA's
+ * (state.ctaTrips: live predictions, or scheduled times marked sched:true when no live CTA data is in; core/agency.js).
  * Includes arrivals up to 30 s in the past (bus at the stop). A trip that lists the stop twice
  * (loop start/end) yields both times.
- * @param {{trips:Array}} state  state slice with GTFS-rt trip updates
+ * @param {{trips:Array, ctaTrips?:Array}} state  state slices with GTFS-rt trip updates
  * @param {string} stopId
  * @param {{routeId?:string|null, hidden?:string[], nowS?:number}} [opts]
  *   routeId: only this route (hidden list is ignored then); hidden: route ids to exclude.
- * @returns {Array<{rid:string, t:number, bus:string|null, tripId:string|null, vehicleId:string|null}>}
- *   tripId alone is not unique: Passio gives several vehicles the same trip id (use tripId + vehicleId).
+ * @returns {Array<{rid:string, t:number, bus:string|null, tripId:string|null, vehicleId:string|null, sched?:true}>}
+ *   tripId alone is not unique: Passio gives several vehicles the same trip id (use tripId + vehicleId). sched: a CTA
+ *   SCHEDULED time (no live prediction): views label it as a schedule estimate, never as live.
  */
-export function arrivalsFor({ trips } = {}, stopId, { routeId = null, hidden = [], nowS } = {}) {
+export function arrivalsFor({ trips, ctaTrips } = {}, stopId, { routeId = null, hidden = [], nowS } = {}) {
   const t0 = typeof nowS === "number" ? nowS : currentS();
   const hid = new Set((hidden || []).map(String));
   const want = String(stopId);
   const out = [];
-  for (const tu of trips || []) {
+  const all = ctaTrips && ctaTrips.length ? (trips || []).concat(ctaTrips) : trips;
+  for (const tu of all || []) {
     const rid = tu && tu.trip && tu.trip.route_id != null ? String(tu.trip.route_id) : null;
     if (!rid) continue;
     if (routeId != null ? rid !== String(routeId) : hid.has(rid)) continue;
@@ -35,8 +38,10 @@ export function arrivalsFor({ trips } = {}, stopId, { routeId = null, hidden = [
       if (!u || String(u.stop_id) !== want) continue;
       const t = Number((u.arrival && u.arrival.time) || (u.departure && u.departure.time) || 0);
       if (t && isFinite(t) && t > t0 - 30) {
-        out.push({ rid, t, bus: tu.vehicle && tu.vehicle.label != null ? String(tu.vehicle.label) : null,
-          tripId: tu.trip.trip_id != null ? String(tu.trip.trip_id) : null, vehicleId: tu.vehicle && tu.vehicle.id != null ? String(tu.vehicle.id) : null });
+        const a = { rid, t, bus: tu.vehicle && tu.vehicle.label != null ? String(tu.vehicle.label) : null,
+          tripId: tu.trip.trip_id != null ? String(tu.trip.trip_id) : null, vehicleId: tu.vehicle && tu.vehicle.id != null ? String(tu.vehicle.id) : null };
+        if (tu.sched) a.sched = true;
+        out.push(a);
       }
     }
   }
@@ -75,15 +80,16 @@ export function liveUnknown(state = {}, nowS) {
 }
 
 /**
- * Number of vehicles currently reporting on a route.
- * @param {{buses:Array}} state
+ * Number of vehicles currently reporting on a route (shuttle buses, or CTA buses in state.ctaBuses for a CTA route).
+ * @param {{buses:Array, ctaBuses?:Array}} state
  * @param {string} rid
  * @returns {number}
  */
-export function runningCount({ buses } = {}, rid) {
+export function runningCount({ buses, ctaBuses } = {}, rid) {
   let n = 0;
   const want = String(rid);
   for (const v of buses || []) if (v && v.trip && String(v.trip.route_id) === want) n++;
+  for (const v of ctaBuses || []) if (v && v.trip && String(v.trip.route_id) === want) n++;
   return n;
 }
 

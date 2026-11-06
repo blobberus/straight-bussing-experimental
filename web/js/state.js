@@ -3,6 +3,7 @@
 import { createStore } from './core/store.js';
 import { load, save } from './core/storage.js';
 import { cleanUsage } from './data/usage.js';
+import { CTA_IDLE } from './core/agency.js';
 
 /** Storage keys (core/storage.js adds the 'sb:' prefix). */
 export const KEYS = Object.freeze({ hiddenRoutes: 'hiddenRoutes', theme: 'theme', routeOrder: 'routeOrder',
@@ -90,10 +91,15 @@ export function initialState() {
     routeStops: {}, stopRoutes: {}, addresses: {},
     service: {},                                               // data/service.json (schedule summary), {} if missing
     landmarks: [],                                             // data/landmarks.json: map labels [{name, lat, lon, tier, kind, osm}]
+    ctaPatterns: {},                                           // data/cta/patterns.json: CTA stop lists per direction {"cta:55": [{dir, stops}]}
     staticLoaded: false,
     // live (data/live.js fills every 10 s)
     buses: [], trips: [], alerts: [],
     feedTs: 0, lastOk: 0, failed: false, liveLoaded: false,
+    // CTA (data/cta-live.js; kept apart from the Passio slices above, see core/agency.js)
+    ctaSchedule: null,                                         // decoded data/cta/schedule.json (core/ctasched.js), null until loaded
+    ctaBuses: [], ctaTrips: [],                                // CTA vehicles; CTA predictions, or scheduled times marked sched:true
+    cta: CTA_IDLE,                                             // {mode: off|live|demo, lastOk, failed, feedTs, loaded}
     // user/prefs
     user: null, locState: 'unknown', locErr: null,
     hiddenRoutes: cleanHidden(load(KEYS.hiddenRoutes, [])),

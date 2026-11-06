@@ -1,6 +1,8 @@
-// Static GTFS-derived data (built daily by tools/build_gtfs.py into web/data/).
+// Static GTFS-derived data (built daily by tools/build_gtfs.py into web/data/; the CTA routes by tools/build_cta.py into
+// web/data/cta/, merged in by data/cta-static.js with "cta:" ids).
 // Robust to partial failure: each file loads independently; a missing/bad file yields an
 // empty slice instead of breaking the app, and staticLoaded is always set at the end.
+import { CTA_FILES, cleanPatterns, mergeCta } from './cta-static.js';
 
 /** Files loaded into the store: [storeKey, fileName, required]. */
 export const STATIC_FILES = Object.freeze([
@@ -130,15 +132,20 @@ export function deriveStopRoutes(routeStops) {
 }
 
 /**
- * Load routes/stops/shapes/route_stops (+ optional stop_addresses, service) into the store, derive
- * stopRoutes, then set staticLoaded:true in one patch. Never rejects; failed files leave empty slices.
+ * Load routes/stops/shapes/route_stops (+ optional stop_addresses, service) into the store, with the optional CTA files
+ * (data/cta-static.js: "cta:" routes, stops, shapes, route stops and hours merged into the same slices, plus
+ * store.ctaPatterns), derive stopRoutes, then set staticLoaded:true in one patch. Never rejects; failed files leave empty
+ * slices.
  * @param {{set(patch:object):void}} store
- * @param {{base?:string, fetch?:typeof fetch}} [opts] base URL of the data folder (default 'data/')
- * @returns {Promise<{failed:string[]}>} names of files that could not be loaded (required or optional)
+ * @param {{base?:string, fetch?:typeof fetch, cta?:boolean}} [opts] base URL of the data folder (default 'data/');
+ *   cta:false skips the CTA files (tests of the shuttle data alone)
+ * @returns {Promise<{failed:string[], ctaFailed:string[]}>} names of shuttle files that could not be loaded (required or
+ *   optional); ctaFailed: the CTA files that could not (no CTA routes then, the shuttles are unaffected)
  */
 export async function loadStatic(store, opts = {}) {
   const base = opts.base ?? 'data/';
   const fetchFn = opts.fetch || ((...a) => globalThis.fetch(...a));
+  const ctaP = opts.cta === false ? Promise.resolve([]) : Promise.allSettled(CTA_FILES.map(([, f]) => getFile(base + f, fetchFn, false)));
   const results = await Promise.allSettled(STATIC_FILES.map(([, f, req]) => getFile(base + f, fetchFn, req)));
   const patch = {}, failed = [];
   results.forEach((res, i) => {
@@ -150,8 +157,15 @@ export async function loadStatic(store, opts = {}) {
       if (req) console.warn('static data failed:', file, res.status === 'rejected' ? res.reason : 'not an object');
     }
   });
+  const cta = {}, ctaFailed = [];
+  (await ctaP).forEach((res, i) => {
+    const [key, file] = CTA_FILES[i];
+    if (res.status === 'fulfilled' && isObj(res.value)) cta[key] = key === 'ctaPatterns' ? cleanPatterns(res.value) : cleanSlice(key, res.value);
+    else ctaFailed.push(file);
+  });
+  mergeCta(patch, cta);
   patch.stopRoutes = deriveStopRoutes(patch.routeStops);
   patch.staticLoaded = true;
   store.set(patch);
-  return { failed };
+  return { failed, ctaFailed };
 }

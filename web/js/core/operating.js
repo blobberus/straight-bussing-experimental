@@ -22,6 +22,7 @@
  */
 import { isScheduledNow, scheduledUntil, clock12 } from "./schedule.js";
 import { liveUnknown } from "./arrivals.js";
+import { isCta } from "./agency.js";
 
 /** Seconds after which a vehicle's last report means it is not operating. */
 export const STALE_S = 300;
@@ -79,8 +80,9 @@ export function operatingBuses(buses, ctx) {
 }
 
 /**
- * Routes the schedule has in service at nowS, in data order. A route without schedule data does not
- * count (isScheduledNow null). [] before static data loads.
+ * Shuttle routes the schedule has in service at nowS, in data order. A route without schedule data does not
+ * count (isScheduledNow null). [] before static data loads. CTA routes (core/agency.js) never count: silent service,
+ * "no live location" and silentText are about the shuttle feed (CTA has its own status, ctaLevel).
  * @param {{routes?:object, service?:object, staticLoaded?:boolean}} state
  * @param {number} nowS
  * @param {{hidden?:string[], among?:string[]|null}} [opts] drop `hidden`; keep only `among` (e.g. a stop's routes)
@@ -89,7 +91,7 @@ export function operatingBuses(buses, ctx) {
 export function scheduledRoutes(state, nowS, { hidden = [], among = null } = {}) {
   if (!state || !state.staticLoaded) return [];
   const hid = new Set((hidden || []).map(String)), only = among ? new Set(among.map(String)) : null;
-  return Object.keys(state.routes || {}).filter((rid) => !hid.has(rid) && (!only || only.has(rid))
+  return Object.keys(state.routes || {}).filter((rid) => !isCta(rid) && !hid.has(rid) && (!only || only.has(rid))
     && isScheduledNow(state.service || {}, rid, nowS) === true);
 }
 
@@ -106,15 +108,16 @@ export function silentService(state, nowS) {
 }
 
 /**
- * Is the route scheduled now with no operating bus? Its status is then "Scheduled, no live location",
- * never "Not running". Callers check liveUnknown first (a feed outage has its own wording).
+ * Is the shuttle route scheduled now with no operating bus? Its status is then "Scheduled, no live location",
+ * never "Not running". Callers check liveUnknown first (a feed outage has its own wording). Always false for a CTA
+ * route (its wording comes from the CTA status: scheduled times, CTA live data, core/agency.js).
  * @param {object} state store state
  * @param {string} rid
  * @param {number} nowS
  * @returns {boolean}
  */
 export function scheduledNoLive(state, rid, nowS) {
-  if (!state || !state.staticLoaded) return false;
+  if (!state || !state.staticLoaded || isCta(rid)) return false;
   if ((state.buses || []).some((b) => b && b.trip && String(b.trip.route_id) === String(rid))) return false;
   return isScheduledNow(state.service || {}, String(rid), nowS) === true;
 }

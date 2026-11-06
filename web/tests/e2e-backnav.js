@@ -33,7 +33,9 @@ export function backNavE2E(h) {
   function tapLine(rid) {
     const s = state(), lm = h.sb().map, hidden = new Set((s.hiddenRoutes || []).map(String));
     ok(lm, "the app's Leaflet map");
-    const others = Object.keys(s.shapes || {}).filter((o) => o !== rid && s.routes[o] && !hidden.has(o)).flatMap((o) => s.shapes[o]);
+    // CTA lines are drawn under the shuttle lines and the topmost line within reach takes a tap (map/geometry.js lineAt),
+    // so a shuttle line only has to keep clear of the other shuttle lines
+    const others = Object.keys(s.shapes || {}).filter((o) => o !== rid && s.routes[o] && !hidden.has(o) && !o.startsWith("cta:")).flatMap((o) => s.shapes[o]);
     let best = null;
     for (const line of s.shapes[rid] || []) {
       for (let i = 0; i < line.length; i += 3) {
