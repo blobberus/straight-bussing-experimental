@@ -80,6 +80,11 @@ export function parseCtaLive(j, state, nowS) {
   }
   const trips = [...byTrip.values()];
   for (const tu of trips) tu.stop_time_update.sort((a, b) => a.arrival.time - b.arrival.time);
+  for (const b of buses) {   // the next stop of each bus (route page "heading here"), from its own predictions
+    let best = null;
+    for (const tu of trips) if (tu.vehicle.id === b.vehicle.id && tu.stop_time_update[0] && (!best || tu.stop_time_update[0].arrival.time < best.arrival.time)) best = tu.stop_time_update[0];
+    if (best) b.stop_id = best.stop_id;
+  }
   return { buses, trips, feedTs };
 }
 
@@ -114,7 +119,7 @@ export function demoCta(state, sched, nowS, cache = new Map()) {
       }
       const span = x.times[j] - x.times[i], pos = pointOn(cache.get(ck), span > 0 ? (nowS - x.times[i]) / span : 0);
       buses.push({ vehicle: { id: vid, label }, position: { latitude: pos.lat, longitude: pos.lon, bearing: pos.bearing },
-        trip: { trip_id: tid, route_id: x.rid }, timestamp: Math.floor(nowS - 4), cta: true, des: x.dir });
+        trip: { trip_id: tid, route_id: x.rid }, timestamp: Math.floor(nowS - 4), cta: true, des: x.dir, stop_id: x.stops[j] });
     }
     const stu = idx.filter((i) => x.times[i] > nowS).slice(0, DEMO_AHEAD).map((i) => ({ stop_id: x.stops[i], arrival: { time: x.times[i] } }));
     if (stu.length) trips.push({ trip: { trip_id: tid, route_id: x.rid }, vehicle: { id: vid, label }, stop_time_update: stu });

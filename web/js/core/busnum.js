@@ -70,13 +70,14 @@ export function busName(b, numbers) {
 
 /**
  * The bus picked on the open route page, or null (another view, another route, or that bus no longer shown).
- * @param {{view?:string, routeId?:string|null, busId?:string|null, buses?:object[]}} state
+ * @param {{view?:string, routeId?:string|null, busId?:string|null, buses?:object[], ctaBuses?:object[]}} state
  * @returns {object|null}
  */
 export function selectedBus(state) {
   if (!state || state.view !== "route" || state.busId == null || state.routeId == null) return null;
   const id = String(state.busId), rid = String(state.routeId);
-  return (state.buses || []).find((b) => busKey(b) === id && String(b?.trip?.route_id ?? "") === rid) || null;
+  const list = rid.startsWith("cta:") ? state.ctaBuses || [] : state.buses || [];   // a CTA route's buses are CTA's (core/agency.js)
+  return list.find((b) => busKey(b) === id && String(b?.trip?.route_id ?? "") === rid) || null;
 }
 
 /**

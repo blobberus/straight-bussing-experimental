@@ -27,6 +27,9 @@ import { emptyState, skeleton, OFFICIAL_PHONE } from "../components.js";
 import { noLiveStatus, scheduledNoLive } from "../../core/operating.js";
 import { noBusHelpHTML } from "./alerts.js";
 import { busKey, busNumbers, busName, selectedBus, busArrival } from "../../core/busnum.js";
+import { allBuses, isCta, ctaLevel, ctaSourceText } from "../../core/agency.js";
+import { arrStale } from "../components.js";
+import { ctaStatusText, ctaContactHTML } from "./routes-cta.js";
 
 const STALE_BUS_S = 60;
 const DAY_NAME = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" };
@@ -57,19 +60,20 @@ export function etaLabel(t, now, stale) {
 }
 
 /**
- * Where each live bus of a route is along the stop order.
+ * Where each live bus of a route is along the stop order (shuttle and CTA buses: core/agency.js allBuses).
  * @param {object} state
  * @param {string} rid
  * @param {number} now
+ * @param {string[]|null} [only] a CTA direction's stop list (store.ctaPatterns) instead of the route's whole order
  * @returns {{label:string, next:number, prev:number|null, frac:number, stale:boolean, seen:number, text:string}[]}
- *   next/prev are indexes into stopOrder(routeStops[rid]); frac 0..1 from prev toward next (by distance)
+ *   next/prev are indexes into stopOrder(routeStops[rid]) (or `only`); frac 0..1 from prev toward next (by distance)
  */
-export function busPositions(state, rid, now) {
-  const list = state.routeStops?.[rid] || [], ids = stopOrder(list);
-  const loop = list.length > 2 && list[0] === list[list.length - 1];
+export function busPositions(state, rid, now, only = null) {
+  const list = state.routeStops?.[rid] || [], ids = only || stopOrder(list);
+  const loop = !only && list.length > 2 && list[0] === list[list.length - 1];
   const name = (i) => state.stops?.[ids[i]]?.name || ids[i];
-  const out = [], nums = busNumbers(state.buses);
-  for (const b of state.buses || []) {
+  const buses = allBuses(state), out = [], nums = busNumbers(buses);
+  for (const b of buses) {
     if (b?.trip?.route_id !== rid || !b.stop_id) continue;
     const next = ids.indexOf(b.stop_id);
     if (next < 0) continue;
@@ -121,7 +125,7 @@ export function renderService(state, rid, now) {
     h += "</ul>";
   } else if (routeService(svc, rid)) h += '<p class="v-sec r-nochange">No schedule changes in the next 30 days.</p>';
   h += renderBuses(svc, rid, now);
-  if (routeService(svc, rid)) h += '<p class="v-foot">Hours and bus counts come from the official published schedule. Live service may differ.</p>';
+  if (routeService(svc, rid)) h += `<p class="v-foot">Hours and bus counts come from ${isCta(rid) ? "CTA's published schedule (the Hyde Park part of the route)" : "the official published schedule"}. Live service may differ.</p>`;
   return h + "</section>";
 }
 
@@ -168,17 +172,21 @@ export function routeStatusText(state, rid, now = nowS()) {
   if (!state || !state.routes || !state.routes[rid] || !state.staticLoaded) return "";
   const n = runningCount(state, rid);
   if (n > 0) return `${n} bus${n === 1 ? "" : "es"}`;
+  if (isCta(rid)) return isScheduledNow(state.service, rid, now) === true ? "Scheduled" : "Not running";   // CTA's own schedule
   if (!state.liveLoaded) return "";
   if (liveUnknown(state, now)) return "Status unknown";
   if (scheduledNoLive(state, rid, now)) return "No live location";
   return "Not running";
 }
 
-/** Status line under the title: buses running + today's scheduled hours. */
+/** Status line under the title: buses running + today's scheduled hours. A CTA route: CTA's status and where its times come from. */
 function statusHtml(state, rid, r, n, now) {
-  const unknown = liveUnknown(state, now), quiet = !n && !unknown && noLiveStatus(state, rid, now);   // scheduled, silent: not "not running"
-  const idle = unknown ? "Live status unavailable" : quiet || "Not running right now";   // a feed outage is not "not running"
-  let h = `<p class="v-status">${n ? '<span class="v-livedot" aria-hidden="true"></span>' : ""}${n ? `${n} bus${n > 1 ? "es" : ""} running` : esc(idle)}${r.short && r.long ? ` &middot; <span class="v-sec">${esc(r.short)}</span>` : ""}</p>`;
+  const cta = isCta(rid);
+  const unknown = !cta && liveUnknown(state, now), quiet = !cta && !n && !unknown && noLiveStatus(state, rid, now);   // scheduled, silent: not "not running"
+  const idle = cta ? ctaStatusText(state, rid, now) : unknown ? "Live status unavailable" : quiet || "Not running right now";   // a feed outage is not "not running"
+  const live = n && (!cta || ["", "late", "demo"].includes(ctaLevel(state.cta, now)));
+  let h = `<p class="v-status">${live ? '<span class="v-livedot" aria-hidden="true"></span>' : ""}${n && !cta ? `${n} bus${n > 1 ? "es" : ""} running` : esc(idle)}${r.short && r.long ? ` &middot; <span class="v-sec">${cta ? "CTA " : ""}${esc(r.short)}</span>` : ""}</p>`;
+  if (cta) h += `<p class="v-sec r-ctasrc${ctaLevel(state.cta, now) === "err" ? " is-warn" : ""}">${esc(ctaSourceText(state.cta, now))}</p>`;
   if (quiet) h += `<p class="v-sec r-nolive">${esc(`No bus on this route is sending its location, so we can't confirm it's running. Call ${OFFICIAL_PHONE} before you rely on it.`)}</p>`;
   // the service day, not the calendar date: at 12:10 AM a route running until 12:25 AM reads "Friday service ...
   // · Scheduled now", never "Today No service · Scheduled now" (iOS RouteDetailView)
@@ -209,13 +217,41 @@ export function renderRoute(state, now = nowS()) {
   if (hidden) h += state.journey
     ? '<div class="v-note"><span class="v-grow v-sec">This route is not part of the current journey, so it is hidden on the map.</span></div>'
     : `<div class="v-note"><span class="v-grow v-sec">This route is hidden from the map and arrival times.</span><button type="button" class="v-btn v-btn--quiet" data-action="routes:toggle" data-id="${esc(rid)}">Show</button></div>`;
-  const help = !n && state.liveLoaded && !(state.buses || []).length ? noBusHelpHTML(state, now, { rid }) : "";
+  const help = !isCta(rid) && !n && state.liveLoaded && !(state.buses || []).length ? noBusHelpHTML(state, now, { rid }) : "";   // the shuttles' help; a CTA route ends with CTA's contact
   // closed: hours (and scheduled buses by hour), then the no-bus help, then the stops; open: help, stops, hours
   const svc = renderService(state, rid, now), first = !!svc && routeClosed(state, rid, now);
   if (!first) h += help;
   if (!ids.length) return h + (first ? svc + help : "") + emptyState("No stops listed", "The schedule has no stops for this route.") + (first ? "" : svc) + "</div>";
   if (first) h += svc + help + '<h2 class="r-h r-stops-h" id="r-stops-h">Stops</h2>';
-  const pos = state.liveLoaded ? busPositions(state, rid, now) : [];
+  const cta = isCta(rid);
+  // a CTA route runs two ways: one timeline per direction (store.ctaPatterns), each with its own buses
+  const dirs = cta && Array.isArray(state.ctaPatterns?.[rid]) && state.ctaPatterns[rid].length ? state.ctaPatterns[rid] : null;
+  const known = state.liveLoaded || cta;
+  const parts = dirs ? dirs.map((d) => ({ title: d.dir, ids: d.stops, loop: false, pos: known ? busPositions(state, rid, now, d.stops) : [] }))
+    : [{ title: "", ids, loop, pos: known ? busPositions(state, rid, now) : [] }];
+  const pos = parts.flatMap((p) => p.pos);
+  const picked = selectedBus(state), pk = busKey(picked), pname = picked ? busName(picked, busNumbers(allBuses(state))) : "";
+  if (picked) h += `<div class="v-note r-busnote" role="status"><span class="v-grow v-sec">${esc(`Showing ${pname}'s times`)}</span><button type="button" class="v-btn v-btn--quiet" data-action="route:allbuses">Show the next bus at each stop</button></div>`;
+  if (pos.length) h += `<ul class="r-buslist" aria-label="Where the buses are">${pos.map((b) => `<li${b.stale ? ' class="is-stale"' : ""}><button type="button" class="r-busbtn${b.key === pk ? " is-picked" : ""}" data-action="route:bus" data-id="${esc(b.key)}" aria-pressed="${b.key === pk}" aria-label="${esc(`${b.text}. ${b.key === pk ? "Showing its times" : "Show its times"}`)}"><span class="r-dot" style="background:${color}" aria-hidden="true"></span><span class="v-grow">${esc(b.text)}</span></button></li>`).join("")}</ul>`;
+  for (const p of parts) {
+    if (p.title) h += `<h3 class="r-h3 r-dir">${esc(p.title)}</h3>`;
+    h += timelineHTML(state, rid, p, { color, fg, stale, picked, pk, pname, now, cta });
+  }
+  if (cta) h += `<p class="v-foot">${esc(ctaSourceText(state.cta, now))}. Bus positions are approximate.</p>`;
+  else if (state.liveLoaded) h += `<p class="v-foot">${stale ? "Live data delayed. Times and bus positions may be off." : "Times are live predictions. Bus positions are approximate."}</p>`;
+  return h + (first ? "" : svc) + (cta ? ctaContactHTML() : "") + "</div>";
+}
+
+/**
+ * One stop timeline (in travel order) with each stop's next time, the buses heading there and the bus rail.
+ * @param {object} state
+ * @param {string} rid
+ * @param {{ids:string[], loop:boolean, pos:object[], title?:string}} part
+ * @param {{color:string, fg:string, stale:boolean, picked:object|null, pk:string, pname:string, now:number, cta:boolean}} o
+ * @returns {string}
+ */
+function timelineHTML(state, rid, part, o) {
+  const { ids, loop, pos } = part, { color, fg, stale, picked, pk, pname, now, cta } = o, r = state.routes[rid];
   const busAt = new Map(), railAt = new Map();
   for (const b of pos) {
     if (!busAt.has(b.next)) busAt.set(b.next, []);
@@ -224,14 +260,12 @@ export function renderRoute(state, now = nowS()) {
     if (!railAt.has(host)) railAt.set(host, []);
     railAt.get(host).push(b);
   }
-  const picked = selectedBus(state), pk = busKey(picked), pname = picked ? busName(picked, busNumbers(state.buses)) : "";
-  if (picked) h += `<div class="v-note r-busnote" role="status"><span class="v-grow v-sec">${esc(`Showing ${pname}'s times`)}</span><button type="button" class="v-btn v-btn--quiet" data-action="route:allbuses">Show the next bus at each stop</button></div>`;
-  if (pos.length) h += `<ul class="r-buslist" aria-label="Where the buses are">${pos.map((b) => `<li${b.stale ? ' class="is-stale"' : ""}><button type="button" class="r-busbtn${b.key === pk ? " is-picked" : ""}" data-action="route:bus" data-id="${esc(b.key)}" aria-pressed="${b.key === pk}" aria-label="${esc(`${b.text}. ${b.key === pk ? "Showing its times" : "Show its times"}`)}"><span class="r-dot" style="background:${color}" aria-hidden="true"></span><span class="v-grow">${esc(b.text)}</span></button></li>`).join("")}</ul>`;
-  h += `<ol class="v-tl r-tl" style="--rc:${color}" aria-label="Stops on ${esc(r.long || r.short || "route")}, in travel order">`;
+  let h = "";
+  h += `<ol class="v-tl r-tl" style="--rc:${color}" aria-label="Stops on ${esc(r.long || r.short || "route")}${part.title ? ", " + esc(part.title) : ""}, in travel order">`;
   ids.forEach((sid, i) => {
-    const all = state.liveLoaded ? arrivalsFor(state, sid, { routeId: rid, nowS: now }) : [];
+    const all = state.liveLoaded || cta ? arrivalsFor(state, sid, { routeId: rid, nowS: now }) : [];   // a CTA route never waits for the shuttle feed
     const a = picked ? busArrival(all, pk) : all[0];   // a picked bus: its own time only, never another bus's
-    const eta = etaLabel(a?.t, now, stale), name = state.stops?.[sid]?.name || sid;
+    const eta = etaLabel(a?.t, now, cta ? !!a && arrStale(a, state, now) : stale), name = state.stops?.[sid]?.name || sid;
     const here = busAt.get(i) || [];
     const pill = here.map((b) => `<span class="v-tlbus${b.stale ? " is-stale" : ""}${b.key === pk ? " is-picked" : ""}" style="background:${color};color:${fg}">${esc(b.name)} heading here${b.stale ? ` &middot; seen ${esc(ago(b.seen, now))}` : ""}</span>`).join("");
     // one element for screen readers (iOS RouteDetailView): name, "next bus in N min" / "no prediction", the bus heading here
@@ -247,8 +281,7 @@ export function renderRoute(state, now = nowS()) {
   });
   h += "</ol>";
   if (loop) h += `<p class="v-sec r-loop"><span aria-hidden="true">↻ </span>Loop: continues to ${esc(state.stops?.[ids[0]]?.name || ids[0])}</p>`;
-  if (state.liveLoaded) h += `<p class="v-foot">${stale ? "Live data delayed. Times and bus positions may be off." : "Times are live predictions. Bus positions are approximate."}</p>`;
-  return h + (first ? "" : svc) + "</div>";
+  return h;
 }
 
 registerView("route", {
