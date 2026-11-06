@@ -492,7 +492,7 @@ test("directions: place + station, stubbed sidewalk walking, option drawn on the
   await waitFor(() => D.activeElement === tt, "focus on the trip title");
   ok($$("#map .sb-plan-bus").length > 0, "the trip stays on the map");
   // on a trip only the trip's lines and their buses are drawn (owner 2026-11-04); they all come back when it ends
-  const drawnLines = () => { let n = 0; SB.map.eachLayer((l) => { if (l instanceof W.L.Polyline && l.options.className === "sb-route") n++; }); return n; };
+  const drawnLines = () => { let n = 0; SB.map.eachLayer((l) => { if (l instanceof W.L.Polyline && String(l.options.className).split(" ").includes("sb-route")) n++; }); return n; };
   const linesOf = (rids) => rids.reduce((n, rid) => n + (state().shapes[rid] || []).filter((p) => p && p.length >= 2).length, 0);
   const tripRids = state().journey.rids.slice();
   ok(tripRids.length >= 1, "a bus trip");
