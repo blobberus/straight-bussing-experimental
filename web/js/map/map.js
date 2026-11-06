@@ -5,16 +5,17 @@
  * above the sheet by setBottomInset while shown), selected stop, user dot,
  * stop highlights and trip plans. Every method is idempotent and cheap to call on each poll: layers
  * redraw only when their signature changes. Theme colors for overlays come from CSS (css/map.css)
- * keyed on the `.sb-dark` class this module toggles on the map element.
+ * keyed on the `.sb-dark` class this module toggles on the map element; route colors (lines, stops, buses, planned bus
+ * legs) from map/cta.js lineColorFor (dark shuttle colors lifted on the dark map, owner 2026-11-06).
  */
 import { createBasemap } from './style.js';
 import { createNetworkLayer, createBusLayer, sig } from './layers.js';
 import { createFavoritesLayer } from './favorites.js';
 import { createCredits } from './credits.js';
 import { createLandmarkLayer } from './landmarks.js';
-import { isCta, squareMarker, CTA_STOP_PANE, CTA_STOP_PANE_Z } from './cta.js';
+import { isCta, squareMarker, lineColorFor, CTA_STOP_PANE, CTA_STOP_PANE_Z } from './cta.js';
 import { alongShape, normLatLngs, toLatLng, unwrapDeg } from './geometry.js';
-import { safeColor, esc } from '../core/esc.js';
+import { esc } from '../core/esc.js';
 import { offShort } from '../core/tripyou.js';
 
 const CAMPUS = [41.7897, -87.5997];
@@ -77,6 +78,7 @@ export function createMap(elId) {
   const selG = L.layerGroup().addTo(map), hlG = L.layerGroup().addTo(map), planG = L.layerGroup().addTo(map);
   const labG = L.layerGroup().addTo(map);
   let selSig = '', selStop = null, hlSig = '', planS = null, planPts = [], hlPick = null, me = null, meAcc = null;
+  let planIn = null;   // the drawn plan's [option, ctx] (setTheme redraws it in the new route colors)
   let you = null, youMk = null, youS = '', labS = '';
   let head = null, headTurn = NaN, headS = '';   // heading cone: {deg, spread}; the rotation shown (unwrapped); last written
 
@@ -185,8 +187,10 @@ export function createMap(elId) {
       el.classList.toggle('sb-dark', d);
       if (d === dark) return;
       dark = d;
-      network.setDark(d);   // CTA lines keep 3:1 against the new land (map/cta.js ctaLineColor)
+      network.setDark(d);   // route colors for the new land (map/cta.js lineColorFor: CTA ctaLineColor, shuttles core/routecolor.js)
+      buses.setDark(d);
       basemap.setDark(d);
+      if (planIn) { planS = null; api.drawPlan(planIn[0], { ...planIn[1], fit: false }); }
     },
 
     /**
@@ -341,11 +345,12 @@ export function createMap(elId) {
      * @returns {Array<[number, number]>}
      */
     drawPlan(option, ctx = {}) {
+      planIn = option ? [option, ctx] : null;
       const s = option ? planSig(option) + '|' + sig(!!ctx.shapes, !!ctx.routes) : '';
       if (s === planS) return planPts;
       planS = s;
       planG.clearLayers();
-      planPts = option ? renderPlan(L, planG, option, ctx) : [];
+      planPts = option ? renderPlan(L, planG, option, { ...ctx, dark }) : [];
       const active = !!option;
       if (active !== planActive) { planActive = active; favs.setDim(active); if (lastNet) network.draw(lastNet, planActive); }
       const rids = active ? planRoutes(option) : null;
@@ -422,7 +427,7 @@ function flatPoints(t) {
   return normLatLngs(nested ? t.flat() : t);
 }
 
-/** Draw plan geometry into group g; returns all points (for fitting). */
+/** Draw plan geometry into group g; returns all points (for fitting). Bus legs in lineColorFor(rid, color, ctx.dark). */
 function renderPlan(L, g, o, ctx) {
   const pts = [];
   const walk = (coords) => {
@@ -441,7 +446,7 @@ function renderPlan(L, g, o, ctx) {
     const ll = alongShape(ctx.shapes?.[l.rid], ctx.routeStops?.[l.rid], l.board, l.alight, fb);
     if (ll.length < 2) continue;
     pts.push(...ll);
-    const color = safeColor(ctx.routes?.[l.rid]?.color);
+    const color = lineColorFor(l.rid, ctx.routes?.[l.rid]?.color, !!ctx.dark);
     L.polyline(ll, { pane: 'sbPlan', className: 'sb-plan-bus', color, weight: 7, opacity: 1, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(g);
     for (const p of [l.board, l.alight]) {
       const q = toLatLng(p);

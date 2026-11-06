@@ -975,6 +975,20 @@ Hand-ported from the live repo (same core files; its docs/ARCHITECTURE.md "Route
   every route." Empty field: the old order. Tests: tests/routes-search.js (the two "matches ... lead" cases). sw
   `sb-v2-97`.
 
+## Route colors on the dark map (2026-11-06, owner: "Outline or change coloring of the dark shuttles to make them more noticable.")
+The same change as the live repo (its docs/ARCHITECTURE.md has the full numbers): `core/routecolor.js` is the live
+file unchanged. On the dark map a shuttle color under 3:1 against the land (#202124) is lifted in OKLab, hue and chroma
+kept, to 3:1 against the land and the street fill (#3A3B40) with AA badge text: Downtown Campus Connector #509446,
+Regents Express #7A80C5, Apostolic #487FFF, Friend Center/Metra #BE743D, Move In Charter #BD6F6A (badge text dark
+#111114); the other ten and the light map keep the published colors; no outline. Here `map/cta.js lineColorFor(rid,
+color, dark)` picks per route: shuttles `mapColor`, CTA `ctaLineColor`, whose dark branch is now the same
+`liftForDark` against the land only (CTA lines stay quieter than the shuttles: key-route gray #414145 -> #6C6C70, still
+darker than the regular #747477; CTA red #B71234 -> #CB2D43, blue #0065BD -> #0E6BC4); its light branch is unchanged.
+Lines, one-route stop outlines, chevrons and planned legs use `lineColorFor`; shuttle bus badges `mapColor` (CTA badges
+keep the route color); `MapApi.setTheme` recolors in place (network, buses) and redraws a drawn plan. Tests:
+core-routecolor.js + fixtures/routecolor_golden.json (the live copies), map-layers.js "dark map", map-style.js, map-cta.js.
+iOS: not here (paused); docs/redesign/GLASS-IOS-PAUSED.md.
+
 ## CTA routes beside the shuttles (2026-11-06, experimental only; owner: "implemenent the CTA routes in the same way passio go shows but make the bus shapes identifiable to be cta and make their stations square. Also list them noticably idfferently on the routes menu. They should still behave on the interface like the normal bus routes.")
 
 The research and the plan for the live app are the live repo's `CTA Implementation.md` (routes, data sources, terms,

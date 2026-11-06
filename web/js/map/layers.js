@@ -5,11 +5,14 @@
  * route. The pure helpers (idOf, sig, networkSig, busSig, lineWeight, lineTapWidth, routeLabel, focusSet) do not touch
  * Leaflet, so this module can be imported without `L` for unit tests.
  * Lines stack by `order` (index 0 on top); focused routes always above unfocused ones. A bus is faded exactly when its
- * route is (core/visibility.js busFaded, owner 2026-11-04).
+ * route is (core/visibility.js busFaded, owner 2026-11-04). On the dark map a dark shuttle color (lines, stop rings,
+ * chevrons, bus badges) is drawn lighter in its own hue (core/routecolor.js mapColor via map/cta.js lineColorFor, owner
+ * 2026-11-06); setDark switches both layers in place.
  * CTA routes (ids "cta:<id>", experimental 2026-11-06) are drawn by the same code; map/cta.js holds what differs: thinner
  * lines under the shuttle lines, square stops (from zoom 16 unless in focus), a squared badge with a "CTA" tag.
  */
 import { safeColor, textOn } from '../core/esc.js';
+import { mapColor } from '../core/routecolor.js';
 import { bearing as geoBearing } from '../core/geo.js';
 import { createChevronLayer, orientedLines } from './chevrons.js';
 import { lineAt as pickLine, LINE_TAP_PX } from './geometry.js';
@@ -17,7 +20,7 @@ import { unwrapDeg } from './geometry.js';
 import { prepareShape, follow, pathCum, pointAt, advance, headingAt } from './track.js';
 import { busKey, busNumbers } from '../core/busnum.js';
 import { busFaded } from '../core/visibility.js';
-import { isCta, CTA_LINE_WIDTHS, CTA_STOP_MIN_Z, CTA_STOP_PANE, CTA_STOP_PANE_Z, ctaStopStyle, ctaLineColor, squareMarker, markCtaBus, markerName } from './cta.js';
+import { isCta, CTA_LINE_WIDTHS, CTA_STOP_MIN_Z, CTA_STOP_PANE, CTA_STOP_PANE_Z, ctaStopStyle, lineColorFor, squareMarker, markCtaBus, markerName } from './cta.js';
 
 const ids = new WeakMap();
 let nextId = 1;
@@ -198,7 +201,7 @@ export function routeLabel(rid, routes) {
  * @param {L.Map} map
  * @param {{onStopTap:(id:string)=>void}} cb
  * lineAt(containerPoint) names the route line under a tap: the topmost one drawn (map/geometry.js lineAt).
- * setDark(on) re-colors CTA lines and stop outlines for the theme (ctaLineColor) without a rebuild.
+ * setDark(on) re-colors lines, stop outlines and chevrons for the theme (map/cta.js lineColorFor) without a rebuild.
  * @returns {{draw(o:object, dimAll?:boolean):boolean, restyle():void, setDark(on:boolean):void, chevrons():number, stopPoints():Array, lineAt(p:{x:number, y:number}):string|null}}
  */
 export function createNetworkLayer(map, cb) {
@@ -208,7 +211,7 @@ export function createNetworkLayer(map, cb) {
   if (!map.getPane(CTA_STOP_PANE)) map.createPane(CTA_STOP_PANE).style.zIndex = String(CTA_STOP_PANE_Z);
   const chev = createChevronLayer(map);
   let last = '', polys = [], stopPts = [], hits = [], stopMks = [];   // hits: drawn route lines, bottom to top: {rid, ll, bounds}
-  let dark = false;   // the theme: CTA lines and stop outlines take ctaLineColor
+  let dark = false, chevIn = [];   // the theme (colors: lineColorFor); the chevron routes in published colors
   const showStops = () => {
     for (const [g, on] of [[stopsG, map.getZoom() >= 14], [ctaG, map.getZoom() >= CTA_STOP_MIN_Z]]) {
       if (on && !map.hasLayer(g)) g.addTo(map);
@@ -232,15 +235,15 @@ export function createNetworkLayer(map, cb) {
       const color = safeColor(routes[rid]?.color), pane = front ? 'sbFocusLines' : 'sbLines', cta = isCta(rid);
       const segs = (shapes[rid] || []).filter((pts) => pts && pts.length >= 2);
       for (const pts of segs) {
-        const line = L.polyline(pts, { pane, className: cta ? 'sb-route sb-route-cta' : 'sb-route', color: cta ? ctaLineColor(color, dark) : color, weight: (cta ? ctaLineWeight(z) : lineWeight(z)) + bonus,
+        const line = L.polyline(pts, { pane, className: cta ? 'sb-route sb-route-cta' : 'sb-route', color: lineColorFor(rid, color, dark), weight: (cta ? ctaLineWeight(z) : lineWeight(z)) + bonus,
           opacity: dim ? 0.2 : front ? 1 : 0.9, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(lines);
-        polys.push({ line, bonus, cta, color });
+        polys.push({ line, bonus, cta, color, rid });
         hits.push({ rid, ll: pts, bounds: L.latLngBounds(pts), bonus });
       }
     }
     const chevRoutes = !dimAll && fronts.length && fronts.length <= 3 ? fronts : [];
-    chev.set(chevRoutes.map((rid) => ({ rid, color: routes[rid]?.color,
-      lines: orientedLines(shapes[rid], o.routeStops?.[rid], o.stops) })));
+    chevIn = chevRoutes.map((rid) => ({ rid, color: safeColor(routes[rid]?.color), lines: orientedLines(shapes[rid], o.routeStops?.[rid], o.stops) }));
+    chev.set(chevIn.map((c) => ({ ...c, color: lineColorFor(c.rid, c.color, dark) })));
     // stops: served by a visible route (only focus routes when focused)
     for (const [id, st] of Object.entries(o.stops || {})) {
       const rs = (o.stopRoutes?.[id] || []).map(String).filter((r) => (focus ? focus.has(r) : !hidden.has(r)));
@@ -250,10 +253,10 @@ export function createNetworkLayer(map, cb) {
       if (g === stopsG) stopPts.push(ll);   // building names keep off the stops drawn from zoom 14
       // a circle (CTA: a square, map/cta.js) in the card color with a route-color stroke; a stop of several routes gets
       // the neutral label2 stroke
-      const rc = single ? safeColor(routes[rs[0]]?.color) : null, sbColor = cta && rc ? rc : null;
-      const opts = { pane, ...(cta ? ctaStopStyle(z) : stopStyle(z)), color: rc ? (sbColor ? ctaLineColor(rc, dark) : rc) : '#5c5c63',
+      const rc = single ? safeColor(routes[rs[0]]?.color) : null, sbRid = rc ? rs[0] : null;   // a one-route stop: its route's line color
+      const opts = { pane, ...(cta ? ctaStopStyle(z) : stopStyle(z)), color: rc ? lineColorFor(sbRid, rc, dark) : '#5c5c63',
         className: (cta ? 'sb-stop sb-stop-cta' : 'sb-stop') + (single ? '' : ' sb-stop-multi'),
-        opacity: dimAll ? 0.4 : 1, fillOpacity: dimAll ? 0.4 : 1, interactive: false, sbCta: cta, sbColor };
+        opacity: dimAll ? 0.4 : 1, fillOpacity: dimAll ? 0.4 : 1, interactive: false, sbCta: cta, sbColor: rc, sbRid };
       stopMks.push((cta ? squareMarker(ll, opts) : L.circleMarker(ll, opts)).addTo(g));
       L.circleMarker(ll, { pane, radius: 22, stroke: false, fillOpacity: 0, className: 'sb-halo', bubblingMouseEvents: false })
         .on('click', () => cb.onStopTap(id)).addTo(g);
@@ -269,12 +272,16 @@ export function createNetworkLayer(map, cb) {
     showStops();
     chev.redraw();
   }
-  /** Theme switch: CTA lines and single-route CTA stop outlines take their color for the new land (no rebuild). */
+  /** Theme switch: lines, single-route stop outlines and chevrons take their color for the new land (no rebuild). */
   function setDark(on) {
     if (!!on === dark) return;
     dark = !!on;
-    for (const p of polys) if (p.cta) p.line.setStyle({ color: ctaLineColor(p.color, dark) });
-    for (const m of stopMks) if (m.options.sbColor) m.setStyle({ color: ctaLineColor(m.options.sbColor, dark) });
+    for (const p of polys) { const c = lineColorFor(p.rid, p.color, dark); if (p.line.options.color !== c) p.line.setStyle({ color: c }); }
+    for (const m of stopMks) {
+      const c = m.options.sbColor ? lineColorFor(m.options.sbRid, m.options.sbColor, dark) : null;
+      if (c && m.options.color !== c) m.setStyle({ color: c });
+    }
+    if (chevIn.some((c) => lineColorFor(c.rid, c.color, true) !== lineColorFor(c.rid, c.color, false))) chev.set(chevIn.map((c) => ({ ...c, color: lineColorFor(c.rid, c.color, dark) })));
   }
   /**
    * The route line under a point of the map container (px), the one drawn on top when several are near; null when
@@ -384,14 +391,17 @@ const easeInOut = (k) => (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2);
  * @param {{onBusTap:(info:{id:string, rid:string, label:string})=>void}} cb
  * @param {{clock?:()=>number, frame?:(fn:Function)=>any, reduce?:()=>boolean}} [opt] tests: a manual clock (ms),
  *   frame scheduler and reduced-motion switch (defaults: performance.now, requestAnimationFrame, the media query)
- * @returns {{draw(buses:Array, o:object):number, setYou(id):boolean, shown(id):[number,number]|null}}
- *   draw returns how many markers changed; shown = where a bus's badge is drawn now (tests)
+ * @returns {{draw(buses:Array, o:object):number, setYou(id):boolean, setDark(on:boolean):void, shown(id):[number,number]|null}}
+ *   draw returns how many markers changed; setDark recolors the shuttle badges in place for the theme (core/routecolor.js
+ *   mapColor; CTA badges keep the route color); shown = where a bus's badge is drawn now (tests)
  */
 export function createBusLayer(map, cb, opt = {}) {
   const L = window.L;
   const group = L.layerGroup().addTo(map);
-  const markers = new Map(); // vehicle id -> {rid, color, label, mk, s, ll, disp, to, anim, vt, seen, rot}
+  const markers = new Map(); // vehicle id -> {rid, base, color, label, mk, s, ll, disp, to, anim, vt, seen, rot}
   let youId = null;          // the bus you ride (Current trip): ring + "You" pill on its marker
+  let dark = false;          // the theme: shuttle badges in mapColor(route color, dark)
+  const badgeColor = (rid, base) => (isCta(rid) ? base : mapColor(base, dark));
   let zooming = false, raf = 0;
   const clock = opt.clock || (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
   const schedule = opt.frame || (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null);
@@ -539,7 +549,7 @@ export function createBusLayer(map, cb, opt = {}) {
       if (hidden.has(rid) && !focus?.has(rid)) continue;   // never a hidden route's bus; other routes in focus: faded
       const key = String(id);
       seen.add(key);
-      const color = safeColor(o.routes?.[rid]?.color), label = routeLabel(rid, o.routes);
+      const base = safeColor(o.routes?.[rid]?.color), color = badgeColor(rid, base), label = routeLabel(rid, o.routes);
       let m = markers.get(key);
       const feed = v.position.bearing == null || v.position.bearing === '' ? NaN : +v.position.bearing;
       const brg = busHeading(feed, m && m.rid === rid ? m.ll : null, [lat, lon], m ? m.brg : NaN, (a, b) => map.distance(a, b));
@@ -562,7 +572,7 @@ export function createBusLayer(map, cb, opt = {}) {
         const info = { id: key, rid, label: v.vehicle?.label != null ? String(v.vehicle.label) : '' };
         mk.on('click', () => cb.onBusTap(info));
         mk.addTo(group);
-        m = { key, rid, color, label, name, num, sel: false, faded: false, mk, s: '', ll: [lat, lon], brg: NaN, disp: start, to: r0.to, anim: null, vt, seen: now, rot: NaN };
+        m = { key, rid, base, color, label, name, num, sel: false, faded: false, mk, s: '', ll: [lat, lon], brg: NaN, disp: start, to: r0.to, anim: null, vt, seen: now, rot: NaN };
         markers.set(key, m);
         if (key === youId) markYou(m, true);
         nameMarker(m);
@@ -608,5 +618,18 @@ export function createBusLayer(map, cb, opt = {}) {
     const p = m.mk.getLatLng();
     return [p.lat, p.lng];
   }
-  return { draw, setYou, shown };
+
+  /** The theme flipped: every shuttle badge (and its heading notch) takes that theme's route color, in place. @param {boolean} on */
+  function setDark(on) {
+    if (!!on === dark) return;
+    dark = !!on;
+    for (const m of markers.values()) {
+      const c = badgeColor(m.rid, m.base);
+      if (c === m.color) continue;
+      m.color = c; m.s = '';   // the next draw compares against the new color
+      const el = m.mk.getElement()?.firstElementChild || m.mk.options.icon?.options?.html;   // the badge, drawn or not yet
+      if (el?.style) { el.style.setProperty('--c', c); el.style.setProperty('--t', textOn(c)); }
+    }
+  }
+  return { draw, setYou, setDark, shown };
 }

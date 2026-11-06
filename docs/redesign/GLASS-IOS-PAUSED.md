@@ -147,3 +147,5 @@ beside the shuttles", glass spec D9). The iPhone app has none of it yet. To port
   tag, square stop annotations from the zoom the web uses, thinner CTA overlays under the shuttles, the Routes "CTA
   buses" section, the route page per direction, the stop page, "Scheduled, est." rows, CTA contact rows, Settings >
   Credits CTA line, App Privacy: still Data Not Collected (the proxy request carries no user data).
+
+- Dark shuttle colors (web 2026-11-06, owner: "Outline or change coloring of the dark shuttles to make them more noticable"): the live repo's main already has the iPhone side (Kit `RouteColor` + RouteColorTests on `routecolor_golden.json`, `MapLine` / `MapChevron` `darkColor`, `BusMarker`); bring it over with the next iOS merge, CTA overlays in `ctaLineColor` (dark = `RouteColor.liftForDark` against the land only).

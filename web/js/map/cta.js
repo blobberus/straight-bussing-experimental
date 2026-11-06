@@ -4,7 +4,8 @@
  * behave on the interface like the normal bus routes"). CTA routes are ordinary routes to map/layers.js (ids "cta:<id>",
  * core/agency.js); this file only holds what is drawn differently, never by color alone:
  *  - lines: thinner than the shuttle lines (CTA_LINE_WIDTHS) and, unless the rider's draw order says otherwise, under
- *    them (layers.js stackOrder); in the route color, lifted to 3:1 against the land where it is darker (ctaLineColor);
+ *    them (layers.js stackOrder); in the route color, lifted to 3:1 against the land where it is darker (ctaLineColor:
+ *    on the dark map core/routecolor.js liftForDark, the shuttles' function; lineColorFor picks per route);
  *  - stops: squares (squareMarker: a Leaflet CircleMarker that draws a square), in their own pane under the shuttle stops,
  *    shown from CTA_STOP_MIN_Z (they stand on every block, both sides of the street) unless their route is in focus (its
  *    route page): then from zoom 14 like any focused route;
@@ -13,6 +14,7 @@
  */
 import { isCta } from '../core/agency.js';
 import { safeColor, contrast } from '../core/esc.js';
+import { liftForDark, mapColor } from '../core/routecolor.js';
 import { PALETTE } from './style.js';
 
 export { isCta };
@@ -28,20 +30,37 @@ function mix(a, b, k) {
 }
 
 /**
- * The color a CTA line and its stop outlines are drawn in: the route color, moved toward white (dark map) or black (light
- * map) in 5% steps until it has CTA_LINE_MIN_CONTRAST against the land. CTA's key-route gray #414145 is 1.6:1 on the dark
- * land (#202124) and nearly vanishes there; the badges keep the route color (white text on it is what counts there).
+ * The color a CTA line and its stop outlines are drawn in, with CTA_LINE_MIN_CONTRAST against the land. Dark map:
+ * core/routecolor.js liftForDark (the shuttles' dark-map function, 2026-11-06): the same hue made lighter, against the
+ * land only, so CTA lines stay quieter than the shuttles (key-route gray #414145, 1.6:1 on the dark land, -> #6C6C70,
+ * still darker than the regular CTA gray #747477). Light map: moved toward black in 5% steps. The badges keep the route
+ * color (white text on it is what counts there).
  * @param {string} color route color
  * @param {boolean} dark the dark map
  * @returns {string} '#RRGGBB'
  */
 export function ctaLineColor(color, dark) {
-  const c = safeColor(color), land = dark ? PALETTE.dark.bg : PALETTE.light.bg, to = dark ? '#FFFFFF' : '#000000';
+  if (dark) return liftForDark(color, PALETTE.dark.bg, CTA_LINE_MIN_CONTRAST);
+  const c = safeColor(color), land = PALETTE.light.bg, to = '#000000';
   for (let i = 0; i <= 20; i++) {
     const m = i ? mix(c, to, i / 20) : c;
     if (contrast(m, land) >= CTA_LINE_MIN_CONTRAST) return m;
   }
   return to;
+}
+
+/**
+ * The color any route's line, stop rings, chevrons and planned legs are drawn in: CTA routes ctaLineColor; shuttles
+ * core/routecolor.js mapColor (as published on the light map; on the dark map a color under 3:1 against the land lifted
+ * in its own hue to 3:1 against the land and the street fill, owner 2026-11-06: "Outline or change coloring of the dark
+ * shuttles to make them more noticable").
+ * @param {string} rid route id
+ * @param {string} color route color
+ * @param {boolean} dark the dark map
+ * @returns {string} '#RRGGBB'
+ */
+export function lineColorFor(rid, color, dark) {
+  return isCta(rid) ? ctaLineColor(color, dark) : mapColor(color, dark);
 }
 
 /** CTA line width (px) by zoom: about two thirds of a shuttle line (map/layers.js LINE_WIDTHS 2 .. 6). */

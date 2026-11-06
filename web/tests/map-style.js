@@ -224,3 +224,9 @@ test('palette: no road but a motorway is yellow or orange (a street must never l
   eq(bad, [], 'yellow / orange non-motorway roads');
   ok(motorways >= 2, 'the motorways stay yellow-orange (' + motorways + ' layers)');
 });
+
+test('route colors on the dark map are measured against this palette (core/routecolor.js DARK_LAND / DARK_STREET)', async () => {
+  const rc = await import('../js/core/routecolor.js');
+  eq(rc.DARK_LAND.toLowerCase(), PALETTE.dark.bg, 'land');
+  eq(rc.DARK_STREET.toLowerCase(), PALETTE.dark.minor, 'street fill');
+});
