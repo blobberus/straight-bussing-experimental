@@ -32,6 +32,11 @@ document.body.appendChild(sheet);
 
 const get = (f) => fetch('../data/' + f).then((r) => r.json());
 const [routes, stops, shapes, routeStops] = await Promise.all(['routes.json', 'stops.json', 'shapes.json', 'route_stops.json'].map(get));
+// &cta=1: CTA routes merged in as the app does (data/static.js: ids "cta:<id>" in the same slices), with CTA buses
+if (q.get('cta') === '1') {
+  const [cr, cs, csh, crs] = await Promise.all(['routes', 'stops', 'shapes', 'route_stops'].map((f) => get(`cta/${f}.json`)));
+  Object.assign(routes, cr); Object.assign(stops, cs); Object.assign(shapes, csh); Object.assign(routeStops, crs);
+}
 const stopRoutes = {};
 for (const [rid, ids] of Object.entries(routeStops)) for (const id of new Set(ids)) (stopRoutes[id] ||= []).push(rid);
 
@@ -62,6 +67,9 @@ if (q.get('plan') === '0') { // a few buses near the selected stop: fresh, stale
     position: { latitude: c.lat + dy, longitude: c.lon + dx, bearing: 75 }, timestamp: now - 5, ...extra });
   buses.push(near(0.0016, 0.0003, '1078', 'n1'), near(-0.0022, -0.0009, '5699', 'n2', { timestamp: now - 300 }),
     near(0.0004, -0.0016, '4346', 'n3'), near(-0.0010, 0.0012, '1075', 'n4', { position: { latitude: c.lat + 0.0012, longitude: c.lon - 0.001 } }));
+  // &cta=1: CTA buses beside them: two on one line (numbered), one stale, one express
+  if (q.get('cta') === '1') buses.push(near(0.0026, -0.0006, 'cta:171', 'cta:8123'), near(0.0030, 0.0010, 'cta:171', 'cta:8130'),
+    near(-0.0030, 0.0004, 'cta:55', 'cta:1702', { timestamp: now - 300 }), near(-0.0004, 0.0024, 'cta:X4', 'cta:4380'));
 }
 api.drawBuses(buses, { routes, hidden: [], focus, nowS: now });
 
