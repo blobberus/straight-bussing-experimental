@@ -28,6 +28,8 @@ import { confirmDialog } from "../confirm.js";
 import { attachSwipe } from "./myroutes-swipe.js";
 import { createPatcher } from "./myroutes-patch.js";
 import { svg } from "../icons.js";
+import { isCta, ctaStatusText, ctaLive } from "../../core/agency.js";
+import { arrStale } from "../components.js";
 
 export { createPatcher };
 
@@ -100,9 +102,10 @@ function favRow(id, i, n, state, now, hidden, stale) {
       + `<button type="button" class="mr-ibtn" data-action="mr:favmove" data-id="${esc(id)}" data-dir="1" aria-label="Move ${name} down"${i === n - 1 ? " disabled" : ""}>${DOWN}</button>`
       + `<button type="button" class="v-btn v-btn--quiet mr-rm" data-action="mr:favrm" data-id="${esc(id)}" aria-label="Remove ${name} from favorites">Remove</button></div>`;
   }
-  const a = state.liveLoaded ? arrivalsFor(state, id, { hidden, nowS: now })[0] : null;
-  const sub = a ? longName(a.rid, state.routes) : liveUnknown(state, now) ? "Live times unavailable" : state.liveLoaded ? "No upcoming buses on your visible routes" : "Waiting for live data";
-  const when = a ? `, next bus ${longName(a.rid, state.routes)} in ${Math.max(0, Math.floor((a.t - now) / 60))} min` : "";
+  const cta = isCta(id), a = state.liveLoaded || cta ? arrivalsFor(state, id, { hidden, nowS: now })[0] : null;
+  const sub = a ? longName(a.rid, state.routes) : liveUnknown(state, now) && !cta ? "Live times unavailable" : state.liveLoaded || cta ? "No upcoming buses on your visible routes" : "Waiting for live data";
+  const when = a ? `, next bus ${isCta(a.rid) ? "CTA " : ""}${longName(a.rid, state.routes)} in ${Math.max(0, Math.floor((a.t - now) / 60))} min${a.sched ? ", scheduled" : ""}` : "";
+  if (a && isCta(a.rid)) stale = arrStale(a, state, now);   // a CTA time: its own source (a scheduled time is an estimate)
   return `<button type="button" class="v-row mr-favrow" data-key="f:${esc(id)}" data-action="stop:open" data-id="${esc(id)}" aria-label="${esc((st.name || id) + when)}">`
     + `<span class="v-grow" aria-hidden="true"><span class="v-prim">${name}</span><span class="v-sec">${a ? routeChip(a.rid, state.routes, { small: true }) + " " : ""}${esc(sub)}</span></span>`
     + (a ? `<span aria-hidden="true">${etaBlock(a.t, { stale, now })}</span>` : "") + "</button>";
@@ -147,7 +150,7 @@ function findCustom(state, id) { return (state.customRoutes || []).find((c) => c
 /** Next arrival of a route at its stop nearest the user (null without location). */
 function nearestNext(state, rid, now) {
   const u = state.user;
-  if (!u || !state.liveLoaded) return null;
+  if (!u || (!state.liveLoaded && !isCta(rid))) return null;
   let best = null;
   for (const sid of new Set(state.routeStops?.[rid] || [])) {
     const s = state.stops?.[sid];
@@ -157,7 +160,7 @@ function nearestNext(state, rid, now) {
   }
   if (!best || best.d > 1500) return null;
   const a = arrivalsFor(state, best.sid, { routeId: rid, nowS: now })[0];
-  return a ? { t: a.t, stop: state.stops[best.sid].name || best.sid } : null;
+  return a ? { t: a.t, stop: state.stops[best.sid].name || best.sid, est: isCta(rid) ? arrStale(a, state, now) : null } : null;
 }
 
 /**
@@ -186,10 +189,10 @@ export function restingText(state, rid, now) {
  * @returns {{text:string, live:boolean}}
  */
 export function savedRouteStatus(state, rid, now, hidden) {
-  const n = runningCount(state, rid);
-  const run = n ? `${n} bus${n === 1 ? "" : "es"} running` : liveUnknown(state, now) ? "Live status unavailable" : noLiveStatus(state, rid, now) || restingText(state, rid, now);
+  const n = runningCount(state, rid), cta = isCta(rid);   // a CTA route: CTA's own status (core/agency.js)
+  const run = cta ? ctaStatusText(state, rid, now) : n ? `${n} bus${n === 1 ? "" : "es"} running` : liveUnknown(state, now) ? "Live status unavailable" : noLiveStatus(state, rid, now) || restingText(state, rid, now);
   const off = hidden.has(String(rid)) ? (state.journey ? " \u00b7 Not on this trip" : " \u00b7 Hidden on map") : "";
-  return { text: run + off, live: n > 0 };
+  return { text: run + off, live: n > 0 && (!cta || ctaLive(state.cta, now)) };
 }
 
 /**
@@ -215,7 +218,7 @@ export function renderCustom(state, id, now = nowS()) {
   for (const rid of rids) {   // every saved route stays listed: running, scheduled, not running, hidden on the map
     const hl = (c.highlight || []).includes(rid), st = savedRouteStatus(state, rid, now, hiddenSet);
     const nx = hiddenSet.has(String(rid)) ? null : nearestNext(state, rid, now);   // a hidden route shows no arrival time
-    const next = nx ? ` · ${stale ? "~" : ""}${Math.max(0, Math.floor((nx.t - now) / 60))} min at ${nx.stop}` : "";
+    const next = nx ? ` · ${(nx.est ?? stale) ? "~" : ""}${Math.max(0, Math.floor((nx.t - now) / 60))} min at ${nx.stop}` : "";
     h += `<div class="mr-rrow"><button type="button" class="v-row mr-rmain" data-action="route:open" data-id="${esc(rid)}">${routeChip(rid, state.routes)}<span class="v-grow"><span class="v-prim">${esc(longName(rid, state.routes))}</span><span class="v-sec">${st.live ? '<span class="v-livedot" aria-hidden="true"></span>' : ""}${esc(st.text + next)}</span></span></button>`
       + `<button type="button" class="mr-hl${hl ? " is-on" : ""}" data-action="mr:hl" data-id="${esc(c.id)}" data-rid="${esc(rid)}" aria-pressed="${hl}" aria-label="Highlight ${esc(longName(rid, state.routes))}"><span class="mr-hltick" aria-hidden="true">${CHECK}</span>Highlight</button></div>`;
   }
@@ -247,14 +250,14 @@ export function renderEditor(state, id, now = nowS()) {
   while (!c && used.has(`My route ${k}`)) k++;   // never suggest a name that is already taken
   const name = c ? c.name : `My route ${k}`;
   const sel = new Set(c ? c.rids : []);
-  const all = Object.keys(state.routes || {});
+  const keys = Object.keys(state.routes || {}), all = keys.filter((r) => !isCta(r)), ctaAll = keys.filter(isCta);   // CTA in its own group
   const unknown = liveUnknown(state, now), running = all.filter((r) => runningCount(state, r) > 0);   // scheduled + silent is never "Not running"
   const sched = unknown ? [] : all.filter((r) => !running.includes(r) && scheduledNoLive(state, r, now)), idle = all.filter((r) => !running.includes(r) && !sched.includes(r));
   const group = (title, list) => list.length ? `<fieldset class="mr-fs"><legend class="mr-label">${title}</legend><div class="v-card">${list.map((r) => checkRow(r, state, sel.has(r))).join("")}</div></fieldset>` : "";
   return `<form class="mr mr-edit" data-form="mr-edit" data-id="${esc(c ? c.id : "")}" novalidate>`
     + `<label class="mr-label" for="mr-name">Name</label><input id="mr-name" class="mr-input" type="text" name="name" maxlength="60" autocomplete="off" enterkeyhint="done" value="${esc(name)}">`
     + '<p class="mr-label mr-routesq">Routes</p><p class="mr-err" role="alert" data-region="mr-err"></p>'   // error next to what it is about
-    + `${group("Running now", running)}${group("Scheduled, no live location", sched)}${group(unknown ? "Live status unknown" : "Not running", idle)}`
+    + `${group("Running now", running)}${group("Scheduled, no live location", sched)}${group(unknown ? "Live status unknown" : "Not running", idle)}${group("CTA buses", ctaAll)}`
     + '<div class="v-actions"><button type="button" class="v-btn v-btn--secondary" data-action="mr:cancel">Cancel</button><button type="submit" class="v-btn v-btn--primary">Save</button></div>'
     + (c ? `<button type="button" class="v-btn v-btn--quiet v-btn--block mr-danger mr-editdel" data-action="mr:del" data-id="${esc(c.id)}" data-from="edit">${TRASH}Delete custom route</button>` : "") + "</form>";
 }

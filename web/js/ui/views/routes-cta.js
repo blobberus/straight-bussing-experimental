@@ -7,40 +7,11 @@
  * contact and the credit line. Status words for CTA routes (never the shuttle feed's "no live location").
  */
 import { esc } from "../../core/esc.js";
-import { runningCount } from "../../core/arrivals.js";
-import { isScheduledNow, scheduledUntil, clock12 } from "../../core/schedule.js";
-import { isCta, ctaLevel, ctaSourceText, CTA_URL, CTA_INFO_URL, CTA_PHONE, CTA_TEL, CTA_CREDIT } from "../../core/agency.js";
-import { restingText } from "./myroutes.js";
+import { registerAction } from "../actions.js";
+import { showAll, hideAll } from "../../core/custom.js";
+import { ctaLevel, ctaSourceText, ctaStatusText, ctaOperating, CTA_URL, CTA_INFO_URL, CTA_PHONE, CTA_TEL, CTA_CREDIT } from "../../core/agency.js";
 
-/**
- * Is a CTA route operating now (the "Show running" rule): a CTA bus reporting on it, or the schedule has it running.
- * @param {object} state
- * @param {string} id
- * @param {number} now
- * @returns {boolean}
- */
-export function ctaOperating(state, id, now) {
-  return isCta(id) && (runningCount(state, id) > 0 || isScheduledNow(state.service || {}, id, now) === true);
-}
-
-/**
- * Status line of a CTA route (plain text): "2 buses live", "1 simulated bus", "Scheduled until 11:40 PM",
- * "Not running now · Scheduled from 5:00 AM today", "No more service today", "Not running today".
- * @param {object} state
- * @param {string} id
- * @param {number} now
- * @returns {string}
- */
-export function ctaStatusText(state, id, now) {
-  const n = runningCount(state, id), lvl = ctaLevel(state.cta, now);
-  if (n) return lvl === "demo" ? `${n} simulated bus${n > 1 ? "es" : ""}` : `${n} bus${n > 1 ? "es" : ""} live`;
-  if (isScheduledNow(state.service || {}, id, now) === true) {
-    const end = scheduledUntil(state.service || {}, id, now);
-    const until = end === "24:00" ? "Scheduled 24 hours" : end ? `Scheduled until ${clock12(end)}` : "Scheduled now";
-    return lvl === "" || lvl === "late" ? `${until} · no bus reporting` : until;
-  }
-  return restingText(state, id, now);
-}
+export { ctaStatusText, ctaOperating };   // their home is core/agency.js
 
 /** CTA's official contact and the credit CTA's terms suggest (under the CTA section and on CTA pages). */
 export function ctaContactHTML() {
@@ -63,10 +34,22 @@ export function ctaSectionHTML(state, ids, hiddenSet, now, rowFn) {
   const shown = ids.filter((i) => !hiddenSet.has(i)), hidden = ids.filter((i) => hiddenSet.has(i));
   const src = ctaSourceText(state.cta, now), lvl = ctaLevel(state.cta, now);
   const warn = lvl === "err" || lvl === "late" ? " is-warn" : "";
+  // Show all / Hide all for the CTA routes alone (the list's own Show all / Hide all cover every route)
+  const bulk = state.journey ? "" : `<span class="rt-ctabulk" role="group" aria-label="All CTA routes">`
+    + `<button type="button" class="v-btn v-btn--quiet" data-action="routes:cta-show"${hidden.length ? "" : " disabled"}>Show all<span class="v-sr"> CTA routes</span></button>`
+    + `<button type="button" class="v-btn v-btn--quiet" data-action="routes:cta-hide"${shown.length ? "" : " disabled"}>Hide all<span class="v-sr"> CTA routes</span></button></span>`;
   return `<section class="rt-cta" aria-labelledby="rt-cta-h"><div class="rt-ctahead"><span class="rt-ctamark" aria-hidden="true">CTA</span>`
-    + `<h3 class="v-h rt-ctah" id="rt-cta-h">CTA buses</h3></div>`
+    + `<h3 class="v-h rt-ctah" id="rt-cta-h">CTA buses</h3>${bulk}</div>`
     + `<p class="v-sec rt-ctasrc${warn}" role="status">${esc(src)}</p>`
     + (shown.length ? `<div class="v-list rt-ctalist">${shown.map((i) => rowFn(state, i, false, now)).join("")}</div>` : "")
     + (hidden.length ? `<h4 class="v-sec rt-ctahid">${state.journey ? "Not on this trip" : "Hidden"}</h4><div class="v-list rt-ctalist">${hidden.map((i) => rowFn(state, i, true, now)).join("")}</div>` : "")
     + ctaContactHTML() + "</section>";
 }
+
+/** The CTA routes in the list's scope (the station filter's, when one is set). */
+function ctaScope(state) {
+  const f = state.routeFilter && Array.isArray(state.routeFilter.ids) ? new Set(state.routeFilter.ids.map(String)) : null;
+  return Object.keys(state.routes || {}).filter((r) => r.startsWith("cta:") && (!f || f.has(r)));
+}
+registerAction("routes:cta-show", (ds, ev, ctx) => { const s = ctx.store.get(); ctx.store.set(showAll(s, ctaScope(s))); });
+registerAction("routes:cta-hide", (ds, ev, ctx) => { const s = ctx.store.get(); ctx.store.set(hideAll(s, ctaScope(s))); });

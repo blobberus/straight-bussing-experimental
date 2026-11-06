@@ -15,7 +15,8 @@
  *  - Without live CTA data (no proxy configured, or it fails) store.ctaTrips holds SCHEDULED times (core/ctasched.js,
  *    entries marked sched:true), always labeled as schedule estimates.
  */
-import { ERR_AFTER_S, LATE_AFTER_S } from "./arrivals.js";
+import { ERR_AFTER_S, LATE_AFTER_S, runningCount } from "./arrivals.js";
+import { isScheduledNow, scheduledUntil, nextStartToday, hoursOn, clock12 } from "./schedule.js";
 
 /** Prefix of every CTA route, stop, trip and vehicle id. */
 export const CTA_PREFIX = "cta:";
@@ -149,4 +150,40 @@ export function ctaSourceText(cta, nowS) {
     case "demo": return "Simulated CTA buses (demo)";
     default: return "CTA live data";
   }
+}
+
+/**
+ * Is a CTA route operating now (the Routes "Show running" rule): a CTA bus reporting on it, or the schedule has it running.
+ * @param {object} state
+ * @param {string} id
+ * @param {number} nowS
+ * @returns {boolean}
+ */
+export function ctaOperating(state, id, nowS) {
+  return isCta(id) && (runningCount(state, id) > 0 || isScheduledNow(state.service || {}, id, nowS) === true);
+}
+
+/**
+ * Status line of a CTA route (plain text), from CTA buses or CTA's schedule, never the shuttle feed: "2 buses live",
+ * "1 simulated bus", "Scheduled 24 hours", "Scheduled until 11:40 PM", "Not running now · Scheduled from 5:00 AM today",
+ * "No more service today", "Not running today" (the last three are the shuttle rows' words, ui/views/myroutes.js
+ * restingText).
+ * @param {object} state
+ * @param {string} id
+ * @param {number} nowS
+ * @returns {string}
+ */
+export function ctaStatusText(state, id, nowS) {
+  const svc = state.service || {}, n = runningCount(state, id), lvl = ctaLevel(state.cta, nowS);
+  if (n) return lvl === "demo" ? `${n} simulated bus${n > 1 ? "es" : ""}` : `${n} bus${n > 1 ? "es" : ""} live`;
+  if (isScheduledNow(svc, id, nowS) === true) {
+    const end = scheduledUntil(svc, id, nowS);
+    const until = end === "24:00" ? "Scheduled 24 hours" : end ? `Scheduled until ${clock12(end)}` : "Scheduled now";
+    return lvl === "" || lvl === "late" ? `${until} · no bus reporting` : until;
+  }
+  const next = nextStartToday(svc, id, nowS);
+  if (next) return `Not running now · Scheduled from ${clock12(next)} today`;
+  const h = hoursOn(svc, id, nowS);
+  if (!h) return "Not running right now";
+  return h.first ? "No more service today" : "Not running today";
 }

@@ -112,3 +112,25 @@ test("Current trip: the nearest SHUTTLE stop leads even with a CTA stop closer; 
   ok(cta > hero && h.indexOf("55th Street &amp; Ellis (EB)", cta) > cta, "CTA nearby: the CTA stop, after the shuttle cards");
   ok(h.slice(cta).includes("Scheduled, est."), "with its scheduled time labeled");
 });
+
+test("My Routes: a saved CTA route says CTA's status; the editor lists CTA routes in their own group", async () => {
+  const { savedRouteStatus, renderEditor } = await import("../js/ui/views/myroutes.js");
+  const s = withCta();
+  eq(savedRouteStatus(s, "cta:171", NOW, new Set()).text.startsWith("Scheduled"), true);
+  eq(savedRouteStatus(s, "cta:171", NOW, new Set()).live, false, "no live dot from the schedule");
+  ok(/Not running/.test(savedRouteStatus(s, "cta:55", NOW, new Set(["cta:55"])).text) && savedRouteStatus(s, "cta:55", NOW, new Set(["cta:55"])).text.endsWith("Hidden on map"));
+  const ed = renderEditor(s, null, NOW), g = ed.indexOf(">CTA buses<");
+  ok(g > 0 && ed.indexOf('value="cta:171"') > g && ed.indexOf('value="R1"') < g, "CTA routes after the shuttle groups");
+});
+
+test("Routes: the CTA section's own Show all / Hide all touch only the CTA routes", async () => {
+  const { runAction } = await import("../js/ui/actions.js");
+  const { createStore } = await import("../js/core/store.js");
+  const store = createStore(withCta({ hiddenRoutes: ["R2"] }));
+  const h = renderRoutes(store.get(), NOW);
+  ok(h.includes('data-action="routes:cta-hide"') && /data-action="routes:cta-show" disabled/.test(h), "Show all is off while no CTA route is hidden");
+  runAction("routes:cta-hide", {}, null, { store });
+  eq(store.get().hiddenRoutes.slice().sort(), ["R2", "cta:171", "cta:55"]);
+  runAction("routes:cta-show", {}, null, { store });
+  eq(store.get().hiddenRoutes, ["R2"], "the hidden shuttle route stays hidden");
+});
