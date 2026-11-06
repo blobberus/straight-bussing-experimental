@@ -60,6 +60,7 @@ const PRECACHE = [
   'js/data/spell.js',
   'js/data/static.js',
   'js/data/cta-static.js',
+  'js/data/cta-live.js',
   'js/data/usage.js',
   'js/map/chevrons.js',
   'js/map/credits.js',

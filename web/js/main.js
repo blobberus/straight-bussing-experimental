@@ -509,6 +509,10 @@ async function boot() {
   if (DEMO) {   // simulated buses only: the live feed is never fetched in a demo session
     import("./ui/demo.js").then((m) => { live = m.startDemo(store, startLive); }).catch(reportError);   // + action demo:info (the pill)
   } else live = startLive(store, { intervalMs: 10000, keepAlive: () => !!notifier?.background?.() });   // bus alerts: also in a background tab
+  // CTA times and buses (experimental 2026-11-06): their own module and store slices, never the shuttle feed's; loaded after
+  // the first render (optional data never blocks it); scheduled times until a CTA proxy is set, simulated in a demo
+  import("./data/cta-live.js").then((m) => m.startCtaLive(store, { demo: DEMO, keepAlive: () => !!notifier?.background?.() }))
+    .catch((e) => console.warn("CTA times", e));
   const results = await Promise.allSettled(VIEW_IDS.map((v) => import(`./ui/views/${v}.js`)));
   results.forEach((r, i) => r.status === "rejected" && (OPTIONAL_VIEWS.has(VIEW_IDS[i]) ? console.warn : console.error)("view " + VIEW_IDS[i] + " failed to load", r.reason));
   registerCoreActions();
