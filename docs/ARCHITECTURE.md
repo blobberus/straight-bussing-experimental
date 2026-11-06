@@ -80,6 +80,10 @@ export function createStore(initial): { get(), set(patch), subscribe(fn)->off } 
   // nav (ui/router.js writes)
   view:'nearby', prevView:null, stopId:null, routeId:null,
   routeFilter:null /* {ids:[rid], label:'Station name'} | null */,
+  // CTA (experimental 2026-11-06, section "CTA routes beside the shuttles"): CTA routes / stops / shapes / hours are IN the
+  // slices above with "cta:" ids; these hold what is CTA's alone
+  ctaPatterns:{} /* {rid:[{dir, stops:[stopId]}]} per direction */, ctaSchedule:null /* core/ctasched.js decodeSchedule */,
+  ctaBuses:[], ctaTrips:[] /* CTA vehicles; CTA predictions or scheduled times (sched:true) */, cta:{mode:'off'|'live'|'demo', lastOk, failed, feedTs, loaded},
 }
 ```
 View-local state (picker query, directions fields) lives in that view module, not the store.
@@ -970,3 +974,105 @@ Hand-ported from the live repo (same core files; its docs/ARCHITECTURE.md "Route
   matches at Main") and an empty result says "Only routes to Main are searched. Clear the station filter to search
   every route." Empty field: the old order. Tests: tests/routes-search.js (the two "matches ... lead" cases). sw
   `sb-v2-97`.
+
+## CTA routes beside the shuttles (2026-11-06, experimental only; owner: "implemenent the CTA routes in the same way passio go shows but make the bus shapes identifiable to be cta and make their stations square. Also list them noticably idfferently on the routes menu. They should still behave on the interface like the normal bus routes.")
+
+The research and the plan for the live app are the live repo's `CTA Implementation.md` (routes, data sources, terms,
+budget); this section is the experimental build's contract.
+
+**Data, the way Passio's is done.** CTA's GTFS zip has no CORS header, so `tools/build_cta.py` (tests
+`tools/test_build_cta.py`) keeps the 14 CTA bus routes that serve Hyde Park (2, 4, X4, 6, 10, 15, 28, 47, 55, 59, 63,
+171, 172, 192) and only their stops, line shapes and stop times inside BOX (47th to 63rd Street, King Drive to the
+lake), and writes `web/data/cta/{routes,stops,shapes,route_stops,patterns,service,schedule,meta}.json` (about 160 KB).
+`pages.yml` runs its tests and then the tool on every deploy and daily, keeping the committed copy on failure. Details:
+route colors are CTA's, darkened until white text passes 4.5:1 (`cta_color` keeps CTA's own); stop names carry the
+direction like the shuttle names ("55th Street & Ellis (EB)"); shapes lose CTA's curb jogs at stops (`despike`) and
+are clipped and simplified; a day whose one window covers 23 hours or more is written 00:00 to 24:00 ("24 hours").
+
+**Ids.** Every CTA route, stop, trip and vehicle id is namespaced `cta:` (route `cta:171`, stop `cta:1427`, vehicle
+`cta:8123`). The live Passio route_id join stays Passio-only. `core/agency.js isCta(id)` tells them apart.
+
+**Static: the same slices.** `data/static.js` loads the CTA files beside Passio's (all optional, failures in
+`ctaFailed`, never `failed`) and `data/cta-static.js mergeCta` adds the `cta:` entries (only those: a CTA file can
+never replace a shuttle route or stop) to store.routes / stops / shapes / routeStops / service.routes (CTA's feed
+window as service.ctaFeed). New slice `store.ctaPatterns` = patterns.json: `{"cta:55": [{dir:"Westbound",
+stops:[...]}, {dir:"Eastbound", stops:[...]}]}`; `routeStops[cta rid]` is direction 0 then direction 1. So
+visibility, custom routes, map order, favorites, route search, the route and stop pages, line taps and Lines by Time
+treat CTA routes like any route, with no special case.
+
+**Live: separate slices.** CTA vehicles and predictions are NEVER in store.buses / store.trips. `data/cta-live.js`
+(started by main.js after the first render) writes only `store.ctaSchedule` (decoded schedule.json),
+`store.ctaBuses`, `store.ctaTrips` and `store.cta = {mode, lastOk, failed, feedTs, loaded}`; every shuttle rule
+(staleLevel, liveUnknown, silent service, "No shuttles running", off-route hiding, operating buses, the status
+banner) keeps reading Passio's slices only, so a CTA failure never hides the shuttle state, or the reverse.
+Code that shows "the buses" or "the arrivals" of any route reads both: `arrivalsFor` and `runningCount`
+(core/arrivals.js) read the CTA slices too; `allBuses(state)` / `allTrips(state)` (memoized concatenations) feed the
+map, the route page, the planner; `selectedBus` looks among CTA's buses for a CTA route. `core/operating.js`
+`scheduledRoutes` and `scheduledNoLive` never count a CTA route; `data/demo.js` (it stands in for Passio's feed)
+simulates shuttles only; `core/coverage.js` (the 800 m note names "the campus shuttle routes") measures from shuttle
+stops only.
+
+Modes of `data/cta-live.js` (`ctaLevel(store.cta, now)`: off / demo / wait / err / late / fresh):
+- `off` (default: `CTA_LIVE_URL = ''`): every minute `store.ctaTrips` = the next 90 minutes of scheduled stop times
+  (`core/ctasched.js scheduledTrips`, trip ids `cta:sched:<rt>:<dir>:<start>`, each entry `sched:true`); no CTA bus
+  is drawn. `arrivalsFor` returns those with `sched:true`.
+- `live` (`CTA_LIVE_URL` = the owner's proxy, `tools/cta-proxy/`): polls every 20 s (paused in a background tab unless
+  bus alerts need it), the same URL for everyone, nothing about the rider. Answer `{v, ok, ts, vehicles:[Bus Tracker
+  vehicle], predictions:[Bus Tracker prd], errors}`; `parseCtaLive` keeps known routes and stops, drops reports over
+  5 minutes old and predictions with dyn 1 / 4 / 16 / 17 (canceled, drop-off only, invalidated), sets each bus's next
+  stop. A failure or `ok:false` keeps the last answer (flagged) for `FALLBACK_S` (120 s), then scheduled times take
+  over, labeled.
+- `demo` (`?demo=1`): simulated CTA buses on CTA's own schedule (`demoCta`: each trip under way between its last and
+  next stop on the line shape, predictions for the trips under way or starting within 30 minutes); never the proxy.
+
+**Wording and labels (ship checklist 1, 2, 5).** A CTA scheduled time is never live: arrival rows say "Scheduled,
+est." with a hollow square (`.dot-sched`), the time gets "~", screen readers hear "CTA route 171, ..., scheduled time,
+an estimate" (`components.js ctaArrLabel`, `arrStale`). A CTA live prediction takes its freshness from `store.cta`
+(`ctaLevel`), never Passio's. Status lines of a CTA route come from `core/agency.js ctaStatusText` ("2 buses live",
+"1 simulated bus", "Scheduled 24 hours", "Scheduled until 1:38 AM", "Not running now · Scheduled from 6:00 AM today"),
+never "no live location"; where CTA times come from is `ctaSourceText` ("Scheduled times · CTA live data not
+connected" / "... unavailable" / "CTA live data"). CTA pages end with CTA's contact (transitchicago.com,
+1-888-YOURCTA, customer information) and "Data provided by Chicago Transit Authority. Straight Bussing is unofficial
+and not affiliated with CTA." (`routes-cta.js ctaContactHTML`); 773.702.8181 stays for the shuttles.
+
+**Screens.**
+- Route badge (`routeChip`): a CTA route's is squared (`.chip.chip--cta`, radius 2 px) and reads "CTA 171". Never a bare
+  `.cta` class: that is the shell's call-to-action button style.
+- Routes list: the shuttle groups hold shuttles only (`groupRoutes`); after them a "CTA buses" section
+  (`ui/views/routes-cta.js ctaSectionHTML`): a rule, a squared "CTA" mark, the heading, its own Show all / Hide all
+  (CTA routes only), the time source line, the CTA rows (same eye toggle and route page), a CTA "Hidden" part, CTA's
+  contact and credit. Search matches CTA routes by number and name ("171", "55 garfield"). Show running keeps the
+  CTA routes the schedule or a CTA bus has running (`ctaOperating`); the list's Show all / Hide all count them.
+- Route page: one timeline per direction (`store.ctaPatterns`, headings "Southbound" / "Northbound"), each with its
+  buses heading along it (`busPositions(state, rid, now, only)`); CTA's status and source lines; no shuttle no-bus help;
+  CTA's contact at the end. Hours & service from CTA's schedule (the Hyde Park part).
+- Stop page: "CTA stop 1427" in place of an address, CTA arrivals without waiting for the shuttle feed, "No CTA bus
+  scheduled in the next 90 minutes" when empty, CTA's source line and contact as the footer.
+- Current trip: the nearest SHUTTLE stop stays the hero (CTA stops sit on every block); the nearest CTA stop within
+  800 m gets its own "CTA nearby" card; "Arriving soon" stays shuttle-only. My Routes: saved CTA routes say CTA's
+  status; the editor lists CTA routes in a "CTA buses" group.
+- Map (map/cta.js, map/layers.js): CTA buses are squared badges with a "CTA" tag (`.sb-bus.sb-bus-cta`, named "CTA bus
+  171, ..."); CTA stops are squares in their own pane under the shuttle stops, from zoom 16 (14 for a focused CTA
+  route); CTA lines are about 2/3 of a shuttle line's width, lifted to 3:1 against the land, and drawn under the
+  shuttle lines (`core/visibility.js drawOrder`: shuttles first, then CTA, unless the rider's map order or a focus
+  says otherwise). A missing bus is held only while other buses of the same feed report.
+- Directions (`core/planner.js`): `data.patterns` makes each CTA route one stop sequence per direction (no ride past a
+  terminal, no "transfer" between two directions of one route); a scheduled CTA time is a timed wait (`waitTimed`,
+  `waitLive:false`, source `schedule`, shown "est."), missed like a live one in refineWalking. Trip following
+  (core/tripprogress.js `followState`) uses CTA live data but never a scheduled CTA time.
+
+**Proxy** (`tools/cta-proxy/worker.js`, owner steps in its README.md, tests `tools/test_cta_proxy.py`): a Cloudflare
+Worker holding the Bus Tracker key as the secret `CTA_KEY`; `GET /cta/v1/live.json` (one CTA refresh per 25 s for
+everyone: 2 getvehicles calls for the 14 routes, getpredictions for the buses within 3 km of Hyde Park) and
+`/cta/v1/health` (counts only); GET / OPTIONS only, every other path 404, no query parameter passed on to CTA; CORS for
+`https://blobberus.github.io` (both Pages sites) plus `EXTRA_ORIGINS`; a daily call budget; CTA's daily limit reported
+as `cta-limit`; the key scrubbed from every message. Privacy: privacy.html "CTA bus data" and About say the proxy gets
+the same request from everyone with nothing about the rider and keeps nothing.
+
+**Tests.** core-cta.js (ids, freshness, schedule decoding on service days, drawOrder, the planner with CTA legs,
+coverage), data-cta.js (time parsing, the proxy answer, demo buses, the three modes, failure fallback), data-static.js
+(the merge), views-cta.js (Routes section, badges, labels, Nearby, My Routes, search, Show running, CTA bulk
+buttons), route-cta.js (route page), map-cta.js (map), tools/test_build_cta.py, tools/test_cta_proxy.py.
+
+**iPhone:** paused (docs/redesign/GLASS-IOS-PAUSED.md has the port list). Not in the live app (its plan is the live
+repo's `CTA Implementation.md`).
