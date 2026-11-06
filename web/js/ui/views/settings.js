@@ -366,6 +366,9 @@ export const CREDITS = Object.freeze([
   { group: "Bus data", items: [
     [["Live bus positions, arrival predictions and service alerts: Passio's public GTFS-Realtime feeds."]],
     [["Routes, stops and timetables: Passio's public GTFS schedule."]],
+    [["CTA routes, stops and timetables (Hyde Park): "], ["CTA's public GTFS schedule", "https://www.transitchicago.com/developers/gtfs/"],
+      [". Live CTA buses, when turned on: "], ["CTA Bus Tracker", "https://www.transitchicago.com/developers/bustracker/"],
+      [", through the app's own proxy. Data provided by Chicago Transit Authority; Straight Bussing is not affiliated with CTA."]],
     [["Data collection: the same public feeds, read every 10 seconds. Data research is currently in progress."]],   // owner 2026-10-16: no data repo link for now
   ] },
 ]);

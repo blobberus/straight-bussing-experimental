@@ -27,10 +27,10 @@ footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--hair
 <body>
 <main>
 <h1>Privacy policy</h1>
-<p class="meta">Straight Bussing, for iPhone and the web. Effective November 4, 2026.</p>
+<p class="meta">Straight Bussing, for iPhone and the web. Effective November 6, 2026.</p>
 
 <p>Straight Bussing is a free, unofficial tracker for the campus shuttles in Hyde Park, Chicago, made as a student project.
-It is not affiliated with or endorsed by the University or by Passio. This policy covers the iPhone app and the web app at
+It is not affiliated with or endorsed by the University, by Passio or by the Chicago Transit Authority (CTA). This policy covers the iPhone app and the web app at
 <a href="./">blobberus.github.io/straight-bussing</a>.</p>
 
 <div class="box">
@@ -38,7 +38,8 @@ It is not affiliated with or endorsed by the University or by Passio. This polic
 anonymously: when each visit starts and, unless you turn it off, how long it lasts, with a random number made in your
 browser instead of any identity; the name of your nearest stop only if you turn that on. Your identity is never collected.
 Apart from these statistics the developer receives nothing unless you send a support request or beta feedback, and runs
-no server of its own. Your live location is never sent anywhere; the only other location data that leaves your device is the rounded start and
+no server of its own, with one exception once live CTA buses are turned on (web test version): a small CTA proxy that
+gets the same request from everyone, with nothing about you in it, and keeps nothing. Your live location is never sent anywhere; the only other location data that leaves your device is the rounded start and
 end of a walking leg, used for walking directions.</p>
 </div>
 
@@ -87,6 +88,14 @@ not tied to a Google login;
 <li><b>Shuttle data.</b> The app downloads the public shuttle feeds from <b>passio3.com</b> (vehicle positions, arrival
 predictions and service alerts). These requests carry no personal data; like any web request, they show your IP address to
 that server.</li>
+<li><b>CTA bus data (web test version).</b> The CTA routes, stops and timetables are public CTA schedule files that come
+with the site from GitHub Pages: your device never asks CTA for them. Live CTA buses are off until the developer turns
+them on; when they are on, the app asks the developer&rsquo;s own CTA proxy (a <b>Cloudflare Workers</b> address,
+workers.dev) for the Hyde Park CTA buses about every 20 seconds while the app is open. That request is the same for
+everyone and carries no location, stop, search, ID or other personal data; the proxy stores and logs nothing about you
+and alone talks to CTA&rsquo;s Bus Tracker, with the developer&rsquo;s key. Like any web request it shows your IP
+address to Cloudflare; <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare&rsquo;s privacy policy</a> applies
+to that.</li>
 <li><b>Place search.</b> Only when the search on your device finds fewer than 5 matches, or when you tap &ldquo;Search for
 &hellip; instead&rdquo;, is text sent to <b>photon.komoot.io</b> (OpenStreetMap geocoder by komoot): the text you typed, or
 its spelling fix when results are shown for the fix, and nothing else. Never your location.</li>

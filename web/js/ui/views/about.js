@@ -29,7 +29,7 @@ export function renderAbout() {
   return `<div class="v-about">
 <section class="v-card v-unofficial" aria-label="Unofficial app">
   <p class="v-prim">Straight Bussing is an unofficial student project.</p>
-  <p class="v-sec">It is not affiliated with or endorsed by the University or by Passio. Arrival times are predictions and can be wrong.</p>
+  <p class="v-sec">It is not affiliated with or endorsed by the University, by Passio or by CTA. Arrival times are predictions and can be wrong.</p>
   <p class="v-sec">For safety rides or anything urgent, use the official service:</p>
   <div class="v-actions"><a class="v-btn v-btn--primary" href="tel:7737028181">Call 773.702.8181</a><a class="v-btn v-btn--secondary" href="https://safety-security.uchicago.edu/Transportation" target="_blank" rel="noopener">Official transportation page</a></div>
 </section>
@@ -39,7 +39,7 @@ export function renderAbout() {
 <ul class="v-plain">
   <li>No account, no ads${usageConfigured() ? "" : ", no tracking"}. Your location, if you allow it, is used on this device; your live location is never stored or sent anywhere. The one exception: when you ask for directions, the rounded start of a walking leg can be your location (see Walking directions).</li>
   <li>Place search: station names and places within a 30-minute walk of campus stops are searched on your device, including spelling fixes. Only when that finds fewer than 5 matches, or when you tap “Search for … instead”, is text sent to <b>photon.komoot.io</b> (OpenStreetMap geocoder): the text you typed, or its spelling fix when results are shown for the fix, and nothing else.</li>
-  <li>Network requests: the public shuttle feeds (<b>passio3.com</b>), map tiles for the area on screen (<b>tiles.openfreemap.org</b>) and the map code (<b>unpkg.com</b>), photon.komoot.io for address search (above), the walking routers and the feedback form (below). The app and its schedule files come from <b>blobberus.github.io</b> (GitHub Pages).</li>
+  <li>Network requests: the public shuttle feeds (<b>passio3.com</b>), map tiles for the area on screen (<b>tiles.openfreemap.org</b>) and the map code (<b>unpkg.com</b>), photon.komoot.io for address search (above), the walking routers and the feedback form (below). The app and its schedule files (CTA's too) come from <b>blobberus.github.io</b> (GitHub Pages). Live CTA buses, once turned on, come from the developer's own CTA proxy (<b>workers.dev</b>, Cloudflare): the same request for everyone, with nothing about you in it.</li>
   <li>Walking directions: only the start and end of each walking leg (your location, when a trip starts there), rounded to about 10 m, are sent to <b>routing.openstreetmap.de</b> (or <b>valhalla1.openstreetmap.de</b> if that is down) to follow sidewalks. Nothing else about you or your trip is sent. If both fail, a straight-line estimate is used and labeled “estimate”.</li>
   <li>Beta feedback: only when you tap “Send feedback” behind the feedback button on the map or “Give feedback” in Settings does a <b>Google Forms</b> page open in a new tab. Nothing is added to its link, and what you type there is sent only when you press Submit.</li>
 ${usageConfigured() ? `  <li>${esc(ABOUT_USAGE)}</li>
@@ -47,16 +47,17 @@ ${usageConfigured() ? `  <li>${esc(ABOUT_USAGE)}</li>
 </ul>
 <p class="v-sec"><a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a> · <a href="support.html?contact=1&amp;app=web&amp;v=${esc(encodeURIComponent(APP_VERSION))}" target="_blank" rel="noopener">Contact support</a></p>
 <h3 class="v-h">How times work</h3>
-<p class="v-sec">Arrival times come from the live shuttle feed. Ride, wait and total times in Directions are estimates from schedules and live predictions, and each one says where it came from. If the feed is late or down, the app tells you.</p>
+<p class="v-sec">Arrival times come from the live shuttle feed. CTA times are CTA's published schedule, marked "Scheduled, est.", until live CTA data is connected. Ride, wait and total times in Directions are estimates from schedules and live predictions, and each one says where it came from. If the feed is late or down, the app tells you.</p>
 <h3 class="v-h">Credits</h3>
 <ul class="v-plain v-sec">
   <li>Live and schedule data: public Passio GTFS and GTFS-Realtime feeds.</li>
+  <li>CTA routes, stops and timetables: CTA's public GTFS schedule; live CTA buses, when on: CTA Bus Tracker. Data provided by Chicago Transit Authority. Not affiliated with CTA.</li>
   <li>Map data and the campus places list: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors (ODbL).</li>
   <li>Map tiles: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, using <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a>. Rendering: Leaflet and MapLibre GL.</li>
   <li>Place search: Photon by komoot. Walking routes: FOSSGIS OSRM and Valhalla.</li>
 </ul>
 <p class="v-foot" data-region="about-data">Version ${esc(APP_VERSION)}</p>
-<p class="v-foot">Unofficial. Not affiliated with the University. Official service: <a href="tel:7737028181">773.702.8181</a>.</p>
+<p class="v-foot">Unofficial. Not affiliated with the University or CTA. Official service: <a href="tel:7737028181">773.702.8181</a>. CTA service: <a href="https://www.transitchicago.com/" target="_blank" rel="noopener">transitchicago.com</a>.</p>
 </div>`;
 }
 
