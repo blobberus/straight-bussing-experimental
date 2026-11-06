@@ -18,6 +18,7 @@ if (q.has('demo')) {
     await import('./map-compass.js');
     await import('./map-linetap.js');
     await import('./map-cta.js');
+    await import('./map-viewsync.js');
   } catch (e) {
     lib.test('import map test modules', () => { throw e; });
   }
