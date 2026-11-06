@@ -22,6 +22,10 @@
  *    then shortest wait, then how many of those an option meets); max 4. Options carry `meets`.
  *  - walk first (owner 2026-10-30, core/rank.js walkFirst): when walking the whole way takes 10 min or less, or
  *    arrives no later than the best bus, a walk option {key:'walk', walkOnly:true, legs:[walk]} leads the list.
+ *  - CTA routes (experimental 2026-11-06, core/agency.js): data.patterns (store.ctaPatterns) gives each CTA route one
+ *    stop sequence per direction, so a ride never runs past a terminal into the other direction. A CTA SCHEDULED time
+ *    (trip update marked sched:true) is a timed wait like a live one (the bus leaves at that time), but the leg says
+ *    so: waitLive false, waitTimed true, source 'schedule' (shown as "est.").
  */
 import { hav, WALK_M_PER_MIN as WALK_M_MIN, WALK_DETOUR as DETOUR } from "./geo.js";
 import { nowS } from "./time.js";
@@ -68,7 +72,7 @@ function makeCtx({ data, predict, walkMins }) {
   const D = data || {};
   const stops = D.stops || {};
   const over = walkMins || {};
-  const live = new Map(); // "rid|stop" -> [{t, tu}] sorted
+  const live = new Map(); // "rid|stop" -> [{t, tu}] sorted (tu.sched: a CTA scheduled time, not a live prediction)
   for (const tu of D.trips || []) {
     const rid = tu && tu.trip && tu.trip.route_id != null ? String(tu.trip.route_id) : null;
     if (!rid) continue;
@@ -109,12 +113,12 @@ function makeCtx({ data, predict, walkMins }) {
     }
     return best;
   };
-  /** Wait to board rid at stopId when ready at readyT: {min, live, t:boardT, tu} or null. */
+  /** Wait to board rid at stopId when ready at readyT: {min, live, timed, t:boardT, tu} or null. */
   const wait = (rid, seq, stopId, readyT) => {
     const arr = live.get(rid + "|" + stopId);
     if (arr) {
       const L = arr.find((x) => x.t >= readyT - GRACE_S);
-      if (L) return { min: Math.max(0, (L.t - readyT) / 60), live: true, t: L.t, tu: L.tu };
+      if (L) return { min: Math.max(0, (L.t - readyT) / 60), live: !L.tu.sched, timed: true, t: L.t, tu: L.tu };
     }
     const n = nBuses[rid];
     if (!n) return null;
@@ -125,9 +129,10 @@ function makeCtx({ data, predict, walkMins }) {
   /** Ride along path after boarding with w: {min, source, conf, alightT, p10?, p90?}. */
   const ride = (rid, seq, path, w) => {
     const a = seq.ids[path[0]], b = seq.ids[path[path.length - 1]];
-    if (w.live && w.tu) {
+    if (w.timed && w.tu) {
       const tb = tripAt(w.tu, b, w.t);
-      if (tb) return { min: Math.max(1, (tb - w.t) / 60), source: "live", conf: 0.8, alightT: tb };
+      if (tb) return w.tu.sched ? { min: Math.max(1, (tb - w.t) / 60), source: "schedule", conf: 0.5, alightT: tb }
+        : { min: Math.max(1, (tb - w.t) / 60), source: "live", conf: 0.8, alightT: tb };
     }
     const key = rid + "|" + path.join(",");
     let r = rideCache.get(key);
@@ -161,7 +166,7 @@ function makeCtx({ data, predict, walkMins }) {
     const ids = path.map((k) => seq.ids[k]);
     const leg = { type: "bus", rid, board: pt(ids[0]), alight: pt(ids[ids.length - 1]),
       path: ids.map((id) => ({ lat: stops[id].lat, lon: stops[id].lon })), stopsPassed: ids.length - 1,
-      wait: w.min, waitLive: w.live, ride: r.min, source: r.source, conf: r.conf, boardT: w.t, alightT: r.alightT,
+      wait: w.min, waitLive: w.live, waitTimed: !!w.timed && !w.live, ride: r.min, source: r.source, conf: r.conf, boardT: w.t, alightT: r.alightT,
       tripId: w.tu && w.tu.trip && w.tu.trip.trip_id != null ? String(w.tu.trip.trip_id) : null,
       vehicleId: w.tu && w.tu.vehicle && w.tu.vehicle.id != null ? String(w.tu.vehicle.id) : null };   // Passio reuses trip ids across buses
     if (r.p10 != null) { leg.p10 = r.p10; leg.p90 = r.p90; }
@@ -174,17 +179,17 @@ function walkLeg(a, b, m, min) {
   return { type: "walk", from: a, to: b, m: Math.round(m), min, source: "estimate" };
 }
 
-/** Direct and one-transfer candidates whose end walks are at most maxM meters. */
+/** Direct and one-transfer candidates whose end walks are at most maxM meters. seqs: key -> {ids, loop, rid}. */
 function candidates(C, seqs, from, to, t0, maxM) {
   const near = {};
-  for (const rid of Object.keys(seqs)) {
+  for (const sk of Object.keys(seqs)) {
     const bo = [], al = [];
-    seqs[rid].ids.forEach((id, i) => {
+    seqs[sk].ids.forEach((id, i) => {
       const b = C.walkTo(from, id, i, "start", maxM), a = C.walkTo(to, id, i, "end", maxM);
       if (b) bo.push(b);
       if (a) al.push(a);
     });
-    near[rid] = { bo, al };
+    near[sk] = { bo, al };
   }
   const start = { lat: from.lat, lon: from.lon, name: "Start" };
   const dest = { lat: to.lat, lon: to.lon, name: "Destination" };
@@ -198,8 +203,8 @@ function candidates(C, seqs, from, to, t0, maxM) {
     walk: (x, y) => x.wm < y.wm - 1e-9 || (Math.abs(x.wm - y.wm) <= 1e-9 && x.arr < y.arr),
     wait: (x, y) => x.w.min < y.w.min - 1e-9 || (Math.abs(x.w.min - y.w.min) <= 1e-9 && x.arr < y.arr),
   };
-  for (const rid of Object.keys(seqs)) {
-    const seq = seqs[rid], { bo, al } = near[rid];
+  for (const sk of Object.keys(seqs)) {
+    const seq = seqs[sk], rid = seq.rid, { bo, al } = near[sk];
     if (!bo.length || !al.length) continue;
     const best = { arr: null, walk: null, wait: null };
     for (const b of bo) {
@@ -222,29 +227,29 @@ function candidates(C, seqs, from, to, t0, maxM) {
       addWalk(legs, start, bl.board, x.b.m, x.b.min);
       legs.push(bl);
       addWalk(legs, bl.alight, dest, x.a.m, x.a.min);
-      cands.push({ key: k === "arr" ? rid : rid + ":" + pair, legs, arr: x.arr, xfer: false });
+      cands.push({ key: k === "arr" ? sk : sk + ":" + pair, legs, arr: x.arr, xfer: false });
     }
   }
 
   // One transfer: earliest arrival of A at each of its stops, then B from linked stops.
-  const rids = Object.keys(seqs);
-  for (const A of rids) {
-    const sa = seqs[A];
+  const keys = Object.keys(seqs);
+  for (const A of keys) {
+    const sa = seqs[A], ra = sa.rid;
     if (!near[A].bo.length) continue;
     const atK = new Array(sa.ids.length).fill(null);
     for (const b of near[A].bo) {
-      const w = C.wait(A, sa, b.id, t0 + b.min * 60);
+      const w = C.wait(ra, sa, b.id, t0 + b.min * 60);
       if (!w) continue;
       for (let k = 0; k < sa.ids.length; k++) {
         const path = pathIdx(sa, b.i, k);
         if (!path) continue;
-        const r = C.ride(A, sa, path, w);
+        const r = C.ride(ra, sa, path, w);
         if (!atK[k] || r.alightT < atK[k].r.alightT) atK[k] = { b, w, r, path };
       }
     }
-    for (const B of rids) {
-      if (B === A || !near[B].al.length) continue;
-      const sb = seqs[B];
+    for (const B of keys) {
+      const sb = seqs[B], rb0 = sb.rid;
+      if (rb0 === ra || !near[B].al.length) continue;   // never a "transfer" to the same route (another direction)
       let best = null;
       sa.ids.forEach((ida, k) => {
         const x = atK[k], s = C.stops[ida];
@@ -254,19 +259,19 @@ function candidates(C, seqs, from, to, t0, maxM) {
           if (!okPt(o)) return;
           const d = ida === idb ? 0 : hav(s, o) * DETOUR;
           if (d > XFER_M) return;
-          const xm = C.xferMin(ida, idb, d), wb = C.wait(B, sb, idb, x.r.alightT + xm * 60);
+          const xm = C.xferMin(ida, idb, d), wb = C.wait(rb0, sb, idb, x.r.alightT + xm * 60);
           if (!wb) return;
           for (const a of near[B].al) {
             const pb = pathIdx(sb, m, a.i);
             if (!pb) continue;
-            const rb = C.ride(B, sb, pb, wb), arr = rb.alightT + a.min * 60;
+            const rb = C.ride(rb0, sb, pb, wb), arr = rb.alightT + a.min * 60;
             if (!best || arr < best.arr) best = { arr, x, d, xm, wb, rb, pb, a };
           }
         });
       });
       if (!best) continue;
       const { x } = best;
-      const l1 = C.busLeg(A, sa, x.path, x.w, x.r), l2 = C.busLeg(B, sb, best.pb, best.wb, best.rb), legs = [];
+      const l1 = C.busLeg(ra, sa, x.path, x.w, x.r), l2 = C.busLeg(rb0, sb, best.pb, best.wb, best.rb), legs = [];
       addWalk(legs, start, l1.board, x.b.m, x.b.min);
       legs.push(l1);
       addWalk(legs, l1.alight, l2.board, best.d, best.xm);
@@ -281,7 +286,7 @@ function candidates(C, seqs, from, to, t0, maxM) {
 /**
  * Plan trips from `from` to `to`. Totals include every walk: to the boarding stop, between stops
  * on a transfer, and from the alighting stop to the destination.
- * @param {{from:{lat,lon}, to:{lat,lon}, now?:number, data:{stops,routes,routeStops,trips,buses},
+ * @param {{from:{lat,lon}, to:{lat,lon}, now?:number, data:{stops,routes,routeStops,trips,buses,patterns?},
  *   predict?:{rideMinutes:Function}, walkMins?:Object<string,number>}} args
  *   walkMins: router minute overrides keyed 'start:<stopId>', 'end:<stopId>', 'xfer:<fromId>><toId>'
  *   (used by refineWalking; normal callers omit it).
@@ -297,7 +302,11 @@ export function plan({ from, to, now, data, predict, walkMins } = {}) {
   const C = makeCtx({ data, predict, walkMins });
   const D = data || {};
   const seqs = {};
-  for (const rid of Object.keys(D.routeStops || {})) seqs[rid] = seqOf(D.routeStops[rid], C.stops);
+  for (const rid of Object.keys(D.routeStops || {})) {
+    const dirs = D.patterns && Array.isArray(D.patterns[rid]) ? D.patterns[rid] : null;
+    if (dirs && dirs.length) dirs.forEach((p, i) => { seqs[rid + "#" + i] = { ...seqOf(p.stops, C.stops), loop: false, rid }; });   // CTA: one per direction
+    else seqs[rid] = { ...seqOf(D.routeStops[rid], C.stops), rid };
+  }
   const sel = { t0, walkOnlyMin: result.walkOnly.min, max: MAX_OPTS, xferGainMin: XFER_GAIN_MIN };
   result.options = pickOptions(candidates(C, seqs, from, to, t0, MAX_WALK), sel);
   // Nothing within 800 m of one end: allow longer end walks (same ranking).
@@ -349,13 +358,13 @@ export async function refineWalking(option, { walkRoute, now, data, from, to, pr
   for (const l of legs) {
     if (l.type === "walk") { t += (Number(l.min) || 0) * 60; continue; }
     if (l.type !== "bus") continue;
-    if (l.waitLive) {
+    if (l.waitLive || l.waitTimed) {   // a live or scheduled departure leaves at its time: arriving later misses it
       if (t > l.boardT + GRACE_S) { missed = true; break; }
       l.wait = Math.max(0, (l.boardT - t) / 60);
     } else {
       l.boardT = t + l.wait * 60;
     }
-    if (!(l.source === "live" && l.alightT > l.boardT)) l.alightT = l.boardT + l.ride * 60;
+    if (!((l.source === "live" || (l.waitTimed && l.source === "schedule")) && l.alightT > l.boardT)) l.alightT = l.boardT + l.ride * 60;
     t = l.alightT;
   }
   if (missed) {

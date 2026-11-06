@@ -42,6 +42,7 @@ import { DEMO } from "../../core/demo.js";
 import { bus } from "../../core/events.js";
 import { WALK_IC, tag, mins, walkMins, walkTotal, optionLines, stepsHTML as stepsFor } from "./tripinfo.js";
 import { svg } from "../icons.js";
+import { allTrips, allBuses } from "../../core/agency.js";
 
 /** The required estimate note under the options. */
 export const NOTE = "Bus times are estimates from schedules and live predictions. They will get more accurate as we collect more ride data.";
@@ -283,7 +284,8 @@ export async function replan({ fresh = false } = {}) {
   const state = cur(), token = ++D.token;
   if (!D.from || !D.to || !state.staticLoaded) { D.result = null; D.refining = false; patchRes(); try { ctxRef?.map?.drawPlan?.(null); } catch (e) { /* */ } return; }
   const now = nowFn(), from = D.from, to = D.to;
-  const data = { stops: state.stops, routes: state.routes, routeStops: state.routeStops, trips: state.trips || [], buses: state.buses || [] };
+  // shuttles and CTA (core/agency.js): CTA predictions or scheduled times (sched, shown as "est."), CTA buses, CTA directions
+  const data = { stops: state.stops, routes: state.routes, routeStops: state.routeStops, trips: allTrips(state), buses: allBuses(state), patterns: state.ctaPatterns || {} };
   let r;
   try { r = deps.plan({ from, to, now, data, predict: deps.predict }); } catch (e) { r = null; }
   if (!r || !Array.isArray(r.options)) { const m = hav(from, to) * 1.2; r = { options: [], walkOnly: { m, min: m / 80 } }; }

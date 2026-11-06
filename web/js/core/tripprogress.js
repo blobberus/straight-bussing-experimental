@@ -27,6 +27,18 @@
 import { arrivalsFor, staleLevel } from "./arrivals.js";
 import { hav, WALK_M_PER_MIN, WALK_DETOUR } from "./geo.js";
 import { routeOrder } from "./notify.js";
+import { allBuses } from "./agency.js";
+
+/**
+ * The live data a trip follows: shuttle and CTA buses, shuttle and CTA predictions, but never a CTA SCHEDULED time
+ * (sched:true): a leg on a scheduled CTA trip keeps the plan's times, flagged as estimates, never "live" (core/agency.js).
+ * @param {object} S store state
+ * @returns {object}
+ */
+function followState(S) {
+  if (!(S.ctaBuses || []).length && !(S.ctaTrips || []).length) return S;
+  return { ...S, buses: allBuses(S), trips: (S.trips || []).concat((S.ctaTrips || []).filter((t) => t && !t.sched)), ctaBuses: [], ctaTrips: [] };
+}
 
 /** Tunables (read-only). */
 export const TRIP = Object.freeze({
@@ -457,7 +469,7 @@ export function tripProgress(journey, state, nowS) {
   const now = num(nowS) != null ? nowS : Date.now() / 1000;
   const J = journey;
   if (!J || J.kind !== "plan" || !Array.isArray(J.legs) || !J.legs.some((l) => l && l.type === "bus" && l.board && l.alight)) return null;
-  const S = state || {};
+  const S = followState(state || {});
   const src = J.legs.filter((l) => l && (l.type === "walk" || (l.type === "bus" && l.board && l.alight)));
   const legs = [];
   let allDone = true, readyT = now, walkStart = num(J.t0), active = -1;
@@ -544,7 +556,7 @@ let memo = null;
 export function tripNow(state, nowS) {
   const now = num(nowS) != null ? nowS : Date.now() / 1000;
   const S = state || {};
-  const k = [S.journey, S.buses, S.trips, S.user, S.stops, S.routeStops, S.lastOk, S.feedTs, S.failed];
+  const k = [S.journey, S.buses, S.trips, S.ctaBuses, S.ctaTrips, S.user, S.stops, S.routeStops, S.lastOk, S.feedTs, S.failed];
   if (memo && Math.abs(now - memo.now) < TRIP.MEMO_S && memo.k.every((x, i) => x === k[i])) return memo.p;
   const p = tripProgress(S.journey, S, now);
   memo = { k, now, p };

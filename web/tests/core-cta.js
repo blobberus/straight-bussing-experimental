@@ -4,6 +4,7 @@ import { isCta, ctaId, splitAgency, allBuses, allTrips, ctaLevel, ctaLive, ctaSo
 import { decodeSchedule, servicesOn, serviceZero, tripsBetween, scheduledTrips, tripsUnderway } from "../js/core/ctasched.js";
 import { chicagoUnix } from "../js/core/timeactive.js";
 import { drawOrder } from "../js/core/visibility.js";
+import { plan, refineWalking } from "../js/core/planner.js";
 
 test("isCta / ctaId / splitAgency: CTA ids are the namespaced ones", () => {
   ok(isCta("cta:171") && isCta("cta:1427") && !isCta("1075") && !isCta(1075) && !isCta(null) && !isCta("xcta:1"));
@@ -104,4 +105,40 @@ test("drawOrder: CTA routes below the shuttles unless focused or ordered up", ()
   eq(drawOrder({ routes, routeOrder: [] }), ["1075", "5702", "cta:55", "cta:171"]);
   eq(drawOrder({ routes, routeOrder: ["cta:171"] }), ["cta:171", "1075", "5702", "cta:55"], "the rider's order wins");
   eq(drawOrder({ routes, routeOrder: [] }, ["cta:55"])[0], "cta:55", "a focused CTA route is on top");
+});
+
+// The planner with a CTA route (two directions) and scheduled CTA times
+const P_NOW = 1_800_000_000;
+const PSTOPS = { "cta:e1": { name: "A (EB)", lat: 41.7950, lon: -87.6100 }, "cta:e2": { name: "B (EB)", lat: 41.7950, lon: -87.6000 }, "cta:e3": { name: "C (EB)", lat: 41.7950, lon: -87.5900 },
+  "cta:w1": { name: "C (WB)", lat: 41.7951, lon: -87.5900 }, "cta:w2": { name: "B (WB)", lat: 41.7951, lon: -87.6000 }, "cta:w3": { name: "A (WB)", lat: 41.7951, lon: -87.6100 } };
+const PDATA = (trips) => ({ stops: PSTOPS, routes: { "cta:55": { short: "55", long: "Garfield" } },
+  routeStops: { "cta:55": ["cta:w1", "cta:w2", "cta:w3", "cta:e1", "cta:e2", "cta:e3"] }, trips, buses: [],
+  patterns: { "cta:55": [{ dir: "Westbound", stops: ["cta:w1", "cta:w2", "cta:w3"] }, { dir: "Eastbound", stops: ["cta:e1", "cta:e2", "cta:e3"] }] } });
+const ptrip = (id, list) => ({ trip: { trip_id: id, route_id: "cta:55" }, vehicle: null, sched: true, stop_time_update: list.map(([s, m]) => ({ stop_id: s, arrival: { time: P_NOW + m * 60 } })) });
+const PTRIPS = [ptrip("cta:sched:55:1:1", [["cta:e1", 8], ["cta:e2", 11], ["cta:e3", 14]]), ptrip("cta:sched:55:0:1", [["cta:w1", 6], ["cta:w2", 9], ["cta:w3", 12]])];
+
+test("planner: a CTA scheduled trip is a timed wait labeled schedule (never live), in the right direction", () => {
+  const r = plan({ from: { lat: 41.7948, lon: -87.6100 }, to: { lat: 41.7948, lon: -87.5900 }, now: P_NOW, data: PDATA(PTRIPS) });
+  const leg = r.options.flatMap((o) => o.legs).find((l) => l.type === "bus");
+  ok(leg, "a CTA option: " + JSON.stringify(r.options.map((o) => o.key)));
+  eq([leg.rid, leg.board.id, leg.alight.id, leg.source, leg.waitLive, leg.waitTimed], ["cta:55", "cta:e1", "cta:e3", "schedule", false, true]);
+  eq([leg.boardT, leg.alightT], [P_NOW + 480, P_NOW + 840], "the scheduled times");
+  eq(leg.tripId, "cta:sched:55:1:1");
+});
+
+test("planner: a CTA ride never runs past the terminal into the other direction", () => {
+  // from A (WB end) to B (WB, further back along Westbound): only an Eastbound ride A>B or walking makes sense
+  const r = plan({ from: { lat: 41.7952, lon: -87.6100 }, to: { lat: 41.7952, lon: -87.6000 }, now: P_NOW, data: PDATA(PTRIPS) });
+  for (const l of r.options.flatMap((o) => o.legs).filter((x) => x.type === "bus")) {
+    const dirOf = (id) => (id.startsWith("cta:e") ? "E" : "W");
+    eq(dirOf(l.board.id), dirOf(l.alight.id), `${l.board.id}>${l.alight.id} stays in one direction`);
+  }
+});
+
+test("refineWalking: a scheduled CTA departure is missed like a live one when the sidewalk walk is longer", async () => {
+  const r = plan({ from: { lat: 41.7948, lon: -87.6100 }, to: { lat: 41.7948, lon: -87.5900 }, now: P_NOW, data: PDATA(PTRIPS) });
+  const opt = r.options.find((o) => o.legs.some((l) => l.type === "bus"));
+  const slow = async (a, b) => ({ m: 1500, min: 20, coords: [[a.lat, a.lon], [b.lat, b.lon]], source: "router" });
+  const out = await refineWalking(opt, { walkRoute: slow, now: P_NOW, data: PDATA(PTRIPS), from: { lat: 41.7948, lon: -87.6100 }, to: { lat: 41.7948, lon: -87.5900 } });
+  ok(out === null || out.legs.filter((l) => l.type === "bus").every((l) => l.boardT >= P_NOW + 20 * 60), "never a bus that left before you get there");
 });
