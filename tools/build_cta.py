@@ -115,6 +115,47 @@ def simplify(pts, tol_m=SIMPLIFY_M):
     return [p for p, kp in zip(pts, keep) if kp]
 
 
+def _xy(p, k):
+    return (p[1] * k, p[0] * 111320.0)
+
+
+def despike(pts, max_leg_m=30.0, min_turn_deg=150.0):
+    """CTA's shapes jog to the curb and back at almost every stop (a -> b -> a, legs of 4 to 11 m): drawn, every CTA line
+    gets tick marks, and a bus following the line wiggles at each stop. Drops repeated points, then (until none is
+    left) every point b where the line turns back by more than min_turn_deg with a leg under max_leg_m."""
+    out = []
+    for p in pts:
+        if not out or (p[0], p[1]) != (out[-1][0], out[-1][1]):
+            out.append(p)
+    if len(out) < 3:
+        return out
+    k = 111320.0 * math.cos(math.radians(out[0][0]))
+    changed = True
+    while changed and len(out) >= 3:
+        changed = False
+        keep = [out[0]]
+        i = 1
+        while i < len(out) - 1:
+            a, b, c = _xy(keep[-1], k), _xy(out[i], k), _xy(out[i + 1], k)
+            ab = (b[0] - a[0], b[1] - a[1])
+            bc = (c[0] - b[0], c[1] - b[1])
+            la, lb = math.hypot(*ab), math.hypot(*bc)
+            if la == 0 or lb == 0:
+                changed = True
+                i += 1
+                continue
+            cos = max(-1.0, min(1.0, (ab[0] * bc[0] + ab[1] * bc[1]) / (la * lb)))
+            if math.degrees(math.acos(cos)) > min_turn_deg and min(la, lb) < max_leg_m:
+                changed = True
+                i += 1
+                continue
+            keep.append(out[i])
+            i += 1
+        keep.append(out[-1])
+        out = keep
+    return out
+
+
 def clip_line(pts, box=BOX, pad_m=CLIP_PAD_M):
     """The runs of a polyline inside the padded box, each extended by one point past the edge. -> [[...], ...]"""
     runs, cur = [], []
@@ -351,7 +392,7 @@ def build(z, today=None, routes=ROUTES, box=BOX):
         for sid, n in cnt.most_common(2):
             if kept and n < MIN_PATTERN_TRIPS * 5:
                 break
-            for run in clip_line(lines.get(sid, []), box):
+            for run in clip_line(despike(lines.get(sid, [])), box):
                 run = [[round(a, 5), round(b, 5)] for a, b in simplify(run)]
                 if run not in shapes_out.setdefault(PREFIX + rid, []):
                     shapes_out[PREFIX + rid].append(run)

@@ -150,6 +150,25 @@ def a_day_of_23_hours_or_more_is_written_as_24_hours():
 
 
 @test
+def despike_drops_the_curb_jogs_at_stops():
+    a, b, c, d = [41.795, -87.600], [41.79509, -87.600], [41.795, -87.599], [41.795, -87.598]   # b: 10 m north and back
+    assert B.despike([a, b, a, c, d]) == [a, c, d], B.despike([a, b, a, c, d])
+    assert B.despike([a, a, c, d]) == [a, c, d], "repeated points dropped"
+    corner = [[41.795, -87.600], [41.796, -87.600], [41.796, -87.599]]   # a real 90 degree corner stays
+    assert B.despike(corner) == corner
+
+
+@test
+def committed_lines_have_no_spikes():
+    out = B.OUT / "shapes.json"
+    if not out.exists():
+        return
+    for rid, lines in json.loads(out.read_text(encoding="utf-8")).items():
+        for line in lines:
+            assert B.despike(line) == line, rid
+
+
+@test
 def merge_patterns_inserts_extra_stops_in_order():
     m = B.merge_patterns([(("a", "b", "d"), 10), (("a", "b", "c", "d"), 3), (("z", "a"), 2), (("q",), 1)])
     assert m == ["z", "a", "b", "c", "d"], m
