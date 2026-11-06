@@ -5,6 +5,7 @@ import { decodeSchedule, servicesOn, serviceZero, tripsBetween, scheduledTrips, 
 import { chicagoUnix } from "../js/core/timeactive.js";
 import { drawOrder } from "../js/core/visibility.js";
 import { plan, refineWalking } from "../js/core/planner.js";
+import { covered } from "../js/core/coverage.js";
 
 test("isCta / ctaId / splitAgency: CTA ids are the namespaced ones", () => {
   ok(isCta("cta:171") && isCta("cta:1427") && !isCta("1075") && !isCta(1075) && !isCta(null) && !isCta("xcta:1"));
@@ -141,4 +142,11 @@ test("refineWalking: a scheduled CTA departure is missed like a live one when th
   const slow = async (a, b) => ({ m: 1500, min: 20, coords: [[a.lat, a.lon], [b.lat, b.lon]], source: "router" });
   const out = await refineWalking(opt, { walkRoute: slow, now: P_NOW, data: PDATA(PTRIPS), from: { lat: 41.7948, lon: -87.6100 }, to: { lat: 41.7948, lon: -87.5900 } });
   ok(out === null || out.legs.filter((l) => l.type === "bus").every((l) => l.boardT >= P_NOW + 20 * 60), "never a bus that left before you get there");
+});
+
+test("coverage: the 800 m note stays about the shuttle routes; a CTA stop alone does not cover a place", () => {
+  const state = { stops: { s1: { name: "Shuttle", lat: 41.79, lon: -87.60 }, "cta:9": { name: "CTA", lat: 41.78, lon: -87.62 } },
+    routeStops: { R1: ["s1"], "cta:63": ["cta:9"] } };
+  ok(covered(state, { lat: 41.7901, lon: -87.6001 }), "near the shuttle stop");
+  ok(!covered(state, { lat: 41.7801, lon: -87.6201 }), "near only a CTA stop: the note still shows");
 });

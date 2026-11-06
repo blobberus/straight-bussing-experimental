@@ -29,6 +29,8 @@ export function covered(state, p) {
   if (!p || p.stop || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return true;
   const stops = state?.stops;
   if (!stops || !Object.keys(stops).length) return true;
-  const rs = state.routeStops && Object.keys(state.routeStops).length ? state.routeStops : undefined;
+  // the shuttle routes only: the note names "the campus shuttle routes" (owner wording); CTA stops do not widen it
+  const shuttle = state.routeStops ? Object.fromEntries(Object.entries(state.routeStops).filter(([rid]) => !String(rid).startsWith("cta:"))) : null;
+  const rs = shuttle && Object.keys(shuttle).length ? shuttle : undefined;
   return nearestStops(stops, p, { max: 1, maxM: COVER_M, routeStops: rs }).length > 0;
 }
