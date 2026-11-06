@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>running</title></head><body><pre id="r"></pre>
+<!-- tools/test_cta_proxy.py serves this page next to a copy of worker.js and reads the title (headless Edge) -->
+<script type="module">
+import W, { _reset, CACHE_S, nearHydePark } from "./worker.js";
+const out = [], ok = (c, m) => out.push((c ? "ok   " : "FAIL ") + m);
+const KEY = "SECRETKEY123", env = { CTA_KEY: KEY };
+let calls = [];
+const veh = (vid, rt, lat, lon) => ({ vid, rt, lat: String(lat), lon: String(lon), hdg: "90", tmstmp: "20261106 08:33:10", tatripid: "T" + vid, des: "x" });
+const answer = (body) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+globalThis.fetch = async (url) => {
+  calls.push(String(url));
+  const u = new URL(url), call = u.pathname.split("/").pop();
+  if (call === "getvehicles") {
+    return answer(u.searchParams.get("rt").includes("171")
+      ? { "bustime-response": { vehicle: [veh("8001", "171", 41.79, -87.60), veh("8002", "4", 41.88, -87.62), veh("8003", "4", 41.83, -87.607)], error: [{ rt: "192", msg: "No data found for parameter" }] } }
+      : { "bustime-response": { error: [{ rt: "X4", msg: "No data found for parameter" }] } });
+  }
+  if (call === "getpredictions") {
+    return answer({ "bustime-response": { prd: u.searchParams.get("vid").split(",").map((v) => ({ vid: v, rt: "171", stpid: "1427", prdtm: "20261106 08:40", tatripid: "T" + v, dyn: 0 })) } });
+  }
+  return answer({});
+};
+// a browser will not set an Origin header on a Request (forbidden header), so the test hands the Worker a request-like
+// object with the parts it reads (url, method, headers.get)
+const req = (path, origin, method = "GET") => ({ url: "https://p.example" + path, method, headers: { get: (k) => (String(k).toLowerCase() === "origin" ? origin || null : null) } });
+const get = (path, origin, method = "GET") => W.fetch(req(path, origin, method), env);
+try {
+  _reset();
+  let r = await get("/cta/v1/live.json?_=123", "https://blobberus.github.io");
+  const j = await r.json(), text = JSON.stringify(j);
+  ok(r.status === 200 && j.ok === true && j.v === 1, "live.json answers ok");
+  ok(j.vehicles.map((v) => v.vid).join() === "8001,8003", "only buses near Hyde Park (8002 downtown left out): " + j.vehicles.map((v) => v.vid));
+  ok(j.predictions.length === 2 && j.predictions.every((p) => p.vid === "8001" || p.vid === "8003"), "predictions for those buses");
+  ok(j.errors.length === 0, "CTA's normal 'No data found' is not an error");
+  ok(r.headers.get("Access-Control-Allow-Origin") === "https://blobberus.github.io", "CORS for the Pages origin");
+  ok(!text.includes(KEY), "the key is not in the answer");
+  ok(calls.every((c) => c.startsWith("https://www.ctabustracker.com/bustime/api/v3/")), "only CTA Bus Tracker is called");
+  ok(calls.filter((c) => c.includes("getvehicles")).length === 2, "14 routes = 2 vehicle calls of up to 10");
+  ok(!calls.some((c) => c.includes("_=123")), "no rider query parameter is passed on to CTA");
+  const n = calls.length;
+  await get("/cta/v1/live.json", "https://blobberus.github.io");
+  await Promise.all([get("/cta/v1/live.json"), get("/cta/v1/live.json")]);
+  ok(calls.length === n, "answers within " + CACHE_S + " s come from the cache: no new CTA call");
+  r = await get("/cta/v1/live.json", "https://evil.example");
+  ok(!r.headers.get("Access-Control-Allow-Origin"), "no CORS for another origin");
+  r = await get("/cta/v1/live.json", "http://127.0.0.1:8000");
+  ok(!r.headers.get("Access-Control-Allow-Origin"), "no CORS for a local origin unless EXTRA_ORIGINS lists it");
+  r = await W.fetch(req("/cta/v1/live.json", "http://127.0.0.1:8000"), { ...env, EXTRA_ORIGINS: "http://127.0.0.1:8000" });
+  ok(r.headers.get("Access-Control-Allow-Origin") === "http://127.0.0.1:8000", "EXTRA_ORIGINS for local testing");
+  r = await get("/bustime/api/v3/getvehicles?rt=8");
+  ok(r.status === 404, "any other path is 404 (no open relay to CTA)");
+  r = await get("/cta/v1/live.json", "https://blobberus.github.io", "POST");
+  ok(r.status === 405, "only GET");
+  r = await get("/cta/v1/live.json", "https://blobberus.github.io", "OPTIONS");
+  ok(r.status === 204 && r.headers.get("Access-Control-Allow-Methods") === "GET, OPTIONS", "CORS preflight");
+  r = await get("/cta/v1/health");
+  const h = await r.json();
+  ok(h.calls_today === n && !JSON.stringify(h).includes(KEY), "health: counts only");
+  _reset();
+  r = await W.fetch(req("/cta/v1/live.json"), {});
+  ok((await r.json()).ok === false, "no key set: ok:false, never a crash");
+  _reset();
+  globalThis.fetch = async () => answer({ "bustime-response": { error: [{ msg: "Transaction limit for current day has been exceeded." }] } });
+  r = await get("/cta/v1/live.json");
+  const lim = await r.json();
+  ok(lim.ok === false && lim.errors[0] === "cta-limit", "CTA's daily limit is reported as cta-limit");
+  _reset();
+  globalThis.fetch = async () => { throw new Error("boom " + KEY); };
+  r = await get("/cta/v1/live.json");
+  const bad = await r.json();
+  ok(bad.ok === false && !JSON.stringify(bad).includes(KEY), "a network failure: ok:false, the key scrubbed from the message");
+  ok(nearHydePark(41.79, -87.60) && !nearHydePark(41.88, -87.63), "nearHydePark");
+} catch (e) { out.push("FAIL exception " + e); }
+document.getElementById("r").textContent = out.join("\n");
+const fail = out.filter((l) => l.startsWith("FAIL")).length;
+document.title = `TESTS pass=${out.length - fail} fail=${fail}`;
+</script></body></html>
