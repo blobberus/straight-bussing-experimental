@@ -265,12 +265,15 @@ function timelineHTML(state, rid, part, o) {
   ids.forEach((sid, i) => {
     const all = state.liveLoaded || cta ? arrivalsFor(state, sid, { routeId: rid, nowS: now }) : [];   // a CTA route never waits for the shuttle feed
     const a = picked ? busArrival(all, pk) : all[0];   // a picked bus: its own time only, never another bus's
-    const eta = etaLabel(a?.t, now, cta ? !!a && arrStale(a, state, now) : stale), name = state.stops?.[sid]?.name || sid;
+    const est = cta ? !!a && arrStale(a, state, now) : stale;
+    let eta = etaLabel(a?.t, now, est);
+    if (cta && est && eta === "Now") eta = "~Now";   // a scheduled CTA time is never the live green "Now"
+    const name = state.stops?.[sid]?.name || sid;
     const here = busAt.get(i) || [];
     const pill = here.map((b) => `<span class="v-tlbus${b.stale ? " is-stale" : ""}${b.key === pk ? " is-picked" : ""}" style="background:${color};color:${fg}">${esc(b.name)} heading here${b.stale ? ` &middot; seen ${esc(ago(b.seen, now))}` : ""}</span>`).join("");
     // one element for screen readers (iOS RouteDetailView): name, "next bus in N min" / "no prediction", the bus heading here
     const who = picked ? pname : "next bus";
-    const old = here.find((b) => b.stale), label = `${name}${eta ? `, ${who} ` + (eta === "Now" ? "now" : "in " + eta.replace("~", "about ")) : picked ? `, no prediction for ${pname}` : ", no prediction"}${here.length ? ", a bus is heading here" + (old ? `, seen ${ago(old.seen, now)}` : "") : ""}`;
+    const old = here.find((b) => b.stale), label = `${name}${eta ? `, ${who} ` + (eta === "Now" ? "now" : eta === "~Now" ? "about now" : "in " + eta.replace("~", "about ")) : picked ? `, no prediction for ${pname}` : ", no prediction"}${here.length ? ", a bus is heading here" + (old ? `, seen ${ago(old.seen, now)}` : "") : ""}`;
     const last = i === ids.length - 1;
     let rail = last && !loop ? "" : `<span class="r-seg" aria-hidden="true">${CHEVRON}</span>`;
     for (const b of railAt.get(i) || []) {

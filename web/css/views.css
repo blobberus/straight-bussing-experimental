@@ -89,6 +89,7 @@
 .v-stopacts .v-btn { flex: 1 1 auto; padding: 0 var(--s-3); }
 .v-chipbtn { position: relative; display: inline-grid; place-items: center; min-width: var(--tap); min-height: var(--tap); margin: -10px -6px; padding: 0; border: 0; background: none; cursor: pointer; }
 .v-chipbtn:active { opacity: .6; }
+.v-chipbtn:has(.chip--cta) { margin-inline: 0; }   /* the wider CTA badges ("CTA 171") must not overlap their neighbors */
 .v-addr { margin: 0; }
 
 /* ---------- Routes station filter chip ("Routes to X" with a clear button) ---------- */

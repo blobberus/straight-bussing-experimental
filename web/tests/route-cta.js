@@ -52,3 +52,9 @@ test("shuttle route page unchanged by the CTA slices", () => {
   ok(!h.includes("r-dir") && !h.includes("transitchicago"), "no direction headings, no CTA contact");
   ok(h.includes("Times are live predictions"));
 });
+
+test("CTA route page: a scheduled time due now reads ~Now, never the live green Now", () => {
+  const s = cta({ ctaTrips: [{ trip: { trip_id: "cta:sched:4:1:2", route_id: "cta:4" }, vehicle: null, sched: true, stop_time_update: [{ stop_id: "cta:10", arrival: { time: NOW + 20 } }] }] });
+  const h = renderRoute(s, NOW);
+  ok(h.includes('<span class="v-tleta">~Now</span>') && !h.includes("is-now"), "muted ~Now");
+});
