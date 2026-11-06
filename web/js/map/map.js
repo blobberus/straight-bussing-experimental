@@ -12,6 +12,7 @@ import { createNetworkLayer, createBusLayer, sig } from './layers.js';
 import { createFavoritesLayer } from './favorites.js';
 import { createCredits } from './credits.js';
 import { createLandmarkLayer } from './landmarks.js';
+import { isCta, squareMarker, CTA_STOP_PANE, CTA_STOP_PANE_Z } from './cta.js';
 import { alongShape, normLatLngs, toLatLng, unwrapDeg } from './geometry.js';
 import { safeColor, esc } from '../core/esc.js';
 import { offShort } from '../core/tripyou.js';
@@ -22,7 +23,7 @@ const TOP_PAD = 132;      // clears the floating search bar and the locate butto
 const FIT_S = 0.6;        // fitTo glide (s). flyToBounds, not fitBounds: Leaflet's CSS zoom animation scales the
                           // vector basemap canvas down on zoom-out, leaving blank margins for ~250 ms
 const PANES = { sbLines: 390, sbFocusLines: 394, sbPlan: 402,
-  sbLabels: 410, sbStops: 420, sbPlanStops: 425, sbHighlight: 430, sbSel: 440 };   // sbLabels: building names above the lines
+  sbLabels: 410, [CTA_STOP_PANE]: CTA_STOP_PANE_Z, sbStops: 420, sbPlanStops: 425, sbHighlight: 430, sbSel: 440 };   // sbLabels: building names above the lines; CTA stops under the shuttle stops
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 function hub() {
@@ -130,7 +131,10 @@ export function createMap(elId) {
     cone.style.setProperty('--sb-spread', Math.round(head.spread) + 'deg');
   }
 
-  /** (Re)draw the selection ring; a favorite gets a wider, unfilled ring around its star badge. */
+  /**
+   * (Re)draw the selection ring; a favorite gets a wider, unfilled ring around its star badge. A CTA stop's ring is a
+   * square like the stop (map/cta.js).
+   */
   function renderSel() {
     const stop = selStop, ll = toLatLng(stop);
     const fav = !!ll && favs.has(stop.id);
@@ -140,8 +144,9 @@ export function createMap(elId) {
     selSig = s;
     selG.clearLayers();
     if (!ll) return;
-    const m = L.circleMarker(ll, { pane: 'sbSel', radius: fav ? 15 : 8, weight: 3, className: fav ? 'sb-sel sb-sel-fav' : 'sb-sel',
-      fillOpacity: fav ? 0 : 1, interactive: false });
+    const cta = isCta(stop.id), mark = cta ? squareMarker : L.circleMarker;
+    const m = mark(ll, { pane: 'sbSel', radius: fav ? (cta ? 14 : 15) : 8, weight: 3, corner: fav ? 6 : 2,
+      className: (fav ? 'sb-sel sb-sel-fav' : 'sb-sel') + (cta ? ' sb-sel-cta' : ''), fillOpacity: fav ? 0 : 1, interactive: false });
     if (stop.name) m.bindTooltip(String(stop.name), { permanent: true, direction: 'top', offset: [0, fav ? -17 : -10], className: 'sb-sel-label' });
     m.addTo(selG);
   }
@@ -317,8 +322,9 @@ export function createMap(elId) {
       hlSig = s;
       hlG.clearLayers();
       for (const it of list) {
-        const ll = toLatLng(it);
-        L.circleMarker(ll, { pane: 'sbHighlight', radius: 11, weight: 3, className: 'sb-hl', interactive: false }).addTo(hlG);
+        const ll = toLatLng(it), cta = isCta(it.id);   // a CTA stop: a square ring, like the stop
+        (cta ? squareMarker : L.circleMarker)(ll, { pane: 'sbHighlight', radius: cta ? 10 : 11, weight: 3, corner: 3,
+          className: cta ? 'sb-hl sb-hl-cta' : 'sb-hl', interactive: false }).addTo(hlG);
         L.circleMarker(ll, { pane: 'sbHighlight', radius: 22, stroke: false, fillOpacity: 0, className: 'sb-halo', bubblingMouseEvents: false })
           .on('click', () => (hlPick ? hlPick(String(it.id)) : stopTap.emit(String(it.id)))).addTo(hlG);
       }

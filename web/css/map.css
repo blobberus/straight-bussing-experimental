@@ -180,6 +180,19 @@
 .sb-map .leaflet-zoom-anim .leaflet-marker-icon.sb-busicon{transition:transform .25s cubic-bezier(0,0,.25,1)}
 .sb-map .leaflet-marker-icon.sb-busicon:focus-visible{outline:2px solid var(--sb-accent);outline-offset:3px;border-radius:10px}
 
+/* CTA (experimental, owner 2026-11-06: "make the bus shapes identifiable to be cta and make their stations square";
+   map/cta.js). Never by color alone: a CTA bus is a squared badge (radius 3, the shuttle's is 7) with a "CTA" tag before
+   the route number, printed in the ring color (white with label ink on the light map, the land with light ink on the dark
+   map: 18:1 / 15:1) so it reads on every CTA color; the number stays white on the darkened CTA color (4.5:1 or more,
+   tools/build_cta.py). CTA stops are squares (stroke and fill as the round shuttle stops), CTA lines thinner
+   (map/cta.js CTA_LINE_WIDTHS). A favorite CTA stop's star badge is a rounded square; its selection ring is square. */
+.sb-bus.sb-bus-cta{border-radius:3px;padding:0 6px 0 0;gap:5px}
+.sb-bus-cta-tag{position:relative;align-self:stretch;display:flex;align-items:center;padding:0 3px 0 2px;
+  background:var(--sb-bus-ring);color:var(--sb-text);font:800 8.5px/1 var(--font,system-ui,sans-serif);letter-spacing:.03em}
+.sb-bus-cta .sb-you-ring{border-radius:8px}
+.sb-fav.sb-fav-cta{border-radius:5px}
+.sb-fav-sm .sb-fav.sb-fav-cta{border-radius:4px}
+
 /* raster fallback basemap in dark */
 .sb-map.sb-dark .sb-raster{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88)}
 
@@ -194,4 +207,5 @@
 @media (forced-colors:active){
   .sb-bus,.sb-me,.sb-pin-end,.sb-fav{border:2px solid CanvasText;forced-color-adjust:none}
   .sb-bus.is-picked{outline-color:Highlight}
+  .sb-bus-cta-tag{background:Canvas;color:CanvasText}
 }

@@ -6,6 +6,8 @@
  * Leaflet, so this module can be imported without `L` for unit tests.
  * Lines stack by `order` (index 0 on top); focused routes always above unfocused ones. A bus is faded exactly when its
  * route is (core/visibility.js busFaded, owner 2026-11-04).
+ * CTA routes (ids "cta:<id>", experimental 2026-11-06) are drawn by the same code; map/cta.js holds what differs: thinner
+ * lines under the shuttle lines, square stops (from zoom 16 unless in focus), a squared badge with a "CTA" tag.
  */
 import { safeColor, textOn } from '../core/esc.js';
 import { bearing as geoBearing } from '../core/geo.js';
@@ -15,6 +17,7 @@ import { unwrapDeg } from './geometry.js';
 import { prepareShape, follow, pathCum, pointAt, advance, headingAt } from './track.js';
 import { busKey, busNumbers } from '../core/busnum.js';
 import { busFaded } from '../core/visibility.js';
+import { isCta, CTA_LINE_WIDTHS, CTA_STOP_MIN_Z, CTA_STOP_PANE, CTA_STOP_PANE_Z, ctaStopStyle, squareMarker, markCtaBus, markerName } from './cta.js';
 
 const ids = new WeakMap();
 let nextId = 1;
@@ -54,7 +57,7 @@ const size = (o) => (o && typeof o === 'object' ? Object.keys(o).length : 0);
 /**
  * Draw lists for the network, bottom to top: `back` (unfocused routes) then `front` (focused,
  * always above). `order` is top-most first; routes missing from it sit below every listed route,
- * in data order. Hidden routes are dropped unless focused.
+ * in data order, shuttles above CTA routes. Hidden routes are dropped unless focused.
  * @param {string[]} ids route ids that have shapes (data order)
  * @param {{hidden?:string[], focus?:string[]|null, order?:string[]}} o
  * @returns {{back:string[], front:string[]}}
@@ -64,7 +67,8 @@ export function stackOrder(ids, o = {}) {
   const vis = (ids || []).map(String).filter((r) => !hidden.has(r) || focus?.has(r));
   const set = new Set(vis), top = [];
   for (const r of (o.order || []).map(String)) if (set.has(r) && !top.includes(r)) top.push(r);
-  for (const r of vis) if (!top.includes(r)) top.push(r);
+  const rest = vis.filter((r) => !top.includes(r));
+  top.push(...rest.filter((r) => !isCta(r)), ...rest.filter(isCta));   // unlisted: shuttle lines above CTA lines
   const bottomUp = top.reverse();
   return { back: bottomUp.filter((r) => !focus?.has(r)), front: bottomUp.filter((r) => !!focus?.has(r)) };
 }
@@ -140,6 +144,14 @@ function widthAt(t, z) {
 export function lineWeight(z) {
   return widthAt(LINE_WIDTHS, z);
 }
+/**
+ * A CTA route's line weight in px (map/cta.js CTA_LINE_WIDTHS: about two thirds of a shuttle line). Focus adds FOCUS_EXTRA.
+ * @param {number} z
+ * @returns {number}
+ */
+export function ctaLineWeight(z) {
+  return widthAt(CTA_LINE_WIDTHS, z);
+}
 /** Focused lines are this much wider (spec 11.3): 5 against 3 at z15, plus full opacity while the rest dim to 0.2. */
 export const FOCUS_EXTRA = 2;
 
@@ -181,7 +193,8 @@ export function routeLabel(rid, routes) {
 /**
  * Network layer: route lines in two panes (unfocused, focused above), the colored line only (no outline, 2026-11-04),
  * right under its own lines in stack order so a higher-priority route covers lower ones where they
- * overlap; stops in their own group shown at zoom >= 14; chevrons along 1-3 focused routes.
+ * overlap; stops in their own group shown at zoom >= 14 (CTA stops: squares in their own pane under the shuttle stops,
+ * from CTA_STOP_MIN_Z unless in focus); chevrons along 1-3 focused routes.
  * @param {L.Map} map
  * @param {{onStopTap:(id:string)=>void}} cb
  * lineAt(containerPoint) names the route line under a tap: the topmost one drawn (map/geometry.js lineAt).
@@ -190,34 +203,36 @@ export function routeLabel(rid, routes) {
 export function createNetworkLayer(map, cb) {
   const L = window.L;
   const lines = L.layerGroup().addTo(map);
-  const stopsG = L.layerGroup();
+  const stopsG = L.layerGroup(), ctaG = L.layerGroup();   // ctaG: CTA stops of routes not in focus (zoom >= CTA_STOP_MIN_Z)
+  if (!map.getPane(CTA_STOP_PANE)) map.createPane(CTA_STOP_PANE).style.zIndex = String(CTA_STOP_PANE_Z);
   const chev = createChevronLayer(map);
   let last = '', polys = [], stopPts = [], hits = [], stopMks = [];   // hits: drawn route lines, bottom to top: {rid, ll, bounds}
   const showStops = () => {
-    const on = map.getZoom() >= 14;
-    if (on && !map.hasLayer(stopsG)) stopsG.addTo(map);
-    else if (!on && map.hasLayer(stopsG)) map.removeLayer(stopsG);
+    for (const [g, on] of [[stopsG, map.getZoom() >= 14], [ctaG, map.getZoom() >= CTA_STOP_MIN_Z]]) {
+      if (on && !map.hasLayer(g)) g.addTo(map);
+      else if (!on && map.hasLayer(g)) map.removeLayer(g);
+    }
   };
 
   function draw(o, dimAll = false) {
     const s = networkSig(o, dimAll);
     if (s === last) return false;
     last = s;
-    lines.clearLayers(); stopsG.clearLayers(); polys = []; stopPts = []; hits = []; stopMks = [];
+    lines.clearLayers(); stopsG.clearLayers(); ctaG.clearLayers(); polys = []; stopPts = []; hits = []; stopMks = [];
     const routes = o.routes || {}, shapes = o.shapes || {}, hidden = new Set((o.hidden || []).map(String));
     const focus = focusSet(o.focus);
-    const w = lineWeight(map.getZoom());
+    const z = map.getZoom();
     const { back, front: fronts } = stackOrder(Object.keys(shapes), o);
     for (const rid of [...back, ...fronts]) {
       // network state: every line at 0.9; focused state: focused lines 2 px wider at full opacity, the others at 0.2
       // (spec 11.3); no outlines (owner 2026-11-04)
       const front = !!focus?.has(rid), dim = dimAll || (focus && !front), bonus = front && !dimAll ? FOCUS_EXTRA : 0;
-      const color = safeColor(routes[rid]?.color), pane = front ? 'sbFocusLines' : 'sbLines';
+      const color = safeColor(routes[rid]?.color), pane = front ? 'sbFocusLines' : 'sbLines', cta = isCta(rid);
       const segs = (shapes[rid] || []).filter((pts) => pts && pts.length >= 2);
       for (const pts of segs) {
-        const line = L.polyline(pts, { pane, className: 'sb-route', color, weight: w + bonus,
+        const line = L.polyline(pts, { pane, className: cta ? 'sb-route sb-route-cta' : 'sb-route', color, weight: (cta ? ctaLineWeight(z) : lineWeight(z)) + bonus,
           opacity: dim ? 0.2 : front ? 1 : 0.9, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(lines);
-        polys.push({ line, bonus });
+        polys.push({ line, bonus, cta });
         hits.push({ rid, ll: pts, bounds: L.latLngBounds(pts), bonus });
       }
     }
@@ -228,23 +243,26 @@ export function createNetworkLayer(map, cb) {
     for (const [id, st] of Object.entries(o.stops || {})) {
       const rs = (o.stopRoutes?.[id] || []).map(String).filter((r) => (focus ? focus.has(r) : !hidden.has(r)));
       if (!rs.length || !Number.isFinite(st?.lat) || !Number.isFinite(st?.lon)) continue;
-      const single = new Set(rs).size === 1;
-      const ll = [st.lat, st.lon];
-      stopPts.push(ll);
-      // a circle in the card color with a route-color stroke; a stop of several routes gets the neutral label2 stroke
-      stopMks.push(L.circleMarker(ll, { pane: 'sbStops', ...stopStyle(map.getZoom()), color: single ? safeColor(routes[rs[0]]?.color) : '#5c5c63',
-        className: single ? 'sb-stop' : 'sb-stop sb-stop-multi', opacity: dimAll ? 0.4 : 1, fillOpacity: dimAll ? 0.4 : 1, interactive: false }).addTo(stopsG));
-      L.circleMarker(ll, { pane: 'sbStops', radius: 22, stroke: false, fillOpacity: 0, className: 'sb-halo', bubblingMouseEvents: false })
-        .on('click', () => cb.onStopTap(id)).addTo(stopsG);
+      const single = new Set(rs).size === 1, cta = isCta(id);
+      const ll = [st.lat, st.lon], g = cta && !focus ? ctaG : stopsG, pane = cta ? CTA_STOP_PANE : 'sbStops';
+      if (g === stopsG) stopPts.push(ll);   // building names keep off the stops drawn from zoom 14
+      // a circle (CTA: a square, map/cta.js) in the card color with a route-color stroke; a stop of several routes gets
+      // the neutral label2 stroke
+      const opts = { pane, ...(cta ? ctaStopStyle(z) : stopStyle(z)), color: single ? safeColor(routes[rs[0]]?.color) : '#5c5c63',
+        className: (cta ? 'sb-stop sb-stop-cta' : 'sb-stop') + (single ? '' : ' sb-stop-multi'),
+        opacity: dimAll ? 0.4 : 1, fillOpacity: dimAll ? 0.4 : 1, interactive: false, sbCta: cta };
+      stopMks.push((cta ? squareMarker(ll, opts) : L.circleMarker(ll, opts)).addTo(g));
+      L.circleMarker(ll, { pane, radius: 22, stroke: false, fillOpacity: 0, className: 'sb-halo', bubblingMouseEvents: false })
+        .on('click', () => cb.onStopTap(id)).addTo(g);
     }
     showStops();
     return true;
   }
 
   function restyle() {
-    const z = map.getZoom(), w = lineWeight(z), ss = stopStyle(z);
-    for (const p of polys) p.line.setStyle({ weight: w + p.bonus });
-    for (const m of stopMks) if (m.options.radius !== ss.radius) m.setStyle(ss).setRadius(ss.radius);
+    const z = map.getZoom(), w = lineWeight(z), wc = ctaLineWeight(z), ss = stopStyle(z), cs = ctaStopStyle(z);
+    for (const p of polys) p.line.setStyle({ weight: (p.cta ? wc : w) + p.bonus });
+    for (const m of stopMks) { const st = m.options.sbCta ? cs : ss; if (m.options.radius !== st.radius) m.setStyle(st).setRadius(st.radius); }
     showStops();
     chev.redraw();
   }
@@ -270,9 +288,9 @@ const STALE_S = 60;
 /**
  * A bus marker (spec 11.4): a 26 pt rounded rectangle in the route color with a 2 pt ring, the short name in mapBadge (10 pt
  * over five characters), the bus number inside it after a thin divider when the line has 2 or more buses, and the heading
- * notch in the route color on the ring.
+ * notch in the route color on the ring. A CTA bus (cta): squared, with a "CTA" tag before the number (map/cta.js).
  */
-function busIcon(color, label, num = 0) {
+function busIcon(color, label, num = 0, cta = false) {
   const root = document.createElement('div');
   root.className = 'sb-bus';
   root.style.setProperty('--c', color);
@@ -281,6 +299,7 @@ function busIcon(color, label, num = 0) {
   const tx = document.createElement('span'); tx.className = 'sb-bus-tx'; tx.textContent = label;
   if (label.length > 5) tx.classList.add('sb-bus-tx-sm');
   root.append(hd, tx);
+  if (cta) markCtaBus(root);
   setNum(root, num);
   return window.L.divIcon({ className: 'sb-busicon', html: root, iconSize: [32, 26], iconAnchor: [16, 13] });
 }
@@ -313,9 +332,10 @@ const NORMAL_M = 350, GLIDE_GAP_S = 30;
 /** Off the line, a move longer than this (m) is drawn as a jump: a straight glide would cross the blocks. */
 const STRAIGHT_M = 150;
 /**
- * A bus missing from a poll while other buses still report keeps its badge this long (s), so a poll that drops it does
- * not make it blink. A poll with no bus at all clears the map at once (data/live.js already held one odd empty answer),
- * so the map never shows buses while the status pill says none report.
+ * A bus missing from a poll while other buses of its feed still report keeps its badge this long (s), so a poll that
+ * drops it does not make it blink. A poll with no bus at all clears the map at once (data/live.js already held one odd
+ * empty answer), so the map never shows buses while the status pill says none report; per feed: a Passio poll with no
+ * bus clears the shuttles at once even while CTA buses report (and the reverse).
  */
 export const MISSING_S = 45;
 
@@ -468,9 +488,12 @@ export function createBusLayer(map, cb, opt = {}) {
     nameMarker(m);
   }
 
-  /** The marker's name: "Bus 2, Red Line/Arts Block" when its route shows several buses, else "Route RED bus". */
+  /**
+   * The marker's name: "Bus 2, Red Line/Arts Block" when its route shows several buses, else "Route RED bus"; a CTA bus
+   * says CTA ("CTA bus 171, U. of Chicago/Hyde Park", map/cta.js markerName).
+   */
   function nameMarker(m) {
-    const base = m.num ? `Bus ${m.num}, ${m.name}` : `Route ${m.label} bus`;
+    const base = markerName(isCta(m.rid), m.label, m.name, m.num);
     const text = m.key === youId ? `You are on this bus: ${base}` : base;
     const el = m.mk.getElement();
     if (el) { el.setAttribute('title', text); el.setAttribute('aria-label', text); }
@@ -494,7 +517,7 @@ export function createBusLayer(map, cb, opt = {}) {
     const hidden = new Set((o.hidden || []).map(String)), focus = focusSet(o.focus);
     const plan = Array.isArray(o.plan) ? o.plan : null;
     const nums = busNumbers(buses), sel = o.selected != null ? String(o.selected) : null;
-    const seen = new Set(), listed = new Set();
+    const seen = new Set(), listed = new Set(), feeds = { cta: 0, shuttle: 0 };   // buses listed per feed (Passio, CTA)
     let changed = 0;
     for (const v of buses || []) {
       const id = busKey(v);
@@ -502,6 +525,7 @@ export function createBusLayer(map, cb, opt = {}) {
       const lat = +v?.position?.latitude, lon = +v?.position?.longitude;
       if (id == null || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
       listed.add(String(id));
+      feeds[isCta(rid) ? 'cta' : 'shuttle']++;
       if (hidden.has(rid) && !focus?.has(rid)) continue;   // never a hidden route's bus; other routes in focus: faded
       const key = String(id);
       seen.add(key);
@@ -523,8 +547,8 @@ export function createBusLayer(map, cb, opt = {}) {
         if (m) group.removeLayer(m.mk);
         const r0 = follow(prep, null, null, [lat, lon], { bearing: feed });   // a new badge starts on its line
         const start = r0.to ? r0.to.pt : [lat, lon];
-        const mk = L.marker(start, { icon: busIcon(color, label, num), zIndexOffset: 500, keyboard: false,
-          title: num ? `Bus ${num}, ${name}` : `Route ${label} bus`, riseOnHover: true });
+        const mk = L.marker(start, { icon: busIcon(color, label, num, isCta(rid)), zIndexOffset: 500, keyboard: false,
+          title: markerName(isCta(rid), label, name, num), riseOnHover: true });
         const info = { id: key, rid, label: v.vehicle?.label != null ? String(v.vehicle.label) : '' };
         mk.on('click', () => cb.onBusTap(info));
         mk.addTo(group);
@@ -556,8 +580,9 @@ export function createBusLayer(map, cb, opt = {}) {
     }
     for (const [key, m] of markers) {
       if (seen.has(key)) { m.gone = null; continue; }
-      // not in this poll while others are (not hidden by the rider): keep it where it is for MISSING_S, then remove it
-      if (!listed.has(key) && listed.size) {
+      // not in this poll while others of its feed are (not hidden by the rider): keep it where it is for MISSING_S, then
+      // remove it. Per feed: CTA buses never keep a shuttle on the map after Passio stops sending any (or the reverse).
+      if (!listed.has(key) && feeds[isCta(m.rid) ? 'cta' : 'shuttle']) {
         if (m.gone == null) m.gone = now;
         if (now - m.gone <= MISSING_S) continue;
       }

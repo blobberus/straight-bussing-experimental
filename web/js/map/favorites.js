@@ -9,6 +9,7 @@
  * class toggles on existing nodes.
  */
 import { sig } from './layers.js';
+import { isCta } from './cta.js';
 
 const PANE = 'sbFav';
 const Z_INDEX = 422;          // stops 420 < favorites < plan stops 425, highlights 430, selection 440, buses 600
@@ -43,11 +44,12 @@ export function favSig(stops) {
   return favList(stops).map((s) => sig(s.id, s.lat.toFixed(6), s.lon.toFixed(6), s.name)).sort().join(';');
 }
 
-function starIcon(name) {
+/** The star badge; a CTA stop's badge is a rounded square (CTA stations are square, map/cta.js). */
+function starIcon(name, cta = false) {
   const wrap = document.createElement('div');
   wrap.className = 'sb-fav-wrap';
   const hit = document.createElement('span'); hit.className = 'sb-fav-hit';
-  const badge = document.createElement('span'); badge.className = 'sb-fav';
+  const badge = document.createElement('span'); badge.className = cta ? 'sb-fav sb-fav-cta' : 'sb-fav';
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('class', 'sb-fav-star');
   const path = document.createElementNS(SVG_NS, 'path'); path.setAttribute('d', STAR);
@@ -90,14 +92,16 @@ export function createFavoritesLayer(map, cb) {
     last = s;
     group.clearLayers(); markers.clear();
     for (const f of favList(stops)) {
-      const mk = L.marker([f.lat, f.lon], { pane: PANE, icon: starIcon(f.name), keyboard: true, riseOnHover: true,
+      const cta = isCta(f.id);
+      const mk = L.marker([f.lat, f.lon], { pane: PANE, icon: starIcon(f.name, cta), keyboard: true, riseOnHover: true,
         bubblingMouseEvents: false });
       mk.on('click', () => cb.onStopTap(f.id));
       mk.addTo(group);
       const el = mk.getElement();
       if (el) {
         el.setAttribute('role', 'button');
-        el.setAttribute('aria-label', f.name ? `Favorite stop: ${f.name}` : 'Favorite stop');
+        const kind = cta ? 'Favorite CTA stop' : 'Favorite stop';
+        el.setAttribute('aria-label', f.name ? `${kind}: ${f.name}` : kind);
         el.addEventListener('keydown', (e) => {
           if (e.key !== 'Enter' && e.key !== ' ') return;
           e.preventDefault(); e.stopPropagation();
