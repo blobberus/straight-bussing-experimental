@@ -13,6 +13,7 @@ export const STATIC_FILES = Object.freeze([
   ['addresses', 'stop_addresses.json', false],
   ['service', 'service.json', false],
   ['landmarks', 'landmarks.json', false],   // map labels (tools/build_landmarks.py): an array, see cleanLandmarks
+  ['corridors', 'corridors.json', false],   // streets the buses really drive (RouteKnower E27c; core/offroute.js): see cleanCorridors
 ]);
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -70,7 +71,35 @@ export function cleanSlice(key, v) {
     } else if (key === 'service') {
       if (id === 'routes') out.routes = cleanServiceRoutes(x);
       else if (id === 'feed' || id === 'generated') out[id] = x;
+    } else if (key === 'corridors') {
+      if (id === 'routes') out.routes = cleanCorridors(x);
+      else if (id === 'valid_until' || id === 'from' || id === 'to') out[id] = String(x);
     } else out[id] = x;
+  }
+  return out;
+}
+
+/**
+ * Keep only well-formed route entries of corridors.json ({rid: {shape: {n, m}, pts: [[lat, lon], ...]}}): a route with
+ * a bad shape signature is dropped (it keeps the E27b rule), bad points are dropped; core/offroute.js corridorFor uses
+ * them.
+ * @param {any} v corridors.routes
+ * @returns {object}
+ */
+function cleanCorridors(v) {
+  const out = {};
+  if (!isObj(v)) return out;
+  for (const [rid, e] of Object.entries(v)) {
+    if (!isObj(e) || !isObj(e.shape) || !Array.isArray(e.pts)) continue;
+    const n = num(e.shape.n), m = num(e.shape.m);
+    if (!(n > 0) || !(m > 0)) continue;
+    const pts = [];
+    for (const p of e.pts) {
+      if (!Array.isArray(p)) continue;
+      const lat = num(p[0]), lon = num(p[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) pts.push([lat, lon]);
+    }
+    out[rid] = { shape: { n, m }, pts };
   }
   return out;
 }

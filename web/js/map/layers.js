@@ -538,6 +538,7 @@ export function createBusLayer(map, cb, opt = {}) {
     const plan = Array.isArray(o.plan) ? o.plan : null;
     const nums = o.numbers instanceof Map ? o.numbers : busNumbers(buses), sel = o.selected != null ? String(o.selected) : null;   // store.busNums: the numbers every view uses
     const seen = new Set(), listed = new Set(), feeds = { cta: 0, shuttle: 0 };   // buses listed per feed (Passio, CTA)
+    const away = new Set((o.away || []).filter((k) => k != null).map(String));   // off its route (core/offroute.js): gone at once
     let changed = 0;
     for (const v of buses || []) {
       const id = busKey(v);
@@ -602,7 +603,7 @@ export function createBusLayer(map, cb, opt = {}) {
       if (seen.has(key)) { m.gone = null; continue; }
       // not in this poll while others of its feed are (not hidden by the rider): keep it where it is for MISSING_S, then
       // remove it. Per feed: CTA buses never keep a shuttle on the map after Passio stops sending any (or the reverse).
-      if (!listed.has(key) && feeds[isCta(m.rid) ? 'cta' : 'shuttle']) {
+      if (!listed.has(key) && feeds[isCta(m.rid) ? 'cta' : 'shuttle'] && !away.has(key)) {
         if (m.gone == null) m.gone = now;
         if (now - m.gone <= MISSING_S) continue;
       }

@@ -27,6 +27,7 @@ import { effectiveHidden } from "../../core/visibility.js";
 import { serviceHoursAt, isScheduledNow, weekSummary, upcomingChanges, busesByHour, groupHours, hourLabel, dayKey, routeService } from "../../core/schedule.js";
 import { emptyState, skeleton, OFFICIAL_PHONE } from "../components.js";
 import { noLiveStatus, scheduledNoLive } from "../../core/operating.js";
+import { awayCount, awayText } from "../../core/offroute.js";
 import { noBusHelpHTML } from "./alerts.js";
 import { busKey, numberMap, busName, selectedBus, busArrival, arrivalBusName } from "../../core/busnum.js";
 import { allBuses, isCta, ctaLevel, ctaSourceText } from "../../core/agency.js";
@@ -181,15 +182,27 @@ export function routeStatusText(state, rid, now = nowS()) {
   return "Not running";
 }
 
-/** Status line under the title: buses running + today's scheduled hours. A CTA route: CTA's status and where its times come from. */
+/**
+ * The note under a scheduled route with no bus on the map (live repo / iOS Kit RouteText.noLiveNote, same words). A bus
+ * off the route (core/offroute.js, store.away) does send its location, so the note then says no bus is ON the route.
+ * @param {number} away buses of the route off it
+ * @returns {string}
+ */
+export function noLiveNote(away) {
+  return `${away > 0 ? "No bus is on this route right now" : "No bus on this route is sending its location"}, so we can't confirm it's running. Call ${OFFICIAL_PHONE} before you rely on it.`;
+}
+
+/** Status line under the title: buses running + today's scheduled hours; buses hidden for being off the route. A CTA route: CTA's status and where its times come from. */
 function statusHtml(state, rid, r, n, now) {
   const cta = isCta(rid);
   const unknown = !cta && liveUnknown(state, now), quiet = !cta && !n && !unknown && noLiveStatus(state, rid, now);   // scheduled, silent: not "not running"
   const idle = cta ? ctaStatusText(state, rid, now) : unknown ? "Live status unavailable" : quiet || "Not running right now";   // a feed outage is not "not running"
   const live = n && (!cta || ["", "late", "demo"].includes(ctaLevel(state.cta, now)));
+  const away = cta || unknown ? 0 : awayCount(state.away, rid);   // Passio buses off the route: hidden, still tracked
   let h = `<p class="v-status">${live ? '<span class="v-livedot" aria-hidden="true"></span>' : ""}${n && !cta ? `${n} bus${n > 1 ? "es" : ""} running` : esc(idle)}${r.short && r.long ? ` &middot; <span class="v-sec">${cta ? "CTA " : ""}${esc(r.short)}</span>` : ""}</p>`;
   if (cta) h += `<p class="v-sec r-ctasrc${ctaLevel(state.cta, now) === "err" ? " is-warn" : ""}">${esc(ctaSourceText(state.cta, now))}</p>`;
-  if (quiet) h += `<p class="v-sec r-nolive">${esc(`No bus on this route is sending its location, so we can't confirm it's running. Call ${OFFICIAL_PHONE} before you rely on it.`)}</p>`;
+  if (away) h += `<p class="v-sec r-away">${esc(awayText(away))}</p>`;   // still tracked; shown again once back on its route
+  if (quiet) h += `<p class="v-sec r-nolive">${esc(noLiveNote(away))}</p>`;
   // the service day, not the calendar date: at 12:10 AM a route running until 12:25 AM reads "Friday service ...
   // · Scheduled now", never "Today No service · Scheduled now" (iOS RouteDetailView)
   const sh = serviceHoursAt(state.service, rid, now), today = sh && sh.hours;

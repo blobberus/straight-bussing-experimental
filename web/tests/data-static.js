@@ -13,6 +13,9 @@ const FILES = {
     r1: { days: { mon: { first: '07:00', last: '19:00', trips: 3, buses: [] }, sat: 'bad' }, exceptions: [{ date: '2026-11-26', type: 'removed', hours: null }, 5] },
     r2: 'bad' } },
   'landmarks.json': { v: 1, l: [['Regenstein Library', 41.792, -87.6, 1, 'library', 'Joseph Regenstein Library'], ['bad', 'x', 1, 1], ['No tier', 41.79, -87.6, 7]] },
+  'corridors.json': { note: 'x', from: '2026-10-10', to: '2026-11-06', valid_until: '2026-12-21', cell_m: 25, routes: {
+    r1: { shape: { n: 2, m: 1400 }, pts: [[41.795, -87.6], ['41.796', '-87.6'], ['x', 1], 'junk'] },
+    r2: { shape: { n: 0, m: 0 }, pts: [] }, r3: { shape: 'x', pts: [] }, r4: { shape: { n: 5, m: 900 } } } },
 };
 const fileOf = (url) => url.split('data/').pop();   // 'routes.json', 'cta/routes.json'
 const okFetch = (overrides = {}) => stubFetch((url) => {
@@ -100,10 +103,11 @@ test('static: bad JSON, thrown fetch and non-object bodies never reject', async 
 test('static: everything failing still sets staticLoaded with empty slices', async () => {
   const store = createStore({});
   const out = await loadStatic(store, { fetch: async () => { throw new TypeError('offline'); } });
-  eq(out.failed.length, 7);
+  eq(out.failed.length, 8);
   const s = store.get();
   eq([s.routes, s.stops, s.shapes, s.routeStops, s.stopRoutes, s.addresses, s.service], [{}, {}, {}, {}, {}, {}, {}]);
   eq(s.landmarks, [], 'map labels: an empty list');
+  eq(s.corridors, {}, 'learned corridors: none (every route keeps the E27b rule)');
   eq(s.staticLoaded, true);
 });
 
@@ -119,6 +123,16 @@ test('static: landmarks (map labels) load as a list, bad rows dropped', async ()
   eq(eg.map((x) => [x.name, x.egg, x.eggZ]), [['Reg', 'The Reg', 17.5], ['Cobb', undefined, undefined]]);
   eq(cleanLandmarks({ l: [['Reg', 41.8, -87.6, 1]], eggs: [[0, 'The Reg']] })[0].egg, undefined, 'no egg_zoom: no nicknames');
   eq(cleanLandmarks({ l: [['Reg', 41.8, -87.6, 1]], eggs: 'x', egg_zoom: 17 })[0].egg, undefined);
+});
+
+test('static: corridors.json (streets the buses really drive, RouteKnower E27c) keeps only routes the app can check', async () => {
+  const store = createStore({});
+  await loadStatic(store, { base: 'data/', fetch: okFetch() });
+  const c = store.get().corridors;
+  eq(c.valid_until, '2026-12-21');
+  eq(c.routes, { r1: { shape: { n: 2, m: 1400 }, pts: [[41.795, -87.6], [41.796, -87.6]] } },
+    'bad points dropped; a route without a usable line signature or points is dropped (it keeps the E27b rule)');
+  eq(cleanSlice('corridors', { routes: 'x' }).routes, {});
 });
 
 test('static: deriveStopRoutes / cleanSlice edge cases', () => {

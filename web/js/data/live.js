@@ -2,13 +2,15 @@
 // Failure keeps the last good data and sets failed:true so the UI can show it.
 // store.buses holds only vehicles that are operating (core/operating.js): ghosts that stopped
 // reporting, unknown routes and buses on out-of-service routes without predictions are dropped here,
-// so the map, route detail, counts, alerts and planner never show them. Buses that have not followed their
-// route for a long time (core/offroute.js: garage runs, parked off the line) are dropped too, with their trip
-// updates, so no arrival time comes from a bus the map does not show.
+// so the map, route detail, counts, alerts and planner never show them. Buses off their route (core/offroute.js:
+// garage runs, parked off the line; measured against the drawn line and, where it is off, the streets the route's
+// buses really drive, store.corridors, owner 2026-11-06 / 2026-11-07) are dropped too, with their trip updates, so no
+// arrival time comes from a bus the map does not show. They are still tracked: their clocks stay here and store.away
+// lists them (the route page counts them), so a bus shows again on its first report back on its route.
 // store.busNums: "Bus 1", "Bus 2" on lines with 2 or more buses for this list (core/busnum.js numberStep: a bus left
 // out of a poll keeps its number 45 s, like its map badge), read by the map badges and every arrival that names a bus.
 import { operatingBuses } from '../core/operating.js';
-import { offRouteStep, dropHidden } from '../core/offroute.js';
+import { offRouteStep, dropHidden, awayBuses } from '../core/offroute.js';
 import { numberStep } from '../core/busnum.js';
 
 /** Passio feed base URL. */
@@ -138,10 +140,12 @@ export function startLive(store, opts = {}) {
       const s = store.get();
       patch.buses = operatingBuses(patch.buses, { routes: s.routes, service: s.service, trips: patch.trips || s.trips,
         feedTs: patch.feedTs, nowS: nowFn(), staticLoaded: s.staticLoaded });
-      const off = offRouteStep(offTracks, patch.buses, { shapes: s.shapes, service: s.service, alerts: patch.alerts || s.alerts,
-        routes: s.routes, nowS: nowFn(), feedTs: patch.feedTs });
+      const off = offRouteStep(offTracks, patch.buses, { shapes: s.shapes, corridors: s.corridors, service: s.service,
+        alerts: patch.alerts || s.alerts, routes: s.routes, nowS: nowFn(), feedTs: patch.feedTs });
       offTracks = off.tracks;
       offHidden = off.hidden;
+      const away = awayBuses(patch.buses, offHidden);   // still tracked, not shown (never counted as running)
+      patch.away = away.length || (s.away || []).length ? away : s.away || away;   // none before and now: no change to report
       if (offHidden.length && !patch.trips) patch.trips = s.trips;   // the store's trips still list a newly hidden bus
     }
     if (offHidden.length && (patch.buses || patch.trips)) {
@@ -150,7 +154,7 @@ export function startLive(store, opts = {}) {
       if (patch.trips) patch.trips = d.trips;
     }
     if (patch.buses) {   // "Bus 1", "Bus 2" for this list (core/busnum.js): the map badges and every arrival read them
-      const nn = numberStep(numSeen, patch.buses, { nowS: nowFn() });
+      const nn = numberStep(numSeen, patch.buses, { away: patch.away, nowS: nowFn() });
       numSeen = nn.seen;
       patch.busNums = { of: patch.buses, routes: nn.routes };
     }
