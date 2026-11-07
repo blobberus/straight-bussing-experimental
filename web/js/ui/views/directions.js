@@ -140,7 +140,7 @@ function legStrip(o, state) {
 
 function optionHTML(o, i, now, state) {
   const on = i === D.sel;
-  const lines = optionLines(o, now), wt = walkTotal(o);
+  const lines = optionLines(o, now, state), wt = walkTotal(o);
   // what this option minimizes (core/rank.js), only when there is something to compare against
   const crit = (D.result?.options?.length || 0) > 1 ? criteriaText(o.meets) : "";
   const critHTML = crit ? `<span class="j-crit">${esc(crit)}</span>` : "";

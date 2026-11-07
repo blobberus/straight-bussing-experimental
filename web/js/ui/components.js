@@ -10,6 +10,7 @@ import { esc, safeColor, textOn, contrast } from "../core/esc.js";
 import { minsUntil, nowS, clock } from "../core/time.js";
 import { svg } from "./icons.js";
 import { staleLevel } from "../core/arrivals.js";
+import { arrivalBusName } from "../core/busnum.js";
 import { isCta, ctaLevel } from "../core/agency.js";
 
 /** Official service phone (display form). */
@@ -182,11 +183,15 @@ export function arrStale(a, state, now) {
 }
 
 /**
- * One arrival row: route chip, route name, live label (+ bus label), ETA.
+ * One arrival row: route chip, route name, live label (+ which bus), ETA.
  * Screen readers get a single sentence, e.g. "Route 6, Campus North, arrives in 4 minutes, live". A CTA arrival says
  * "CTA route 171" and, for a scheduled time, "scheduled time, an estimate" (ctaArrLabel).
- * @param {{rid:string, t:number, bus?:string, tripId?:string}} a  from core/arrivals.arrivalsFor
- * @param {Object} state store state (routes, lastOk, failed, feedTs)
+ * Which bus (owner 2026-11-06): on a line with 2 or more buses the map badge's number, "Live · Bus 2" (with walking
+ * guidance "Live · Bus 2, leave in 3 min, est."), also spoken: "Route 6, Campus North, Bus 2, arrives in 4 minutes,
+ * live". One bus on the line: the fleet label as before ("Live · Bus 1647"; the guidance replaces it). An arrival not
+ * tied to a numbered bus of its line (or a scheduled CTA time) names none (core/busnum.js arrivalBusName).
+ * @param {{rid:string, t:number, bus?:string, tripId?:string, vehicleId?:string}} a  from core/arrivals.arrivalsFor
+ * @param {Object} state store state (routes, lastOk, failed, feedTs, buses, ctaBuses, busNums)
  * @param {{action?:string, now?:number, sub?:string}} [opts] action -> render as a button with data-action/data-id(rid)/data-trip
  * @returns {string}
  */
@@ -202,8 +207,11 @@ export function arrivalRow(a, state, opts = {}) {
   const lbl = cta ? ctaArrLabel(a, st, n) : liveLabel(level);
   const stale = cta ? lbl.stale : !!level;
   const when = m < 1 ? "arriving now" : `arrives in ${m} minute${m === 1 ? "" : "s"}`;
-  const label = `${cta ? "CTA route" : "Route"} ${short}, ${long}, ${when}, ${lbl.text}`;
-  const extra = opts.sub ? " · " + esc(opts.sub) : a.bus ? " · Bus " + esc(a.bus) : "";
+  const num = arrivalBusName(st, a);   // "Bus 2" on a line with several buses, else ''
+  const label = `${cta ? "CTA route" : "Route"} ${short}, ${long}, ${num ? num + ", " : ""}${when}, ${lbl.text}`;
+  const sub = opts.sub ? String(opts.sub) : "";
+  const extra = num ? " · " + esc(num + (sub ? ", " + sub.charAt(0).toLowerCase() + sub.slice(1) : ""))
+    : sub ? " · " + esc(sub) : a.bus ? " · Bus " + esc(a.bus) : "";
   const vis = `${routeChip(a.rid, st.routes)}<span class="grow"><span class="prim">${esc(long)}</span>`
     + `<span class="sec">${lbl.html}${extra}</span></span>${etaBlock(a.t, { stale, now: n })}`;
   if (opts.action) {

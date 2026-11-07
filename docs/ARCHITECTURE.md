@@ -793,6 +793,21 @@ Owner steps, columns and privacy rules: **`docs/USAGE-STATS.md`**.
   bus is no longer shown. State: `busId` (nav, not persisted). Tests: core-busnum.js, route-busnum.js, map-layers.js,
   e2e.js (a bus tap picks it, back clears it).
 - 2026-10-30 (later): a picked bus left out of a feed poll keeps its pick for `PICK_HOLD_S` (45 s, like the map's badge, MISSING_S); leaving the route page still lets go at once (`busnum.pickCheck`, main.js). sw sb-v2-75.
+- Arrivals name the numbered bus (2026-11-06, owner: "When showing which bus is about to arrive at station, it should
+  state which bus number displayed on the route is about to arrive if there is more than 1 bus"; ported from the live
+  repo). One source, core/busnum.js: an arrival is tied to its bus by the trip update's vehicle id (else the label) and
+  named "Bus 2" only when that bus is numbered on the arrival's own route (`arrivalBusName`); a Directions leg only with
+  a live boarding time (`legBusName`); no vehicle, a bus the map does not show, another route's bus, a schedule or
+  estimated time, a scheduled CTA time (`sched`): no number. One bus on the line: unchanged. Where: arrival rows ("Live ·
+  Bus 2", "Live · Bus 2, leave in 3 min, est.", spoken too), the stop's collapsed header, Favorites, Arriving soon, My
+  Routes, the route page timeline ("Bus 2" under each time when no bus is picked), Directions ("Leave in 10 min for Bus
+  2, ...", "Bus 2 arrives at X"), the trip in progress (vehicle `num`, core/tripyou.js busName) and the trip and station
+  alerts. Stable numbers: data/live.js keeps `store.busNums` per poll (`numberStep`: a shuttle left out of a poll keeps
+  its place 45 s, like its badge); `routeNumbers(state)` adds the CTA routes from store.ctaBuses (2 or more CTA buses on
+  a CTA route: Bus 1, Bus 2 in vehicle id order); the map badges (main.js `numbers: numberMap(s)`) and the trip
+  (core/tripprogress.js followState carries busNums) read the same numbers. A bus that leaves for good or joins
+  renumbers the line in vehicle id order. Tests: core-busnum.js (incl. CTA), data-live.js, map-layers.js,
+  route-busnum.js, arrive-busnum.js, trip-view.js.
 
 ## Arriving In, trips with no bus, walk first (2026-10-30, owner: "the time that is shown when the menu is minimized ... should show the time until the next bus will arrive at their stop. Call it Arriving In: ... rather show the current walking time or the duration of the next step if the user's trip has no bus", "if the distance is very close, it is ok to just suggest the user to walk on their first travel option")
 - Current trip header (main.js shows the view's meta at every detent, so also minimized): while a plan journey is on,

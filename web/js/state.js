@@ -94,6 +94,7 @@ export function initialState() {
     ctaPatterns: {},                                           // data/cta/patterns.json: CTA stop lists per direction {"cta:55": [{dir, stops}]}
     staticLoaded: false,
     // live (data/live.js fills every 10 s)
+    busNums: null,                                             // {of: buses, routes: {rid: {key: n}}}: "Bus 1", "Bus 2" (core/busnum.js numberStep)
     buses: [], trips: [], alerts: [],
     feedTs: 0, lastOk: 0, failed: false, liveLoaded: false,
     // CTA (data/cta-live.js; kept apart from the Passio slices above, see core/agency.js)

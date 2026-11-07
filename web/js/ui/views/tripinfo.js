@@ -11,6 +11,7 @@ import { clock } from "../../core/time.js";
 import { walkMin } from "../../core/geo.js";
 import { routeChip } from "../components.js";
 import { svg } from "../icons.js";
+import { legBusName } from "../../core/busnum.js";
 
 /** Ride-time source wording for bus steps. */
 export const SRC = { live: "from live bus prediction", learned: "learned from past rides", schedule: "from schedule", estimate: "distance estimate" };
@@ -91,17 +92,22 @@ export function leaveInfo(o, now) {
  * The walks are in the leg strip above it; the card's aria-label says the rest.
  * @param {object} o Option
  * @param {number} now
+ * The live first bus of a line with several buses is named as on its map badge (owner 2026-11-06, core/busnum.js
+ * legBusName): "Leave in 10 min for Bus 2, 3:11 PM at Ellis Ave & 57th St".
+ * @param {object} [state] store state (buses, ctaBuses, busNums) for the bus number; without it no bus is named
  * @returns {{html:string, text:string}} html for the card, text for its aria-label
  */
-export function optionLines(o, now) {
+export function optionLines(o, now, state = null) {
   const times = legsTimes(o, now), fb = o.legs.findIndex((l) => l.type === "bus");
   if (fb < 0) return { html: "", text: "" };
   const bus = o.legs[fb], board = bus.board?.name || "the stop", busAt = clock(times[fb].b), leave = leaveInfo(o, now);
+  const num = state ? legBusName(state, bus) : "";
   if (leave) {
-    const text = `${leave.kind === "now" ? "Leave now" : `Leave in ${Math.floor(leave.slack)} min`}, bus ${busAt} at ${board}`;
+    const go = leave.kind === "now" ? "Leave now" : `Leave in ${Math.floor(leave.slack)} min`;
+    const text = num ? `${go} for ${num}, ${busAt} at ${board}` : `${go}, bus ${busAt} at ${board}`;
     return { text, html: `<span class="v-sec j-oline${leave.kind === "now" ? " j-now" : ""}">${esc(text)}<span class="v-livedot j-live" aria-hidden="true"></span></span>` };
   }
-  const text = `Bus about ${busAt} at ${board}, est.`;
+  const text = `${num || "Bus"} about ${busAt} at ${board}, est.`;
   return { text, html: `<span class="v-sec j-oline">${esc(text)}</span>` };
 }
 
@@ -112,10 +118,11 @@ const LIVE_LINE = '<span class="v-sec v-stepsub v-steplive"><span class="dot-liv
  * Step list for an option (spec 10.16; the same words as the iPhone app's TripInfo.steps): a vertical timeline, the walk
  * to the first stop and to the destination always shown. Each step reads in body with the place and time in Semibold;
  * a live bus time gets the live source line, a derived time "est." as plain text, a walk its source in words ("Sidewalk
- * route" / "Walking estimate"); at most one middle dot per line.
+ * route" / "Walking estimate"); at most one middle dot per line. A live bus of a line with several buses is named as on
+ * its map badge: "Bus 2 arrives at X 3:11 PM" (owner 2026-11-06), else "Bus arrives at X".
  * @param {object} o Option
  * @param {number} now
- * @param {object} state store state (routes)
+ * @param {object} state store state (routes, buses, busNums)
  * @param {{fromLabel?:string, toLabel?:string}} [labels]
  * @returns {string}
  */
@@ -136,7 +143,8 @@ export function stepsHTML(o, now, state, { fromLabel, toLabel } = {}) {
       let h = `Walk ${esc(walkMins(l.min))} min (${Math.round(l.m || 0)} m) to <b>${esc(to || "the stop")}</b>${change}`;
       if (i === 0 && next?.type === "bus") {
         const lv = leaveInfo(o, now);
-        if (lv) h += sub(`${lv.kind === "now" ? "Leave now" : "Leave by " + esc(clock(lv.by))} to catch the ${esc(clock(times[1].b))} bus,${tag("est.")}`);
+        const nb = legBusName(state, next);   // "Bus 2" on a line with several buses
+        if (lv) h += sub(`${lv.kind === "now" ? "Leave now" : "Leave by " + esc(clock(lv.by))} to catch ${nb ? `${esc(nb)} at ${esc(clock(times[1].b))}` : `the ${esc(clock(times[1].b))} bus`},${tag("est.")}`);
       }
       h += sub(l.source === "router" ? "Sidewalk route" : "Walking estimate");
       steps.push(li(WALK_IC, h, "j-walk"));
@@ -144,7 +152,7 @@ export function stepsHTML(o, now, state, { fromLabel, toLabel } = {}) {
     }
     const t = times[i], w = Math.round(l.wait || 0), r = mins(l.ride), sp = l.stopsPassed || 1;
     const color = safeColor(state.routes?.[l.rid]?.color);
-    steps.push(li(routeChip(l.rid, state.routes, { small: true }), `Bus arrives at <b>${esc(l.board?.name || "")}</b> <b class="v-clock">${esc(clock(t.b))}</b>${l.waitLive ? "" : tag("est.")}`
+    steps.push(li(routeChip(l.rid, state.routes, { small: true }), `${esc(legBusName(state, l) || "Bus")} arrives at <b>${esc(l.board?.name || "")}</b> <b class="v-clock">${esc(clock(t.b))}</b>${l.waitLive ? "" : tag("est.")}`
       + (l.waitLive ? LIVE_LINE : "")
       + sub(`Wait ~${w < 1 ? "&lt;1" : w} min, then ride ~${r} min (${sp} stop${sp > 1 ? "s" : ""}) to ${esc(l.alight?.name || "")}, ${esc(clock(t.a))} &middot; ${esc(SRC[l.source] || "estimate")},${tag("est.")}`), "j-bus", color));
   });

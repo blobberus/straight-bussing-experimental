@@ -14,7 +14,7 @@ import { hav } from "./core/geo.js";
 import { DEMO } from "./core/demo.js";
 import { mapVisibility, lineTapOpens } from "./core/visibility.js";
 import { settleTimeView } from "./core/custom.js";
-import { busKey, selectedBus, pickCheck } from "./core/busnum.js";
+import { busKey, selectedBus, pickCheck, numberMap } from "./core/busnum.js";
 import { allBuses } from "./core/agency.js";
 import { createMap } from "./map/map.js";
 import { loadStatic } from "./data/static.js";
@@ -40,7 +40,7 @@ const MAP_METHODS = ["setTheme", "setBottomInset", "drawNetwork", "drawBuses", "
   "highlightStops", "drawPlan", "drawFavorites", "setTrip", "inView", "setLandmarks", "fitTo", "flyTo", "onStopTap", "onBusTap", "onLineTap", "onUserMove", "onMapTap"];
 const VIS_KEYS = ["hiddenRoutes", "routeFilter", "view", "routeId", "routeOrder", "journey", "activeCustom", "customRoutes"];
 const NET_KEYS = ["routes", "shapes", "routeStops", "stopRoutes", "stops", "theme", ...VIS_KEYS];
-const BUS_KEYS = ["buses", "ctaBuses", "feedTs", "routes", "busId", ...VIS_KEYS];
+const BUS_KEYS = ["buses", "ctaBuses", "busNums", "feedTs", "routes", "busId", ...VIS_KEYS];
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -94,7 +94,7 @@ function syncMap(s, changed) {
   if (NET_KEYS.some(has)) mapCall("drawNetwork", { routes: s.routes, shapes: s.shapes, routeStops: s.routeStops,
     stopRoutes: s.stopRoutes, stops: s.stops, hidden, focus, order, dark: isDark() });
   if (BUS_KEYS.some(has)) mapCall("drawBuses", allBuses(s), { routes: s.routes, shapes: s.shapes, hidden, focus, nowS: nowS(),
-    selected: busKey(selectedBus(s)) });   // the bus picked on the route page is highlighted
+    selected: busKey(selectedBus(s)), numbers: numberMap(s) });   // the bus picked on the route page is highlighted; numbers: store.busNums + CTA (core/busnum.js)
   if (has("view") || has("stopId") || has("stops")) {
     const st = s.view === "stop" && s.stopId && s.stops ? s.stops[s.stopId] : null;
     mapCall("setSelectedStop", st ? { id: s.stopId, lat: st.lat, lon: st.lon } : null);

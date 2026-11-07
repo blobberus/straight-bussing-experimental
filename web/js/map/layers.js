@@ -536,7 +536,7 @@ export function createBusLayer(map, cb, opt = {}) {
     const now = o.nowS ?? Date.now() / 1000;
     const hidden = new Set((o.hidden || []).map(String)), focus = focusSet(o.focus);
     const plan = Array.isArray(o.plan) ? o.plan : null;
-    const nums = busNumbers(buses), sel = o.selected != null ? String(o.selected) : null;
+    const nums = o.numbers instanceof Map ? o.numbers : busNumbers(buses), sel = o.selected != null ? String(o.selected) : null;   // store.busNums: the numbers every view uses
     const seen = new Set(), listed = new Set(), feeds = { cta: 0, shuttle: 0 };   // buses listed per feed (Passio, CTA)
     let changed = 0;
     for (const v of buses || []) {
