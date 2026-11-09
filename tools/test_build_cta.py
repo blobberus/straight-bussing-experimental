@@ -189,6 +189,13 @@ def the_committed_build_is_sane():
             assert all(s in stops for s in p["stops"]), rid
     total = sum(f.stat().st_size for f in out.glob("*.json"))
     assert total < 400_000, total
+    svc = json.loads((out / "service.json").read_text(encoding="utf-8"))
+    for rid, r in svc["routes"].items():   # Schedule by hour: departures timed at a CTA stop the app knows
+        if "at" in r:
+            assert r["at"].startswith("cta:") and r["at"] in stops, (rid, r["at"])
+        for d in r["days"].values():
+            if d and d.get("dep"):
+                assert d["dep"][0] < 1440 and all(isinstance(x, int) and 0 <= x <= 2880 for x in d["dep"]), rid
 
 
 def main():

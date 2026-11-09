@@ -17,8 +17,8 @@ Files (all in web/data/cta/):
   shapes.json       {"cta:55": [[[lat, lon], ...], ...]}   clipped to BOX + CLIP_PAD_M, simplified (SIMPLIFY_M)
   route_stops.json  {"cta:55": [direction 0 stops..., direction 1 stops...]}   (the app's one-list-per-route shape)
   patterns.json     {"cta:55": [{"dir": "Eastbound", "stops": [...]}, {"dir": "Westbound", "stops": [...]}]}
-  service.json      tools/build_gtfs.py build_service format (hours per weekday, buses per hour, holiday changes) for the
-                    times inside BOX
+  service.json      tools/build_gtfs.py build_service format (hours per weekday, buses per hour, holiday changes,
+                    departures at the reference stop "at" for Schedule by hour) for the times inside BOX
   schedule.json     the stop times inside BOX, compact (see encode_schedule; decoded by web/js/core/ctasched.js)
   meta.json         when, from where, which routes, the box, the credit line CTA's terms suggest
 
@@ -401,9 +401,14 @@ def build(z, today=None, routes=ROUTES, box=BOX):
     # hours (build_gtfs format) from the times inside the box
     svc_trips = [{"trip_id": tid, "route_id": PREFIX + t["route_id"], "service_id": t["service_id"]}
                  for tid, t in trips.items() if tid in times]
-    service = BG.build_service(z, svc_trips, times, (), today=today)
+    order = defaultdict(list)                     # raw stop order per route (both directions): ties of the reference stop
+    for (rid, _did), master in masters.items():
+        order[PREFIX + rid] += master
+    service = BG.build_service(z, svc_trips, times, (), today=today, route_stops=order)
     service["routes"] = {k: v for k, v in service["routes"].items() if k in routes_out}
     for r in service["routes"].values():
+        if r.get("at"):
+            r["at"] = PREFIX + r["at"]                # Schedule by hour: the stop its dep lists are timed at
         for d in list(r["days"].values()) + [e.get("hours") for e in r["exceptions"]]:
             all_day(d)
 
