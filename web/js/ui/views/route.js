@@ -20,11 +20,12 @@
 import { registerView } from "../router.js";
 import { registerAction } from "../actions.js";
 import { esc, safeColor, textOn } from "../../core/esc.js";
-import { nowS, minsUntil, ago } from "../../core/time.js";
+import { nowS, minsUntil, ago, clockOfDay } from "../../core/time.js";
 import { hav } from "../../core/geo.js";
 import { arrivalsFor, staleLevel, runningCount, activeAlerts, alertText, alertRouteIds, liveUnknown } from "../../core/arrivals.js";
 import { effectiveHidden } from "../../core/visibility.js";
-import { serviceHoursAt, isScheduledNow, weekSummary, upcomingChanges, busesByHour, groupHours, hourLabel, dayKey, routeService } from "../../core/schedule.js";
+import { serviceHoursAt, isScheduledNow, weekSummary, upcomingChanges, hourBuses, groupHours, hourLabel, routeService, scheduleDay, departures, hourlyHeadways, headwayLine } from "../../core/schedule.js";
+import { svg } from "../icons.js";
 import { emptyState, skeleton, OFFICIAL_PHONE } from "../components.js";
 import { noLiveStatus, scheduledNoLive } from "../../core/operating.js";
 import { awayCount, awayText } from "../../core/offroute.js";
@@ -36,6 +37,7 @@ import { ctaStatusText, ctaContactHTML } from "./routes-cta.js";
 
 const STALE_BUS_S = 60;
 const DAY_NAME = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" };
+const INFO = svg("info", 15);
 const CHEVRON = '<svg class="r-chev" viewBox="0 0 10 6" width="10" height="6" aria-hidden="true" focusable="false"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 /**
@@ -127,22 +129,46 @@ export function renderService(state, rid, now) {
     for (const c of changes) h += `<li><span class="r-k">${esc(c.label)}</span> ${esc(c.text)}</li>`;
     h += "</ul>";
   } else if (routeService(svc, rid)) h += '<p class="v-sec r-nochange">No schedule changes in the next 30 days.</p>';
-  h += renderBuses(svc, rid, now);
+  const day = scheduleDay(svc, rid, now);   // the bars and the list show the same day
+  if (day) {
+    const when = day.today ? (day.yesterday ? DAY_NAME[day.key] : "today") : DAY_NAME[day.key] + "s";
+    h += renderBuses(day.day, when) + renderHeadways(state, rid, day.day, when);
+  }
   if (routeService(svc, rid)) h += `<p class="v-foot">Hours and bus counts come from ${isCta(rid) ? "CTA's published schedule (the Hyde Park part of the route)" : "the official published schedule"}. Live service may differ.</p>`;
   return h + "</section>";
 }
 
-/** Scheduled buses by hour for the current service day (after midnight a night route is on yesterday's), else the first day with service: bars + text. */
-function renderBuses(svc, rid, now) {
-  const sh = serviceHoursAt(svc, rid, now), today = sh ? sh.dayKey : dayKey(now);
-  let key = today, list = busesByHour(svc, rid, key);
-  if (!list.length) for (const k of ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]) if ((list = busesByHour(svc, rid, k)).length) { key = k; break; }
+/** The note under "Schedule by hour" (owner 2026-11-09 in the live repo: "a disclaimer that the bus schedules don't often follow this schedule"). */
+export function headwayNote(stopName) {
+  return `Timetable only${stopName ? `, times at ${stopName}` : ""}. Buses often don't keep to this schedule, so go by the live times when buses are running.`;
+}
+
+/**
+ * "Schedule by hour" (live repo, owner 2026-11-09: "Every 30 minutes between x times", under the bus counts): how often
+ * the timetable sends a bus, one line per range (core/schedule.js hourlyHeadways, times in the device's 12 / 24 hour
+ * style), then the disclaimer. CTA routes: their Hyde Park timetable (web/data/cta/service.json), at a CTA stop. Each
+ * line is one sentence for screen readers ("Every 30 minutes, 7:00 to 10:00 AM").
+ */
+function renderHeadways(state, rid, day, when) {
+  const segs = hourlyHeadways(departures(day));
+  if (!segs.length) return "";
+  const at = routeService(state.service, rid)?.at, name = at ? state.stops?.[at]?.name || "" : "";
+  let h = `<h3 class="r-h3" id="r-freq-h">Schedule by hour, ${esc(when)}</h3><div class="v-card r-freq"><ul class="r-flist" aria-labelledby="r-freq-h">`;
+  for (const s of segs) {
+    const l = headwayLine(s, clockOfDay);
+    h += `<li class="r-frow${s.kind === "none" ? " is-none" : ""}"><span class="v-sr">${esc(l.say)}</span><span class="r-fk" aria-hidden="true">${esc(l.text)}</span><span class="r-fw" aria-hidden="true">${esc(l.when)}</span></li>`;
+  }
+  return h + `</ul><p class="r-fnote">${INFO}<span>${esc(headwayNote(name))}</span></p></div>`;
+}
+
+/** Scheduled buses by hour for one day entry (core/schedule.js scheduleDay): bars + text. */
+function renderBuses(day, when) {
+  const list = hourBuses(day);
   if (!list.length) return "";
   const max = Math.max(...list.map((x) => x.buses));
   if (max <= 1 && list.every((x) => x.buses === list[0].buses)) return "";
   const span = (list[list.length - 1].hour - list[0].hour + 24) % 24 + 1, by = new Map(list.map((x) => [x.hour, x.buses]));
   const bars = Array.from({ length: span }, (_, i) => { const hr = (list[0].hour + i) % 24; return { hour: hr, buses: by.get(hr) || 0 }; });
-  const when = key === today ? (sh && sh.yesterday ? DAY_NAME[key] : "today") : DAY_NAME[key] + "s";
   const groups = groupHours(list).map((g) => `${hourLabel(g.from)} to ${hourLabel(g.to)}: ${g.buses} bus${g.buses > 1 ? "es" : ""}`);
   let h = `<h3 class="r-h3">Scheduled buses by hour, ${esc(when)}</h3><div class="v-card r-hours"><div class="r-bars${bars.length > 14 ? " is-dense" : ""}" aria-hidden="true">`;
   for (const x of bars) h += `<span class="r-bar"><span class="r-barn">${x.buses || ""}</span><span class="r-barfill${x.buses ? "" : " is-zero"}" style="height:${Math.round((x.buses / max) * 70)}%"></span><span class="r-barh">${x.hour % 3 === 0 ? esc(hourLabel(x.hour).replace(" ", "")) : ""}</span></span>`;
