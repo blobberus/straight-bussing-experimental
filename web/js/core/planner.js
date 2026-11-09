@@ -26,13 +26,22 @@
  *    stop sequence per direction, so a ride never runs past a terminal into the other direction. A CTA SCHEDULED time
  *    (trip update marked sched:true) is a timed wait like a live one (the bus leaves at that time), but the leg says
  *    so: waitLive false, waitTimed true, source 'schedule' (shown as "est.").
+ *  - timetable mode (owner 2026-11-09, a start time chosen in Directions, core/timetable.js): plan({timetable}) waits for
+ *    the next scheduled shuttle departure at the stop after you walk there and rides to the scheduled arrival where you
+ *    get off (of the next few departures, the one that gets there first; a loop ride continues on the trip that starts
+ *    at the loop's end). Live shuttle trips, live buses and headway guesses are not used. CTA legs use CTA's own
+ *    published schedule: Directions passes the scheduled CTA trips around the start time (core/ctasched.js
+ *    scheduledTrips) as `trips` (only sched:true entries are kept). Bus legs say source 'timetable', waitSched true.
  */
 import { hav, WALK_M_PER_MIN as WALK_M_MIN, WALK_DETOUR as DETOUR } from "./geo.js";
 import { nowS } from "./time.js";
 import { pickOptions, walkTotals, walkFirst } from "./rank.js";
+import { instancesBetween, departureIndex, reachAt, AHEAD_S } from "./timetable.js";
 
 const MAX_WALK = 800, MAX_WALK_FAR = 1600, XFER_M = 150, BUS_M_MIN = 18000 / 60;
 const MAX_OPTS = 4, MIN_WALK_LEG = 1, GRACE_S = 15, HEADWAY_CAP = 30, XFER_GAIN_MIN = 2;
+/** Timetable mode: of the next departures (at most SCHED_TRY, within SCHED_LOOK_S of the first), the one that gets there first. */
+const SCHED_TRY = 6, SCHED_LOOK_S = 3600;
 
 /** Planner constants (read-only, for UI copy and tests). */
 export const PLANNER = Object.freeze({ WALK_M_MIN, DETOUR, MAX_WALK, MAX_WALK_FAR, XFER_M, BUS_KMH: 18, MAX_OPTS, MIN_WALK_LEG, GRACE_S, HEADWAY_CAP });
@@ -67,13 +76,18 @@ function pathIdx(seq, i, j) {
   return out;
 }
 
-/** Per-plan helpers closed over the data. */
-function makeCtx({ data, predict, walkMins }) {
+/** Per-plan helpers closed over the data. `timetable` (a cleaned data/timetable.json) = timetable mode from t0. */
+function makeCtx({ data, predict, walkMins, timetable, t0 }) {
   const D = data || {};
   const stops = D.stops || {};
   const over = walkMins || {};
+  // timetable mode (a chosen start time, owner 2026-11-09): scheduled trips only, no live bus, prediction or headway guess
+  const sched = timetable ? (() => {
+    const inst = instancesBetween(timetable, t0, t0 + AHEAD_S, Object.keys(D.routeStops || {}));
+    return { inst, idx: departureIndex(inst) };
+  })() : null;
   const live = new Map(); // "rid|stop" -> [{t, tu}] sorted (tu.sched: a CTA scheduled time, not a live prediction)
-  for (const tu of D.trips || []) {
+  for (const tu of sched ? (D.trips || []).filter((x) => x && x.sched) : D.trips || []) {   // timetable mode: CTA's schedule only
     const rid = tu && tu.trip && tu.trip.route_id != null ? String(tu.trip.route_id) : null;
     if (!rid) continue;
     for (const u of tu.stop_time_update || []) {
@@ -86,7 +100,7 @@ function makeCtx({ data, predict, walkMins }) {
   }
   for (const arr of live.values()) arr.sort((a, b) => a.t - b.t);
   const nBuses = {};
-  for (const v of D.buses || []) {
+  for (const v of sched ? [] : D.buses || []) {
     const r = v && v.trip && v.trip.route_id;
     if (r != null) nBuses[r] = (nBuses[r] || 0) + 1;
   }
@@ -113,8 +127,13 @@ function makeCtx({ data, predict, walkMins }) {
     }
     return best;
   };
-  /** Wait to board rid at stopId when ready at readyT: {min, live, timed, t:boardT, tu} or null. */
+  /** Wait to board rid at stopId when ready at readyT: {min, live, timed, t:boardT, tu} (timetable mode: {.., sched, inst}) or null. */
   const wait = (rid, seq, stopId, readyT) => {
+    if (sched) {
+      const list = sched.idx.get(rid + "|" + stopId);
+      const i = list ? list.findIndex((x) => x.t >= readyT - GRACE_S) : -1;
+      if (i >= 0) return { min: Math.max(0, (list[i].t - readyT) / 60), live: false, sched: true, t: list[i].t, tu: null, inst: list[i].inst, ready: readyT, list, i };
+    }
     const arr = live.get(rid + "|" + stopId);
     if (arr) {
       const L = arr.find((x) => x.t >= readyT - GRACE_S);
@@ -126,12 +145,26 @@ function makeCtx({ data, predict, walkMins }) {
     return { min, live: false, t: readyT + min * 60, tu: null };
   };
   const rideCache = new Map();
-  /** Ride along path after boarding with w: {min, source, conf, alightT, p10?, p90?}. */
+  /**
+   * Ride along path after boarding with w: {min, source, conf, alightT, p10?, p90?}. Timetable mode: the scheduled time
+   * at the stop where you get off, on the departure (of the next few) that gets there first, `board` = that departure;
+   * null when none does.
+   */
   const ride = (rid, seq, path, w) => {
     const a = seq.ids[path[0]], b = seq.ids[path[path.length - 1]];
+    if (w.sched) {
+      let best = null;
+      for (let k = w.i; k < w.list.length && k < w.i + SCHED_TRY && w.list[k].t <= w.t + SCHED_LOOK_S; k++) {
+        const d = w.list[k], tb = reachAt(sched.inst, d.inst, b, d.t);
+        if (tb != null && (!best || tb < best.tb)) best = { d, k, tb };
+      }
+      if (!best) return null;
+      const board = best.k === w.i ? w : { ...w, min: Math.max(0, (best.d.t - w.ready) / 60), t: best.d.t, inst: best.d.inst, i: best.k };
+      return { min: Math.max(1, (best.tb - best.d.t) / 60), source: "timetable", conf: 0.5, alightT: best.tb, board };
+    }
     if (w.timed && w.tu) {
       const tb = tripAt(w.tu, b, w.t);
-      if (tb) return w.tu.sched ? { min: Math.max(1, (tb - w.t) / 60), source: "schedule", conf: 0.5, alightT: tb }
+      if (tb) return w.tu.sched ? { min: Math.max(1, (tb - w.t) / 60), source: sched ? "timetable" : "schedule", conf: 0.5, alightT: tb }
         : { min: Math.max(1, (tb - w.t) / 60), source: "live", conf: 0.8, alightT: tb };
     }
     const key = rid + "|" + path.join(",");
@@ -167,8 +200,9 @@ function makeCtx({ data, predict, walkMins }) {
     const leg = { type: "bus", rid, board: pt(ids[0]), alight: pt(ids[ids.length - 1]),
       path: ids.map((id) => ({ lat: stops[id].lat, lon: stops[id].lon })), stopsPassed: ids.length - 1,
       wait: w.min, waitLive: w.live, waitTimed: !!w.timed && !w.live, ride: r.min, source: r.source, conf: r.conf, boardT: w.t, alightT: r.alightT,
-      tripId: w.tu && w.tu.trip && w.tu.trip.trip_id != null ? String(w.tu.trip.trip_id) : null,
+      tripId: w.inst ? w.inst.id : w.tu && w.tu.trip && w.tu.trip.trip_id != null ? String(w.tu.trip.trip_id) : null,
       vehicleId: w.tu && w.tu.vehicle && w.tu.vehicle.id != null ? String(w.tu.vehicle.id) : null };   // Passio reuses trip ids across buses
+    if (w.sched || (sched && w.timed)) leg.waitSched = true;   // timetable mode: a scheduled departure, fixed like a live one, never live
     if (r.p10 != null) { leg.p10 = r.p10; leg.p90 = r.p90; }
     return leg;
   };
@@ -214,7 +248,8 @@ function candidates(C, seqs, from, to, t0, maxM) {
         const path = pathIdx(seq, b.i, a.i);
         if (!path) continue;
         const r = C.ride(rid, seq, path, w);
-        const x = { arr: r.alightT + a.min * 60, wm: b.min + a.min, b, a, path, w, r };
+        if (!r) continue;   // timetable mode: no scheduled trip goes there
+        const x = { arr: r.alightT + a.min * 60, wm: b.min + a.min, b, a, path, w: r.board || w, r };
         for (const k in best) if (!best[k] || better[k](x, best[k])) best[k] = x;
       }
     }
@@ -244,7 +279,8 @@ function candidates(C, seqs, from, to, t0, maxM) {
         const path = pathIdx(sa, b.i, k);
         if (!path) continue;
         const r = C.ride(ra, sa, path, w);
-        if (!atK[k] || r.alightT < atK[k].r.alightT) atK[k] = { b, w, r, path };
+        if (!r) continue;
+        if (!atK[k] || r.alightT < atK[k].r.alightT) atK[k] = { b, w: r.board || w, r, path };
       }
     }
     for (const B of keys) {
@@ -264,8 +300,10 @@ function candidates(C, seqs, from, to, t0, maxM) {
           for (const a of near[B].al) {
             const pb = pathIdx(sb, m, a.i);
             if (!pb) continue;
-            const rb = C.ride(rb0, sb, pb, wb), arr = rb.alightT + a.min * 60;
-            if (!best || arr < best.arr) best = { arr, x, d, xm, wb, rb, pb, a };
+            const rb = C.ride(rb0, sb, pb, wb);
+            if (!rb) continue;
+            const arr = rb.alightT + a.min * 60;
+            if (!best || arr < best.arr) best = { arr, x, d, xm, wb: rb.board || wb, rb, pb, a };
           }
         });
       });
@@ -293,13 +331,14 @@ function candidates(C, seqs, from, to, t0, maxM) {
  * @returns {{now:number, options:Array<Object>, walkOnly:{m:number, min:number}}}
  *   Option = {key, total, totalMin, arrive, t0, walkMin, walkM, meets, legs:[WalkLeg|BusLeg]} (see docs/ARCHITECTURE.md)
  */
-export function plan({ from, to, now, data, predict, walkMins } = {}) {
+export function plan({ from, to, now, data, predict, walkMins, timetable } = {}) {
   const t0 = typeof now === "number" && isFinite(now) ? now : nowS();
   const result = { now: t0, options: [], walkOnly: { m: 0, min: 0 } };
   if (!okPt(from) || !okPt(to)) return result;
   const wm = walkM(from, to);
   result.walkOnly = { m: Math.round(wm), min: wm / WALK_M_MIN };
-  const C = makeCtx({ data, predict, walkMins });
+  const C = makeCtx({ data, predict, walkMins, timetable, t0 });
+  if (timetable) result.timetable = true;
   const D = data || {};
   const seqs = {};
   for (const rid of Object.keys(D.routeStops || {})) {
@@ -337,7 +376,7 @@ function overridesOf(legs) {
  * @param {{walkRoute:Function, now?:number, data?:Object, from?:{lat,lon}, to?:{lat,lon}, predict?:Object}} ctx
  * @returns {Promise<Object|null>} refined option ({...option, refined:true, replanned?:true}) or null
  */
-export async function refineWalking(option, { walkRoute, now, data, from, to, predict, _depth = 0 } = {}) {
+export async function refineWalking(option, { walkRoute, now, data, from, to, predict, timetable, _depth = 0 } = {}) {
   if (!option || !Array.isArray(option.legs)) return option || null;
   const t0 = typeof now === "number" && isFinite(now) ? now : typeof option.t0 === "number" ? option.t0 : nowS();
   const legs = option.legs.map((l) => ({ ...l }));
@@ -358,13 +397,13 @@ export async function refineWalking(option, { walkRoute, now, data, from, to, pr
   for (const l of legs) {
     if (l.type === "walk") { t += (Number(l.min) || 0) * 60; continue; }
     if (l.type !== "bus") continue;
-    if (l.waitLive || l.waitTimed) {   // a live or scheduled departure leaves at its time: arriving later misses it
+    if (l.waitLive || l.waitTimed || l.waitSched) {   // a live or scheduled departure leaves at its time: arriving later misses it
       if (t > l.boardT + GRACE_S) { missed = true; break; }
       l.wait = Math.max(0, (l.boardT - t) / 60);
     } else {
       l.boardT = t + l.wait * 60;
     }
-    if (!((l.source === "live" || (l.waitTimed && l.source === "schedule")) && l.alightT > l.boardT)) l.alightT = l.boardT + l.ride * 60;
+    if (!((l.source === "live" || l.source === "timetable" || (l.waitTimed && l.source === "schedule")) && l.alightT > l.boardT)) l.alightT = l.boardT + l.ride * 60;
     t = l.alightT;
   }
   if (missed) {
@@ -373,10 +412,10 @@ export async function refineWalking(option, { walkRoute, now, data, from, to, pr
     const f = okPt(from) ? from : first.type === "walk" ? first.from : first.board;
     const d = okPt(to) ? to : last.type === "walk" ? last.to : last.alight;
     if (!okPt(f) || !okPt(d) || !data) return null;
-    const again = plan({ from: f, to: d, now: t0, data, predict, walkMins: overridesOf(legs) });
+    const again = plan({ from: f, to: d, now: t0, data, predict, walkMins: overridesOf(legs), timetable });
     const same = again.options.find((o) => o.key === option.key);
     if (!same) return null;
-    const r = await refineWalking(same, { walkRoute, now: t0, data, from: f, to: d, predict, _depth: _depth + 1 });
+    const r = await refineWalking(same, { walkRoute, now: t0, data, from: f, to: d, predict, timetable, _depth: _depth + 1 });
     return r ? { ...r, replanned: true } : null;
   }
   const total = (t - t0) / 60;
