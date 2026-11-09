@@ -847,6 +847,22 @@ Owner steps, columns and privacy rules: **`docs/USAGE-STATS.md`**.
   enough to walk.", End trip, Trip steps (core/tripprogress.js `walkTrip` / `walkLeft`); no notification prompt.
 - Tests: tests/trip-arriving.js (8), core-rank.js walk first (3), views-flows.js walk option. sw sb-v2-74.
 
+## Trip start time (2026-11-09, ported from the live repo; owner: "when deciding a destination, the user should have an optional trip start time. This trip start time should schedule the arrivals based on the scheduled arrival time (this should have a larger disclaimer ...)")
+The live repo's docs/ARCHITECTURE.md "Trip start time" is the full contract (the control, the wheels, the modes, the
+rules, the disclaimer's words, data, tests). What differs here:
+- CTA legs at a chosen time: Directions passes CTA's published schedule around the start time (`core/ctasched.js
+  scheduledTrips(state.ctaSchedule, t0, {aheadS: AHEAD_S})`) as the plan's `trips` and no live buses; the planner keeps
+  only sched:true trips in timetable mode, so a CTA leg boards a scheduled CTA trip (never a live CTA prediction) and
+  reads "Scheduled bus at X" / "from the timetable" like a shuttle leg (`waitSched`, source 'timetable').
+- This build has no long-way-around rule (live 2026-11-06), so the core test of the 53rd's timetable uses Ellis & 53rd St.
+  to Logan Center at noon (12:04 to 12:12 PM) instead of Regenstein to Vue53; there is no shared golden file here (the
+  live repo's planner answers differ by that rule).
+- Files: tools/build_gtfs.py `build_timetable` (web/data/timetable.json; pages.yml rebuilds it), data/timetable.js,
+  core/timetable.js, core/planner.js `plan({timetable})`, ui/views/directions.js `whenHTML` / `ttNoteHTML`,
+  ui/views/leavepick.js, tripinfo.js "Scheduled bus at"; css views.css `.v-dwhen*`, settings.css `.wh-col--day`,
+  journey.css `.v-ttnote`; tests core-timetable.js (incl. a CTA case), data-timetable.js, views-tripstart.js,
+  e2e-tripstart.js, tools/test_timetable.py; sw sb-v2-118. iPhone: docs/redesign/GLASS-IOS-PAUSED.md.
+
 ## Line replaces line: Back after a line opened from a line (2026-11-02, owner: "Pressing back after selecting a specific line to view should not shift to the previous line but rather go to the previous menu view entirely")
 - `ui/router.js navigate`: a view registered with `replaceSelf: true` (only `route`, ui/views/route.js) that is opened
   while the same view shows another id (a map line tap via main.js onLineTap, a bus tap via onBusTap) does not push the
