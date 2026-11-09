@@ -30,6 +30,7 @@ import { initFrame, initTextSize, initGlassLite } from "./ui/frame.js";
 import { isSettingsOpen, closeSettingsOverlay } from "./ui/settings-overlay.js";
 import { startTripMap } from "./ui/tripmap.js";
 import { createCompass, mayAskCompass } from "./ui/compass.js";
+import { rememberInstall, installedNow } from "./core/install.js";
 
 /** Every view module; each calls registerView() at import time ("timepick" only registers its actions: Lines by Time is an overlay). */
 export const VIEW_IDS = Object.freeze(["nearby", "stop", "routes", "route", "alerts", "about", "pick", "directions", "myroutes", "settings", "timepick"]);
@@ -78,6 +79,27 @@ window.addEventListener("error", (e) => {
   reportError(e.error || e.message);
 });
 window.addEventListener("unhandledrejection", (e) => reportError(e.reason));
+
+/* ---------------- Add to Home Screen: the browser's own one-tap install (owner 2026-11-07/09) ----------------
+   Chrome, Edge and Samsung Internet announce that they can install the app with beforeinstallprompt: it is kept (no
+   browser mini-infobar) for the Add to Home Screen popup's one button (ui/install-prompt.js calls prompt()). An install
+   from anywhere (that button, the address bar's install icon, the browser menu) fires appinstalled: remembered, so the
+   popup never shows again in this browser. iPhone and iPad Safari have no such event (the popup shows steps there).
+   Listening from the first module run: the event can come before boot finishes. Not in demo mode (no popup there). */
+const install = { event: null, installed: false };
+if (!DEMO) {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    install.event = e;
+    bus.emit("install:offer", {});
+  });
+  window.addEventListener("appinstalled", () => {
+    install.event = null;
+    install.installed = true;
+    rememberInstall({ installedAt: Date.now() });
+    bus.emit("install:done", {});
+  });
+}
 
 /* ---------------- map (with a no-op fallback) ---------------- */
 function nullMap() {
@@ -438,6 +460,11 @@ function registerCoreActions() {
   registerAction("locate", () => locate(), fb);
   registerAction("retry", () => (live ? live.pollNow() : undefined), fb);
   registerAction("detent", (ds) => sheet.setDetent(ds.id), fb);
+  // Settings > Add to Home Screen: Settings closes, the Add to Home Screen popup opens on the map (focus on its heading)
+  registerAction("install:open", () => {
+    if (isSettingsOpen()) closeSettingsOverlay({ focus: "none" });
+    import("./ui/install-prompt.js").then((m) => m.openInstallPrompt({ store, ctx, install })).catch(reportError);
+  }, fb);
 }
 /* Open a stop / route (the sheet goes to the view's detent). Only choosing a route frames the map: stop and
    bus taps keep the user's map view (owner request 2026-10-09). */
@@ -532,6 +559,9 @@ async function boot() {
   // the feedback circle under Settings, until the rider gives feedback or silences it (owner 2026-11-02; glass spec Q7,
   // owner 2026-11-04); the only feedback prompt since the beta welcome popup was removed (owner 2026-11-04)
   import("./ui/feedback-button.js").then((m) => m.startFeedbackButton({ store, ctx })).catch((e) => console.warn("feedback button", e));
+  // Add to Home Screen (owner 2026-11-07/09): only outside the installed app, never in demo mode; it shows by itself only
+  // after the live feed first answered (the next bus comes first) and waits for trips, menus and the feedback ping
+  if (!DEMO && !installedNow()) import("./ui/install-prompt.js").then((m) => m.startInstallPrompt({ store, ctx, install })).catch((e) => console.warn("install prompt", e));
   // anonymous usage statistics (owner 2026-10-27; data/usage.js): nothing at all until a receiver is set, never in demo mode
   if (!DEMO) import("./data/usage.js").then((m) => m.usageConfigured() && import("./ui/views/about.js").then((a) => m.startUsage(store, { ver: a.APP_VERSION })))
     .catch((e) => console.warn("usage statistics", e));

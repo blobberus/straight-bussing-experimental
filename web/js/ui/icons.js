@@ -2,7 +2,7 @@
  * @module ui/icons
  * The one icon set of the website (docs/DESIGN-SPEC.md section 5): Lucide (ISC license, https://lucide.dev), drawn on
  * its 24 grid with a 2 px stroke and round caps and joins, so a 20 px icon reads like SF Symbols Regular next to the
- * iPhone app. The gaps in Lucide (a walking figure, an antenna with a slash) are drawn here on the same grid and
+ * iPhone app. The gaps in Lucide (a walking figure, an antenna with a slash, Edge's "App available" icon) are drawn here on the same grid and
  * stroke. One glyph per meaning; filled variants ("-fill") only where the spec uses them (selected tab, following,
  * favorite on). No emoji, no mixed stroke widths (the back chevron is the one 2.5 px glyph, like SF Symbols semibold).
  * Every icon is decorative (aria-hidden): the text next to it, or the button's aria-label, says the same.
@@ -43,6 +43,15 @@ export const PATHS = Object.freeze({
   "eye-off": '<path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/>',
   menu: '<path d="M4 12h16"/><path d="M4 6h16"/><path d="M4 18h16"/>',
   phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.8 12.8 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.8 12.8 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  /* the browsers' own install glyphs, as Lucide lookalikes (Apple's SF Symbols may not be used on the web): Safari's
+     Share (square and arrow up) and Add to Home Screen (plus in a rounded square); core/installsteps.js */
+  share: '<path d="M12 2v13"/><path d="m16 6-4-4-4 4"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>',
+  "square-plus": '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/>',
+  /* Chrome's menu (three dots, upright) and its install icon in the address bar (a screen with a down arrow) */
+  "ellipsis-vertical": '<circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>',
+  "monitor-down": '<path d="M12 13V7"/><path d="m15 10-3 3-3-3"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/>',
+  /* drawn: Edge's "App available" icon (three squares and a plus) on Lucide's layout-grid */
+  "apps-plus": '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/><path d="M17.5 14v7"/><path d="M14 17.5h7"/>',
   "square-arrow-out-up-right": '<path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/><path d="m21 3-9 9"/><path d="M15 3h6v6"/>',
   ellipsis: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',

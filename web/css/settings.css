@@ -11,6 +11,9 @@
 
 /* Credits (owner 2026-10-16): the last item; the chevron turns down when the list is open */
 .st-credits { margin-top: var(--s-6); }
+/* Settings > Add to Home Screen (owner 2026-11-07/09): one section gap above it, About right under it */
+.st-a2hs { margin-top: var(--s-6); }
+.st-a2hs + .v-card { margin-top: var(--s-3); }
 .st-credbtn { min-height: var(--tap); }
 .st-credchev .ic { transition: transform var(--m-quick) var(--ease-out); }
 .st-credbtn[aria-expanded="true"] .st-credchev .ic { transform: rotate(90deg); }

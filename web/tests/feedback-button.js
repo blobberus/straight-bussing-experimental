@@ -17,6 +17,9 @@ import {
   markFeedbackDone, _resetFeedback,
 } from "../js/ui/feedback.js";
 import { isSettingsOpen, overlayKind, closeSettingsOverlay, OVERLAY_ID } from "../js/ui/settings-overlay.js";
+import { A2HS_OFF_KEY } from "../js/ui/install-prompt.js";
+// test seam: the Add to Home Screen card (ui/install-prompt.js) never shows by itself in these flows (install.test.html covers it)
+try { sessionStorage.setItem(A2HS_OFF_KEY, "1"); } catch (e) { /* blocked storage */ }
 
 const FORM = "https://forms.gle/zK4hi2UfYsrXURR97";
 const DASH = /[–—]/;

@@ -247,7 +247,7 @@ export function openSettingsOverlay(ctx, content, opts = {}) {
   void scrim.offsetWidth;          // start the scrim fade from 0
   scrim.classList.add("is-in");
   // the app behind (its sheet, the glass controls, the bottom row) must not be reachable while Settings is on top
-  for (const id of ["sheetHead", "content", "tabs", "mapctl", "bottomrow", "topbar", "ctxbar"]) {
+  for (const id of ["sheetHead", "content", "tabs", "mapctl", "bottomrow", "topbar", "ctxbar", "a2hs"]) {
     const n = $(id);
     if (n && !n.inert) { n.inert = true; sess.inerted.push(n); }
   }
