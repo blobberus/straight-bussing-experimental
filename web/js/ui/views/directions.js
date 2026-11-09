@@ -17,6 +17,10 @@
  * focused; collapsing the sheet puts the keyboard away and shows the selected option on the map (the card shows
  * again when the sheet expands). Focusing a field expands the sheet.
  * Walking is always visible: card + step markup in ./tripinfo.js.
+ * Trip start time (owner 2026-11-09): under the fields a "Leave now" control; a chosen time ("Leave tomorrow at 5:40 PM",
+ * cleared by its x) plans from then: under 10 minutes away with live times, later from the timetable (core/timetable.js
+ * startMode; data/timetable.js loads it on first use). Never stored: it lives in D.at for this visit only, and a time that
+ * has passed goes back to Leave now.
  */
 import { registerView } from "../router.js";
 import { registerAction } from "../actions.js";
@@ -31,7 +35,7 @@ import { rankOptions, criteriaText, walkFirst } from "../../core/rank.js";
 import { walkRoute } from "../../core/walk.js";
 import { createThrottle } from "../../core/throttle.js";
 import { predict } from "../../core/predict.js";
-import { routeChip, emptyState, skeleton, OFFICIAL_PHONE } from "../components.js";
+import { routeChip, emptyState, skeleton, officialLinks, OFFICIAL_PHONE } from "../components.js";
 import { matchStations, ICONS } from "./pick.js";
 import { noBusHelpHTML } from "./alerts.js";   // the operator's own words + who to call when no bus reports (rider safety)
 import { createPlaceSearch, assumeNoteHTML, setHTMLKeepFocus, focusNote } from "./placesearch.js";
@@ -42,6 +46,10 @@ import { DEMO } from "../../core/demo.js";
 import { bus } from "../../core/events.js";
 import { WALK_IC, tag, mins, walkMins, walkTotal, optionLines, stepsHTML as stepsFor } from "./tripinfo.js";
 import { svg } from "../icons.js";
+import { startMode, leaveLabel, outsideTimetable, LEAVE_NOW, AHEAD_S, TT_TITLE, TT_DISCLAIMER, TT_SOON, TT_START_LATER, TT_NONE_TITLE, TT_OUTSIDE, TT_LOADING, TT_FAILED } from "../../core/timetable.js";
+import { scheduledTrips } from "../../core/ctasched.js";
+import { openLeavePick } from "./leavepick.js";
+import { loadTimetable, timetableNow } from "../../data/timetable.js";
 import { allTrips, allBuses } from "../../core/agency.js";
 
 /** The required estimate note under the options. */
@@ -53,16 +61,18 @@ const CLEAR_IC = svg("circle-x-fill", 17);
 const CHEV_IC = svg("chevron-right", 11, { stroke: 2.5 });
 
 /** View-local state. Endpoints are {lat, lon, label, stop?, me?}. */
-export const D = { from: null, to: null, fromText: "", toText: "", active: null, sugs: [], result: null, sel: 0, selKey: null, refining: false, meDenied: false, token: 0, missed: false, focusTo: false, optsChanged: false };
+export const D = { from: null, to: null, fromText: "", toText: "", active: null, sugs: [], result: null, sel: 0, selKey: null, refining: false, meDenied: false, token: 0, missed: false, focusTo: false, optsChanged: false,
+  at: null, tt: "" };   // at: the chosen trip start (unix s; null = Leave now; never stored); tt: '' | 'loading' | 'failed' (the timetable)
 /** Minimum seconds between background re-plans on live updates (iOS AppModel.dirRefreshS). */
 export const DIR_REFRESH_S = 8;
 /** Injectable dependencies (tests replace them; wallMs / later = the re-plan throttle's clock and timer). */
-export const deps = { plan, refineWalking, walkRoute, predict, wallMs: () => Date.now(), later: (f, ms) => setTimeout(f, ms) };
+export const deps = { plan, refineWalking, walkRoute, predict, loadTimetable, wallMs: () => Date.now(), later: (f, ms) => setTimeout(f, ms) };
 let rootRef = null, ctxRef = null, offStore = null, lastUser = null, offPlanWatch = null, offInset = null, lastRest = null;
 const photon = createPlaceSearch(() => patchSug());
 /** Background re-plan on live updates: .poke() per change, at most every DIR_REFRESH_S (gate: nothing open / failing feed = skip, a new plan still refining = defer). */
 export const liveReplan = createThrottle(() => replan(), { everyMs: DIR_REFRESH_S * 1000, now: () => deps.wallMs(), later: (f, ms) => deps.later(f, ms),
-  gate: () => (!rootRef || !D.from || !D.to || !D.result || cur().failed ? "skip" : D.refining ? "defer" : "go") });
+  gate: () => (!rootRef || !D.from || !D.to || !D.result || cur().failed ? "skip" : D.refining ? "defer"
+    : D.result.mode === "timetable" && startMode(D.at, nowFn()) === "timetable" ? "skip" : "go") });   // a timetable plan uses no live data until its time is near
 
 const cur = () => ctxRef?.store?.get?.() || {};
 const nowFn = () => (ctxRef?.now ? ctxRef.now() : nowS());
@@ -145,8 +155,9 @@ function optionHTML(o, i, now, state) {
   const crit = (D.result?.options?.length || 0) > 1 ? criteriaText(o.meets) : "";
   const critHTML = crit ? `<span class="j-crit">${esc(crit)}</span>` : "";
   const routesTxt = o.legs.filter((l) => l.type === "bus").map((l) => state.routes?.[l.rid]?.short || l.rid).join(" then ");
-  const aria = `Option ${i + 1}${crit ? " (" + crit + ")" : ""}: about ${o.totalMin} minutes including ${wt > 0 ? walkMins(wt) + " minutes walking" : "no walking"}, arrive ${clock(o.arrive)}${routesTxt ? ", take " + routesTxt : ""}. ${lines.text} Estimate.`.replace(/<1 min/g, "under 1 min");
-  const start = on && !isPlanJourney(state) && planJourney(o) ? '<button type="button" class="v-btn v-btn--primary v-btn--block j-start" data-action="dir:start">Start</button><p class="v-fine j-starthint">Shows only this trip&rsquo;s routes on the map. Follow the bus stop by stop in Current trip.</p>' : "";
+  const tt = D.result?.mode === "timetable";
+  const aria = `Option ${i + 1}${crit ? " (" + crit + ")" : ""}: about ${o.totalMin} minutes including ${wt > 0 ? walkMins(wt) + " minutes walking" : "no walking"}, arrive ${clock(o.arrive)}${routesTxt ? ", take " + routesTxt : ""}. ${lines.text} ${tt ? "Scheduled times, estimate." : "Estimate."}`.replace(/<1 min/g, "under 1 min");
+  const start = !on ? "" : tt ? startLaterHTML() : !isPlanJourney(state) && planJourney(o) ? '<button type="button" class="v-btn v-btn--primary v-btn--block j-start" data-action="dir:start">Start</button><p class="v-fine j-starthint">Shows only this trip&rsquo;s routes on the map. Follow the bus stop by stop in Current trip.</p>' : "";
   // the total and its "est." stay together (no "~" in front of an est. number: spec O4); the arrival clock on the right
   return `<div class="v-opt${on ? " is-on" : ""}"><button type="button" class="v-optmain" data-action="dir:opt" data-i="${i}" aria-pressed="${on}" aria-label="${esc(aria)}">${critHTML}<span class="v-otop"><span class="v-otot">${o.totalMin}<small> min</small>${tag("est.")}</span><span class="v-oarr">Arrive ${esc(clock(o.arrive))}</span></span><span class="v-osum">${legStrip(o, state)}</span>${lines.html}</button>${on ? stepsHTML(o, now, state) + start : ""}</div>`;
 }
@@ -158,10 +169,29 @@ function optionHTML(o, i, now, state) {
 function walkOptionHTML(o, i, now, state) {
   const on = i === D.sel, l = o.legs[0] || {};
   const aria = `Option ${i + 1}: walk the whole way, ${walkMins(o.walkMin)} minutes, ${Math.round(o.walkM || 0)} meters, arrive ${clock(o.arrive)}. Close enough to walk.`.replace(/<1 minutes/g, "under 1 minute");
-  const start = on && !isPlanJourney(state) && planJourney(o) ? '<button type="button" class="v-btn v-btn--primary v-btn--block j-start" data-action="dir:start">Start</button><p class="v-fine j-starthint">Follow your walk in Current trip.</p>' : "";
+  const start = !on ? "" : D.result?.mode === "timetable" ? startLaterHTML() : !isPlanJourney(state) && planJourney(o) ? '<button type="button" class="v-btn v-btn--primary v-btn--block j-start" data-action="dir:start">Start</button><p class="v-fine j-starthint">Follow your walk in Current trip.</p>' : "";
   return `<div class="v-opt v-opt--walk${on ? " is-on" : ""}"><button type="button" class="v-optmain" data-action="dir:opt" data-i="${i}" aria-pressed="${on}" aria-label="${esc(aria)}">`
     + `<span class="j-crit">Close enough to walk</span><span class="v-otop"><span class="j-walkic" aria-hidden="true">${svg("walk", 20)}</span><span class="v-otot">${esc(walkMins(o.walkMin))}<small> min walk</small></span><span class="v-oarr">Arrive ${esc(clock(o.arrive))}</span></span>`
     + `<span class="v-sec j-oline">${esc(walkDetail(o.walkM, l.source))}</span></button>${on ? stepsHTML(o, now, state) + start : ""}</div>`;
+}
+
+/** Instead of Start on a plan for later (timetable mode): when Start comes (live times take over 10 minutes before). */
+const startLaterHTML = () => `<p class="v-fine j-starthint j-later">${esc(TT_START_LATER)}</p>`;
+
+/**
+ * The larger disclaimer over a plan for a chosen start time (owner 2026-11-09: "this should have a larger disclaimer saying
+ * that most buses tend to run late on schedule and currently the ... shuttles don't have a way of adjusting to this issue"):
+ * a warnBg card above the options, more visible than the est. notes, not an alarm (a clock, no red), with the outside-the-
+ * timetable note when it applies and the official contact. Trusted HTML.
+ * @param {number} at the chosen start
+ * @returns {string}
+ */
+export function ttNoteHTML(at) {
+  const tt = timetableNow(), outside = tt && outsideTimetable(tt, at);
+  return `<section class="v-ttnote" aria-labelledby="ttNoteH">${svg("clock-alert", 20)}<span class="v-grow">`
+    + `<b class="v-ttnote-h" id="ttNoteH">${esc(TT_TITLE)}</b><span class="v-ttnote-b">${esc(TT_DISCLAIMER)}</span>`
+    + (outside ? `<span class="v-ttnote-b">${esc(TT_OUTSIDE)}</span>` : "")
+    + `<span class="v-ttnote-off">Unofficial. ${officialLinks()}</span></span></section>`;
 }
 
 /** "605 m on sidewalks" (a routed walk) or "605 m, walking estimate" (straight line); the iPhone app's WalkOptionCard. */
@@ -202,15 +232,23 @@ export function resHTML(state, now = nowS()) {
     if (!D.from && !state.user && !(D.active === "from" && D.sugs.some((s) => s.kind === "me"))) h +='<button type="button" class="v-btn v-btn--secondary v-btn--block" data-action="dir:me" data-key="from">Start from my location</button>';
     return h;
   }
+  if (D.tt === "failed") return cov + emptyState(TT_FAILED, "", { icon: "wifi-off" }) + `<button type="button" class="v-btn v-btn--secondary v-btn--block" data-action="dir:when-clear">${esc(LEAVE_NOW)}</button>`;
+  if (D.tt === "loading") return cov + `<p class="v-hint" role="status">${esc(TT_LOADING)}</p>` + skeleton(2);
   if (!state.staticLoaded || !D.result) return cov + skeleton(2);
-  const r = D.result, w = r.walkOnly || { m: 0, min: 0 }, level = staleLevel(state, now);
-  let h = tripBarHTML(state) + (level ? '<p class="v-stale" role="status">Live data delayed. Bus times may be off.</p>' : "") + cov;
+  const r = D.result, w = r.walkOnly || { m: 0, min: 0 }, tt = r.mode === "timetable", t0 = r.t0 || now;
+  const level = tt ? "" : staleLevel(state, now);   // a timetable plan uses no live data: the status banner still flags the feed
+  let h = tripBarHTML(state) + (level ? '<p class="v-stale" role="status">Live data delayed. Bus times may be off.</p>' : "") + cov
+    + (tt ? ttNoteHTML(t0) : r.mode === "live" ? `<p class="v-hint v-soon">${esc(TT_SOON)}</p>` : "");
+  if (!r.options.length && tt) {   // nothing on the timetable then: say so, offer the walk (no live help: nothing live was asked)
+    h += emptyState(TT_NONE_TITLE, `The timetable has no shuttle that goes close to both places around ${clock(t0)}.`, { icon: "route" });
+    return h + `<div class="v-opt v-opt--walk is-on"><div class="v-optmain"><span class="v-otop"><span class="j-walkic" aria-hidden="true">${svg("walk", 20)}</span><span class="v-otot">${mins(w.min)}<small> min walk</small></span><span class="v-oarr">Arrive ${esc(clock(t0 + (w.min || 0) * 60))}</span></span><span class="v-sec j-oline">${esc(walkDetail(w.m, w.source))}</span></div></div>`;
+  }
   if (!r.options.length) {
     const running = (state.buses || []).length > 0;
     h += liveUnknown(state, now) ? emptyState("Can't plan shuttle trips right now", "The live shuttle feed can't be reached, so we can't tell which buses are running.", { icon: "wifi-off" })   // feed outage != no service
       : emptyState("No practical shuttle route right now", D.missed ? "The next buses leave before you could reach the stop." : running ? "Nothing runs close enough to both places."
         : silentService(state, now) ? silentText(state, scheduledRoutes(state, now, { hidden: effectiveHidden(state) }), now, OFFICIAL_PHONE) : "No shuttles are running right now.", { icon: "route" });   // empty feed, routes scheduled
-    h += `<div class="v-opt v-opt--walk is-on"><div class="v-optmain"><span class="v-otop"><span class="j-walkic" aria-hidden="true">${svg("walk", 20)}</span><span class="v-otot">${mins(w.min)}<small> min walk</small></span><span class="v-oarr">Arrive ${esc(clock(now + (w.min || 0) * 60))}</span></span><span class="v-sec j-oline">${esc(walkDetail(w.m, w.source))}</span></div></div>`;
+    h += `<div class="v-opt v-opt--walk is-on"><div class="v-optmain"><span class="v-otop"><span class="j-walkic" aria-hidden="true">${svg("walk", 20)}</span><span class="v-otot">${mins(w.min)}<small> min walk</small></span><span class="v-oarr">Arrive ${esc(clock(t0 + (w.min || 0) * 60))}</span></span><span class="v-sec j-oline">${esc(walkDetail(w.m, w.source))}</span></div></div>`;
     return h + (running ? "" : noBusHelpHTML(state, now));
   }
   h += r.options.slice(0, PLANNER.MAX_OPTS).map((o, i) => (o.walkOnly ? walkOptionHTML(o, i, now, state) : optionHTML(o, i, now, state))).join("");
@@ -239,15 +277,32 @@ function field(key) {
 export function renderDirections(state, now = nowS()) {
   return `<div class="v-dir">${dirboxHTML()}<div data-region="dir-sug">${sugHTML()}</div><div data-region="dir-res">${resHTML(state, now)}</div></div>`;
 }
-/** The Start / Destination fields with the swap button (in the top card, or in the panel). */
+/** The Start / Destination fields with the swap button, then the trip start time (in the top card, or in the panel). */
 function dirboxHTML() {
-  return `<div class="v-dirbox">${field("from")}${field("to")}<button type="button" class="v-dswap" data-action="dir:swap" aria-label="Swap start and destination">${SWAP_IC}</button></div>`;
+  return `<div class="v-dirbox"><div class="v-dfields">${field("from")}${field("to")}<button type="button" class="v-dswap" data-action="dir:swap" aria-label="Swap start and destination">${SWAP_IC}</button></div>`
+    + `<div class="v-dwhen" data-region="dir-when">${whenHTML()}</div></div>`;
+}
+
+/**
+ * The trip start time control (owner 2026-11-09): "Leave now", or the chosen time with a clear button. A tap opens the
+ * wheels (dir:when). Trusted HTML.
+ * @param {number} [now]
+ * @returns {string}
+ */
+export function whenHTML(now = nowFn()) {
+  const set = startMode(D.at, now) !== "now", label = leaveLabel(D.at, now);
+  const aria = set ? `Trip start time: ${label}. Change` : `Trip start time: ${LEAVE_NOW}. Choose a later time`;
+  return `<button type="button" class="v-dwhenbtn${set ? " is-set" : ""}" data-action="dir:when" aria-haspopup="dialog" aria-label="${esc(aria)}">`
+    + `<span class="v-dwhenic" aria-hidden="true">${svg("clock", 17)}</span><span class="v-dwhentxt">${esc(label)}</span>`
+    + `<span class="v-dwhenchev" aria-hidden="true">${svg("chevron-down", 13, { stroke: 2.5 })}</span></button>`
+    + (set ? `<button type="button" class="v-dwhenclear" data-action="dir:when-clear" aria-label="Clear the start time and leave now">${CLEAR_IC}</button>` : "");
 }
 
 const lastHtml = {};
 function patch(region, html) { const el = rootRef?.querySelector?.(`[data-region="${region}"]`); if (el && lastHtml[region] !== html) { setHTMLKeepFocus(el, html); lastHtml[region] = html; } }
 function patchSug() { if (D.active) { D.sugs = computeSugs(cur(), D.active === "from" ? D.fromText : D.toText); if (D.active === "to" && !D.from && !cur().user) D.sugs = D.sugs.filter((s) => s.kind !== "me"); } patch("dir-sug", sugHTML()); }   // no start yet: the results' "Start from my location" is the one location action
 function patchRes() { patch("dir-res", resHTML(cur(), nowFn())); try { bus.emit("sheet:header", {}); } catch (e) { /* header optional */ } }
+function patchWhen() { patch("dir-when", whenHTML()); }
 function setInput(key) { const el = fq(`[data-input="dir-${key}"]`); if (el) el.value = D[key]?.label || (key === "from" ? D.fromText : D.toText); }
 
 /** Draw the selected option (or the walk-only line) on the map; optionally fit to it. */
@@ -283,16 +338,35 @@ function pickSel(fresh) {
 export async function replan({ fresh = false } = {}) {
   const state = cur(), token = ++D.token;
   if (!D.from || !D.to || !state.staticLoaded) { D.result = null; D.refining = false; patchRes(); try { ctxRef?.map?.drawPlan?.(null); } catch (e) { /* */ } return; }
-  const now = nowFn(), from = D.from, to = D.to;
-  // shuttles and CTA (core/agency.js): CTA predictions or scheduled times (sched, shown as "est."), CTA buses, CTA directions
-  const data = { stops: state.stops, routes: state.routes, routeStops: state.routeStops, trips: allTrips(state), buses: allBuses(state), patterns: state.ctaPatterns || {} };
+  const wall = nowFn(), from = D.from, to = D.to;
+  if (D.at != null && startMode(D.at, wall) === "now") { D.at = null; patchWhen(); }   // its time has come: Leave now
+  // the trip start (owner 2026-11-09): now, a chosen time under 10 minutes away (live times from then), or later (the timetable)
+  const mode = startMode(D.at, wall), now = mode === "now" ? wall : D.at;
+  let timetable = null;
+  if (mode === "timetable") {
+    timetable = timetableNow();
+    if (!timetable) {
+      D.tt = "loading"; D.result = null; D.refining = false; patchRes();
+      try { ctxRef?.map?.drawPlan?.(null); } catch (e) { /* */ }
+      try { timetable = await deps.loadTimetable(); } catch (e) { timetable = null; }
+      if (token !== D.token) return;
+      if (!timetable) { D.tt = "failed"; patchRes(); return; }
+      fresh = true;
+    }
+  }
+  D.tt = "";
+  // shuttles and CTA (core/agency.js); a timetable plan takes CTA's published schedule around the start time instead of
+  // its live predictions (core/ctasched.js scheduledTrips), and no live bus
+  const data = { stops: state.stops, routes: state.routes, routeStops: state.routeStops, patterns: state.ctaPatterns || {},
+    trips: timetable ? (state.ctaSchedule ? scheduledTrips(state.ctaSchedule, now, { aheadS: AHEAD_S }) : []) : allTrips(state), buses: timetable ? [] : allBuses(state) };
   let r;
-  try { r = deps.plan({ from, to, now, data, predict: deps.predict }); } catch (e) { r = null; }
+  try { r = deps.plan({ from, to, now, data, predict: deps.predict, ...(timetable ? { timetable } : {}) }); } catch (e) { r = null; }
   if (!r || !Array.isArray(r.options)) { const m = hav(from, to) * 1.2; r = { options: [], walkOnly: { m, min: m / 80 } }; }
+  r = { ...r, mode, t0: now };
   if (fresh || !D.result) { D.result = r; D.missed = false; D.refining = true; pickSel(fresh); patchRes(); drawSel(fresh); }
   const top = r.options.filter((o) => !o.walkOnly).slice(0, PLANNER.MAX_OPTS);   // the walk option is rebuilt below
   const [settled, walk] = await Promise.all([
-    Promise.allSettled(top.map((o) => deps.refineWalking(o, { walkRoute: deps.walkRoute, now, data, from, to, predict: deps.predict }))),
+    Promise.allSettled(top.map((o) => deps.refineWalking(o, { walkRoute: deps.walkRoute, now, data, from, to, predict: deps.predict, ...(timetable ? { timetable } : {}) }))),
     Promise.resolve().then(() => deps.walkRoute(from, to)).catch(() => null),
   ]);
   if (token !== D.token) return;
@@ -312,6 +386,7 @@ export async function replan({ fresh = false } = {}) {
  * @returns {boolean}
  */
 export function startTrip() {
+  if (D.result?.mode === "timetable") return false;   // a plan for later: Start comes when live times take over
   const j = planJourney(D.result?.options?.[D.sel], D.to?.label);
   if (!j || !ctxRef?.store) return false;
   ctxRef.store.set({ journey: j });
@@ -343,7 +418,7 @@ const legSig = (j) => ((j && j.legs) || []).filter((l) => l.type === "bus").map(
  */
 function syncJourney(picked = false) {
   const s = cur();
-  if (!isPlanJourney(s) || !rootRef) return;
+  if (!isPlanJourney(s) || !rootRef || D.result?.mode === "timetable") return;
   const j = planJourney(D.result?.options?.[D.sel], D.to?.label);
   if (j && (!sameRids(j.rids, s.journey.rids) || j.label !== s.journey.label || (picked && legSig(j) !== legSig(s.journey)))) ctxRef.store.set({ journey: j });
 }
@@ -368,6 +443,22 @@ export function setEndpoint(key, ep) {
   endPlanJourney();
   D[key] = ep; if (ep) D[key + "Text"] = ep.label;
   setInput(key); afterSet();
+}
+
+/**
+ * Set the trip start time (null, or a time already past = Leave now) and re-plan. A new start time is a new trip, like a new
+ * endpoint: a started one ends.
+ * @param {number|null} at unix s
+ * @returns {number|null} the start time kept
+ */
+export function setStartTime(at) {
+  const keep = Number.isFinite(at) && startMode(at, nowFn()) !== "now" ? at : null;
+  if (keep === D.at) { patchWhen(); return keep; }
+  endPlanJourney();
+  D.at = keep;
+  patchWhen();
+  replan({ fresh: true });
+  return keep;
 }
 
 /** Use the current location for a field (asks permission if needed). */
@@ -539,3 +630,15 @@ registerAction("dir:clear", (ds, ev, ctx) => {
   el.focus({ preventScroll: true });
 });
 registerAction("dir:start", (ds, ev, ctx) => { ctxRef = ctx || ctxRef; startTrip(); });
+/** The start time control: the wheels (./leavepick.js); Set re-plans from the chosen time, focus back on the control. */
+registerAction("dir:when", (ds, ev, ctx) => {
+  ctxRef = ctx || ctxRef;
+  const trigger = ev?.target?.closest?.("[data-action]") || undefined;
+  openLeavePick(ctx, { at: D.at, trigger, onSet: (at) => { setStartTime(at); fq('[data-action="dir:when"]')?.focus({ preventScroll: true }); } });
+});
+/** The start time's clear button: back to Leave now; focus stays on the control. */
+registerAction("dir:when-clear", (ds, ev, ctx) => {
+  ctxRef = ctx || ctxRef;
+  setStartTime(null);
+  fq('[data-action="dir:when"]')?.focus({ preventScroll: true });
+});
