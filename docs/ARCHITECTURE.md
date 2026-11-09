@@ -1162,3 +1162,19 @@ buttons), route-cta.js (route page), map-cta.js (map), tools/test_build_cta.py, 
 
 **iPhone:** paused (docs/redesign/GLASS-IOS-PAUSED.md has the port list). Not in the live app (its plan is the live
 repo's `CTA Implementation.md`).
+
+## Schedule by hour on the route page (2026-11-09, ported from the live repo; owner: "Clicking on a particular line and going to the bottom should display it's schedule by hour (i.e.: Every 30 minutes between x times). This time specification should have a disclaimer that the bus schedules don't often follow this schedule.")
+
+The live repo's docs/ARCHITECTURE.md "Schedule by hour on the route page" is the full contract (data, rule, day, view,
+tests); web/js/core/schedule.js is the same file in both repos except the CTA "24 hours" label. Here only:
+- **CTA routes too.** `tools/build_cta.py` passes its stop order to `build_gtfs.build_service` (route_stops) and prefixes
+  the reference stop (`at: "cta:<stop>"`), so web/data/cta/service.json carries `dep` for the Hyde Park part of each route
+  (40 KB, 3 KB gzipped; pages.yml rebuilds it daily). The route page shows it like a shuttle's, at a CTA stop, under the
+  CTA source line. CTA's noisy timetables are why hourlyHeadways tidies (same-pace neighbours, bursts under 30 min, at
+  most 6 lines a stretch): CTA 47 weekdays "About every 20 min, 4:03 to 5:05 AM", "About every 9 min, 5:05 AM to 10:08
+  PM", "About every 20 min, 10:08 to 11:11 PM", "About every 25 min, 11:11 PM to 12:21 AM", "Every 22 min, 12:21 to 1:28
+  AM". A 24-hour CTA route's service day starts at its quietest minute (build_gtfs service_spans), so its list starts
+  there ("About every 25 min, 11:51 PM to 1:29 AM" first).
+- Tests: web/tests/route-schedule.js, route-hourly.js (+ every CTA route), data-static.js, tools/test_truth.py,
+  tools/test_build_cta.py (cta `at` is a known stop, dep in range). sw `sb-v2-117`. iPhone: paused here
+  (docs/redesign/GLASS-IOS-PAUSED.md); the live repo's main has it.
