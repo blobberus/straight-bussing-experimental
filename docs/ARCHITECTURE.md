@@ -1274,3 +1274,11 @@ tests); web/js/core/schedule.js is the same file in both repos except the CTA "2
 - Tests: web/tests/route-schedule.js, route-hourly.js (+ every CTA route), data-static.js, tools/test_truth.py,
   tools/test_build_cta.py (cta `at` is a known stop, dep in range). sw `sb-v2-117`. iPhone: paused here
   (docs/redesign/GLASS-IOS-PAUSED.md); the live repo's main has it.
+- **All times, day tabs, Now / Next** (follow-up 2026-11-09, owner: "The schedule by hour should be expandable to show
+  exactly what time of day the bus can be expected. The table should highlight the current time. It can break it down
+  between the weekday and weekend."): the live repo's contract (its ARCHITECTURE, same section): tabs by the data
+  (scheduleTabs), "Show all times" / "Hide times" (store.freq, never saved), one row per hour with the minutes, "Now" and
+  "Next" on today's tab only. CTA routes get it too; their weekday, Saturday and Sunday timetables often differ, so they
+  show three tabs (CTA 171: Weekday / Saturday / Sunday). A 24 hour CTA route's table starts where its service day does
+  (its quietest minute, e.g. 11:51 PM). Tests: route-schedule.js, route-hourly.js (+ CTA), e2e-hourly.js, data-state.js.
+  sw `sb-v2-121`.
